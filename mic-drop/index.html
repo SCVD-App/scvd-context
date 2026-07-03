@@ -2453,11 +2453,13 @@ function MicDrop() {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.status === 204) {
-        // Spotify's success response has no body — flip optimistically, the next
-        // poll (within SPOTIFY_POLL_INTERVAL) will correct it if something's off.
-        setSpotifyPlaying(!wasPlaying);
+      if (res.ok) {
+        // Spotify's play/pause can legitimately return various 2xx codes depending
+        // on device state — don't gate success on exactly 204. Rather than guess
+        // the new state optimistically, ask Spotify directly a beat later so the
+        // icon reflects reality even if our guess would've been wrong.
         setSpotifyPlaybackMsg("");
+        setTimeout(() => pollSpotifyNowPlaying(), 800);
         return;
       }
       if (res.status === 403) {
@@ -2479,7 +2481,7 @@ function MicDrop() {
     } catch (e) {
       pushDebug("spotify playback error", e.message);
     }
-  }, [getValidSpotifyToken, spotifyPlaying, pushDebug]);
+  }, [getValidSpotifyToken, spotifyPlaying, pushDebug, pollSpotifyNowPlaying]);
 
   // Handle the redirect back from Spotify (?code=...&state=... in the URL)
   useEffect(() => {
