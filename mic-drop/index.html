@@ -112,6 +112,18 @@ const REPORT_INTERVAL_MS   = 500;
 const MIN_VOX_RMS          = 0.06;   // narrowband gate — rejects backing track bleed, requires close vocal signal
 const MAX_VOX_FREQ         = 3000;   // human singing voice tops out ~3kHz
 
+// ── SPOTIFY INTEGRATION (Beta) ────────────────────────────────────────────────
+// Placeholder Client ID — swap for the real one from developer.spotify.com/dashboard.
+// Safe to keep public in source (same as Spotify's own web player does).
+const SPOTIFY_CLIENT_ID    = "5cba2d3336ad4d08b63970ad40fc7814";
+const SPOTIFY_REDIRECT_URI = "https://scvd-app.github.io/Mic-Drop/";
+const SPOTIFY_SCOPES       = "user-read-currently-playing user-read-playback-state user-modify-playback-state";
+const SPOTIFY_AUTH_URL     = "https://accounts.spotify.com/authorize";
+// Deliberately capped low right now — Spotify's Developer Mode only allows 5 test
+// users before requiring Extended Quota Mode (needs registered business + 250k MAU).
+// This flag lets us kill the feature globally in one place if the auth slot fills up.
+const SPOTIFY_BETA_ENABLED = true;
+
 // ── PITCH DETECTION (autocorrelation) ────────────────────────────────────────
 function detectPitch(buffer, sampleRate) {
   const SIZE = buffer.length;
@@ -1711,7 +1723,7 @@ function SessionReport({ songs, onClose, onUnlock, isPro }) {
 }
 
 // ── ABOUT / SUPPORT MODAL ────────────────────────────────────────────────────
-function AboutModal({ onClose, profile }) {
+function AboutModal({ onClose, profile, spotifyStatus, spotifyError, onConnectSpotify, onDisconnectSpotify }) {
   const answers = profile?.quizAnswers || {};
   const answered = Object.keys(answers).length;
 
@@ -1950,6 +1962,59 @@ function AboutModal({ onClose, profile }) {
           </a>
         </div>
 
+        {/* Spotify Beta — quietly placed, not in the main flow */}
+        {SPOTIFY_BETA_ENABLED && (
+          <div style={{ background:"rgba(0,0,0,0.3)", border:"1px solid #1e1e1e", borderRadius:"14px", padding:"20px", marginBottom:"16px" }}>
+            <div style={{ fontSize:"14px", letterSpacing:"0.25em", color:"#555", fontFamily:"'Courier New',monospace", marginBottom:"12px" }}>SPOTIFY — BETA</div>
+            <div style={{ fontSize:"14px", color:"#aaa", fontFamily:"'Courier New',monospace", lineHeight:1.9, marginBottom:"14px" }}>
+              Optional. Connects your Spotify account so Mic Drop knows exactly what's
+              playing the instant a track changes, instead of waiting on song ID to catch up.
+              Early testing only right now — limited number of connections available.
+            </div>
+            {spotifyStatus === "connected" ? (
+              <>
+                <div style={{ fontSize:"14px", color:"#4caf50", fontFamily:"'Courier New',monospace", marginBottom:"10px", letterSpacing:"0.1em" }}>
+                  ● CONNECTED
+                </div>
+                <button
+                  onClick={onDisconnectSpotify}
+                  style={{
+                    display:"block", width:"100%", padding:"14px",
+                    borderRadius:"10px", textAlign:"center",
+                    border:"1px solid #2a2a2a", background:"rgba(255,255,255,0.03)",
+                    color:"#888", fontFamily:"'Courier New',monospace",
+                    fontSize:"15px", letterSpacing:"0.1em", cursor:"pointer",
+                  }}
+                >
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={onConnectSpotify}
+                  disabled={spotifyStatus === "connecting"}
+                  style={{
+                    display:"block", width:"100%", padding:"14px",
+                    borderRadius:"10px", textAlign:"center",
+                    border:"1px solid #2a2a2a", background:"rgba(255,255,255,0.03)",
+                    color:"#1DB954", fontFamily:"'Courier New',monospace",
+                    fontSize:"15px", letterSpacing:"0.1em", cursor:"pointer",
+                    opacity: spotifyStatus === "connecting" ? 0.5 : 1,
+                  }}
+                >
+                  {spotifyStatus === "connecting" ? "Connecting…" : "♫ Connect Spotify"}
+                </button>
+                {spotifyStatus === "error" && (
+                  <div style={{ fontSize:"13px", color:"#C0392B", fontFamily:"'Courier New',monospace", marginTop:"10px", lineHeight:1.7 }}>
+                    {spotifyError || "Connection unavailable right now"}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {/* Integrity model reminder */}
         <div style={{ textAlign:"center", padding:"0 8px" }}>
           <div style={{ fontSize:"20px", color:"#333", fontFamily:"'Courier New',monospace", lineHeight:1.9, fontStyle:"italic" }}>
@@ -2159,6 +2224,57 @@ function MicDrop() {
     } catch {} // user cancelled share sheet — not an error
   }, [debugLog, lastMimeType]);
 
+  const wakeLock = useRef(null); // Screen Wake Lock — keeps AudioContext alive while armed
+
+  // ── SCREEN WAKE LOCK — keeps the AudioContext alive when the phone is dashboard-mounted ──
+  // Mobile browsers suspend background/inactive-screen AudioContexts to save power.
+  // Without this, MicDrop silently stops processing ~60s after the screen locks
+  // (no charger plugged in, driving), which was being misread as "distortion improves
+  // when screen is off" — it's actually the app going dormant, not behaving better.
+  const requestWakeLock = useCallback(async () => {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLock.current = await navigator.wakeLock.request("screen");
+        pushDebug("wakeLock", "acquired");
+        wakeLock.current.addEventListener("release", () => {
+          pushDebug("wakeLock", "released (system)");
+        });
+      } else {
+        pushDebug("wakeLock", "unsupported on this browser");
+      }
+    } catch (err) {
+      pushDebug("wakeLock request failed", `${err.name}: ${err.message}`);
+    }
+  }, [pushDebug]);
+
+  const releaseWakeLock = useCallback(async () => {
+    try {
+      if (wakeLock.current) {
+        await wakeLock.current.release();
+        wakeLock.current = null;
+      }
+    } catch {} // already released — not an error
+  }, []);
+
+  // Wake Locks are auto-released by the OS whenever the tab is backgrounded
+  // (screen off, app-switch, etc). Re-acquire on return to foreground if still armed,
+  // and log the visibility + AudioContext state each time — this is the hard evidence
+  // for the distortion investigation, not a guess.
+  useEffect(() => {
+    const onVisibility = async () => {
+      const ctxState = audioCtx.current ? audioCtx.current.state : "no-context";
+      pushDebug("visibilitychange", `${document.visibilityState} · audioCtx: ${ctxState} · armed: ${armed}`);
+      if (document.visibilityState === "visible" && armed) {
+        if (audioCtx.current && audioCtx.current.state === "suspended") {
+          try { await audioCtx.current.resume(); pushDebug("audioCtx", "resumed on visible"); }
+          catch (err) { pushDebug("audioCtx resume failed", err.message); }
+        }
+        requestWakeLock();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [armed, requestWakeLock, pushDebug]);
 
   // Identification phase: null | "capturing" | "counting" | "sending" | "enriching"
   const [idPhase,     setIdPhase]     = useState(null);
@@ -2181,6 +2297,93 @@ function MicDrop() {
       return saved ? JSON.parse(saved) : { name:"", photo:null, cardStyle:"circle", preset:"gold" };
     } catch { return { name:"", photo:null, cardStyle:"circle", preset:"gold" }; }
   });
+
+  // ── SPOTIFY (Beta) — connection state ──
+  // "connected"   — we have a token and believe it's valid
+  // "connecting"  — mid-OAuth redirect round trip
+  // "error"       — last attempt failed (slot full, denied, exchange failed, etc)
+  // null          — never connected
+  const [spotifyStatus, setSpotifyStatus] = useState(() => {
+    try { return localStorage.getItem("micDrop_spotifyToken") ? "connected" : null; }
+    catch { return null; }
+  });
+  const [spotifyError, setSpotifyError] = useState(null);
+
+  const connectSpotify = useCallback(() => {
+    if (!SPOTIFY_BETA_ENABLED) return;
+    // CSRF guard — verified against sessionStorage when Spotify redirects back
+    const state = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    try { sessionStorage.setItem("micDrop_spotifyOauthState", state); } catch {}
+    const params = new URLSearchParams({
+      client_id:     SPOTIFY_CLIENT_ID,
+      response_type: "code",
+      redirect_uri:  SPOTIFY_REDIRECT_URI,
+      scope:         SPOTIFY_SCOPES,
+      state,
+    });
+    setSpotifyStatus("connecting");
+    window.location.href = `${SPOTIFY_AUTH_URL}?${params.toString()}`;
+  }, []);
+
+  const disconnectSpotify = useCallback(() => {
+    try { localStorage.removeItem("micDrop_spotifyToken"); } catch {}
+    setSpotifyStatus(null);
+    setSpotifyError(null);
+  }, []);
+
+  // Handle the redirect back from Spotify (?code=...&state=... in the URL)
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const code  = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const err   = url.searchParams.get("error");
+    if (!code && !err) return; // nothing to do — normal page load
+
+    // Clean the URL immediately so a refresh doesn't replay the exchange
+    url.searchParams.delete("code");
+    url.searchParams.delete("state");
+    url.searchParams.delete("error");
+    window.history.replaceState({}, "", url.toString());
+
+    if (err) {
+      pushDebug("spotify auth", `denied or failed: ${err}`);
+      setSpotifyStatus("error");
+      setSpotifyError(err === "access_denied" ? "Connection cancelled" : err);
+      return;
+    }
+
+    let expectedState = null;
+    try { expectedState = sessionStorage.getItem("micDrop_spotifyOauthState"); } catch {}
+    if (!state || state !== expectedState) {
+      pushDebug("spotify auth", "state mismatch — possible CSRF, aborting exchange");
+      setSpotifyStatus("error");
+      setSpotifyError("Security check failed — please try connecting again");
+      return;
+    }
+
+    // TODO: worker-side token exchange route not built yet.
+    // Needs a Cloudflare Worker route (e.g. POST /spotify/exchange) that takes this
+    // `code`, calls Spotify's /api/token with the Client Secret (never exposed here),
+    // and returns { access_token, refresh_token, expires_in } for us to store.
+    (async () => {
+      try {
+        const res = await fetch(`${PROXY_BASE_URL}/spotify/exchange`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, redirect_uri: SPOTIFY_REDIRECT_URI }),
+        });
+        if (!res.ok) throw new Error(`exchange failed: ${res.status}`);
+        const data = await res.json();
+        localStorage.setItem("micDrop_spotifyToken", JSON.stringify(data));
+        setSpotifyStatus("connected");
+        pushDebug("spotify auth", "connected successfully");
+      } catch (e) {
+        pushDebug("spotify exchange error", e.message);
+        setSpotifyStatus("error");
+        setSpotifyError("Couldn't finish connecting — worker exchange route not live yet");
+      }
+    })();
+  }, [pushDebug]);
 
   const [activeUsers, setActiveUsers] = useState(null);
   const pingTimer    = useRef(null);
@@ -2418,6 +2621,7 @@ function MicDrop() {
         setCurrentSamples(prev => { commitSongToLog(trackInfoRef.current, prev); return []; });
       }
       setArmed(false);
+      releaseWakeLock();
       clearInterval(autoTimer.current);
       clearInterval(reportTimer.current);
       clearInterval(countdownTimer.current);
@@ -2503,6 +2707,7 @@ function MicDrop() {
 
         // Arm after everything is ready
         setArmed(true);
+        requestWakeLock();
 
         setTimeout(() => recognizeTrack(), 300);
         autoTimer.current = setInterval(() => {
@@ -2655,7 +2860,16 @@ function MicDrop() {
       {showOnboarding && <OnboardingModal onClose={() => setShowOnboarding(false)} />}
 
       {/* ABOUT MODAL */}
-      {showAbout && <AboutModal onClose={() => setShowAbout(false)} profile={profile} />}
+      {showAbout && (
+        <AboutModal
+          onClose={() => setShowAbout(false)}
+          profile={profile}
+          spotifyStatus={spotifyStatus}
+          spotifyError={spotifyError}
+          onConnectSpotify={connectSpotify}
+          onDisconnectSpotify={disconnectSpotify}
+        />
+      )}
 
       {/* PROFILE SETUP */}
       {showProfile && <ProfileSetup profile={profile} onSave={setProfile} onClose={() => setShowProfile(false)} />}
