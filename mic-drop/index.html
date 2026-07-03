@@ -3095,50 +3095,41 @@ function MicDrop() {
 
       {/* PAID PRO BANNER — paying subscriber */}
       {proPaid.paid && (
-        <div style={{ width:"100%", maxWidth:"420px", padding:"6px 20px 0" }}>
+        <div style={{ width:"100%", maxWidth:"420px", padding:"4px 20px 0" }}>
           <div style={{
-            borderRadius:"10px", padding:"12px 14px",
+            borderRadius:"8px", padding:"6px 14px",
             background:"rgba(201,168,76,0.10)",
             border:"1px solid rgba(201,168,76,0.35)",
-            display:"flex", flexDirection:"column", alignItems:"center", gap:"4px",
+            textAlign:"center",
           }}>
-            <div style={{ fontSize:"14px", letterSpacing:"0.2em", color:"#C9A84C", fontFamily:"'Courier New',monospace", fontWeight:"bold", textAlign:"center" }}>
-              👑 BACKSTAGE PASS ACTIVE
-            </div>
-            <div style={{ fontSize:"13px", color:"#888", fontFamily:"'Courier New',monospace", textAlign:"center", lineHeight:1.7 }}>
-              The full Mic Drop experience is yours — {proPaid.daysLeft} day{proPaid.daysLeft !== 1 ? "s" : ""} remaining.
-            </div>
-            <div style={{ fontSize:"12px", color:"#555", fontFamily:"'Courier New',monospace", textAlign:"center", lineHeight:1.7, marginTop:"2px" }}>
-              ✦ Arm up. Sing something worth bragging about. ✦
-            </div>
+            <span style={{ fontSize:"13px", letterSpacing:"0.15em", color:"#C9A84C", fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>
+              👑 BACKSTAGE PASS
+            </span>
+            <span style={{ fontSize:"12px", color:"#777", fontFamily:"'Courier New',monospace", marginLeft:"8px" }}>
+              {proPaid.daysLeft} day{proPaid.daysLeft !== 1 ? "s" : ""} left
+            </span>
           </div>
         </div>
       )}
 
       {/* TRIAL ACTIVE BANNER — free trial only, not paid */}
       {trial.active && !trial.expired && !proPaid.paid && (
-        <div style={{ width:"100%", maxWidth:"420px", padding:"6px 20px 0" }}>
+        <div style={{ width:"100%", maxWidth:"420px", padding:"4px 20px 0" }}>
           <div
             onClick={() => setShowSplash(true)}
             style={{
-              borderRadius:"10px", padding:"10px 14px",
+              borderRadius:"8px", padding:"6px 14px",
               background:"rgba(201,168,76,0.07)",
               border:"1px solid rgba(201,168,76,0.18)",
-              display:"flex", flexDirection:"column", alignItems:"center", gap:"4px",
-              cursor:"pointer",
+              textAlign:"center", cursor:"pointer",
             }}
           >
-            <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-              <span style={{ fontSize:"18px", letterSpacing:"0.2em", color:"#C9A84C", fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>
-                ✦ PRO TRIAL — {trial.daysLeft} DAY{trial.daysLeft!==1?"S":""} REMAINING ✦
-              </span>
-            </div>
-            <div style={{ fontSize:"17px", color:"#555", fontFamily:"'Courier New',monospace", textAlign:"center", fontStyle:"italic", letterSpacing:"0.08em" }}>
-              We want your money — but we want to make sure we're earning it first.
-            </div>
-            <div style={{ fontSize:"15px", color:"#3a3a3a", fontFamily:"'Courier New',monospace", letterSpacing:"0.15em", marginTop:"2px" }}>
-              TAP TO SEE PRO FEATURES →
-            </div>
+            <span style={{ fontSize:"13px", letterSpacing:"0.15em", color:"#C9A84C", fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>
+              ✦ PRO TRIAL — {trial.daysLeft} DAY{trial.daysLeft!==1?"S":""} LEFT
+            </span>
+            <span style={{ fontSize:"12px", color:"#3a3a3a", fontFamily:"'Courier New',monospace", marginLeft:"8px" }}>
+              TAP FOR DETAILS →
+            </span>
           </div>
         </div>
       )}
@@ -3252,14 +3243,36 @@ function MicDrop() {
       {/* TRACK CARD */}
       {trackInfo && !showReport && (
         <div className="track-card" style={{ width:"100%", maxWidth:"420px", padding:"0 20px 10px" }}>
-          <div style={{ background:"rgba(201,168,76,0.07)", border:"1px solid rgba(201,168,76,0.22)", borderRadius:"12px", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div
+            onClick={spotifyStatus === "connected" ? toggleSpotifyPlayback : undefined}
+            style={{
+              background: spotifyStatus === "connected" ? "rgba(29,185,84,0.06)" : "rgba(201,168,76,0.07)",
+              border: spotifyStatus === "connected" ? "1px solid rgba(29,185,84,0.30)" : "1px solid rgba(201,168,76,0.22)",
+              borderRadius:"12px", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center",
+              cursor: spotifyStatus === "connected" ? "pointer" : "default",
+              position:"relative",
+            }}
+          >
             <div>
               <div style={{ fontSize:"17px", color:"#ffffff", fontWeight:"bold", letterSpacing:"0.03em" }}>{trackInfo.title}</div>
               <div style={{ fontSize:"20px", color:"#aaa", marginTop:"4px" }}>{trackInfo.artist}</div>
             </div>
-            <div style={{ textAlign:"right" }}>
-              <div style={{ fontSize:"20px", color:"#aaa" }}>Key of <span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.key}</span></div>
-              <div style={{ fontSize:"20px", color:"#aaa", marginTop:"3px" }}><span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.bpm}</span> BPM</div>
+            <div style={{ textAlign:"right", display:"flex", alignItems:"center", gap:"10px" }}>
+              <div>
+                <div style={{ fontSize:"20px", color:"#aaa" }}>Key of <span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.key}</span></div>
+                <div style={{ fontSize:"20px", color:"#aaa", marginTop:"3px" }}><span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.bpm}</span> BPM</div>
+              </div>
+              {/* Play/pause affordance — the whole card is tappable, this icon just signals that */}
+              {spotifyStatus === "connected" && (
+                <div style={{
+                  width:"32px", height:"32px", borderRadius:"50%", flexShrink:0,
+                  background:"rgba(29,185,84,0.15)", border:"1px solid rgba(29,185,84,0.4)",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:"14px", color:"#1DB954",
+                }}>
+                  {spotifyPlaying ? "⏸" : "▶"}
+                </div>
+              )}
             </div>
           </div>
           {trackInfo.tip && (
@@ -3267,26 +3280,9 @@ function MicDrop() {
               💡 {trackInfo.tip}
             </div>
           )}
-          {/* Spotify remote play/pause — only meaningful when we actually know playback state */}
-          {spotifyStatus === "connected" && (
-            <div style={{ marginTop:"10px", display:"flex", flexDirection:"column", alignItems:"center", gap:"4px" }}>
-              <button
-                onClick={toggleSpotifyPlayback}
-                style={{
-                  display:"flex", alignItems:"center", gap:"8px",
-                  padding:"8px 20px", borderRadius:"999px",
-                  border:"1px solid rgba(29,185,84,0.35)", background:"rgba(29,185,84,0.08)",
-                  color:"#1DB954", fontFamily:"'Courier New',monospace",
-                  fontSize:"15px", letterSpacing:"0.1em", cursor:"pointer",
-                }}
-              >
-                {spotifyPlaying ? "⏸ Pause" : "▶ Play"}
-              </button>
-              {spotifyPlaybackMsg && (
-                <div style={{ fontSize:"13px", color:"#C0392B", fontFamily:"'Courier New',monospace", letterSpacing:"0.05em" }}>
-                  {spotifyPlaybackMsg}
-                </div>
-              )}
+          {spotifyPlaybackMsg && (
+            <div style={{ marginTop:"6px", fontSize:"13px", color:"#C0392B", fontFamily:"'Courier New',monospace", textAlign:"center", letterSpacing:"0.05em" }}>
+              {spotifyPlaybackMsg}
             </div>
           )}
           {/* Running accuracy for current song */}
