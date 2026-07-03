@@ -2310,6 +2310,10 @@ function MicDrop() {
     catch { return null; }
   });
   const [spotifyError, setSpotifyError] = useState(null);
+  // Live playback state from Spotify's own polling — null until we've heard from
+  // the API at least once. Drives the play/pause button's icon and target action.
+  const [spotifyPlaying, setSpotifyPlaying] = useState(null);
+  const [spotifyPlaybackMsg, setSpotifyPlaybackMsg] = useState(""); // Premium-required / no-device messaging
 
   const connectSpotify = useCallback(() => {
     if (!SPOTIFY_BETA_ENABLED) return;
@@ -2331,6 +2335,7 @@ function MicDrop() {
     try { localStorage.removeItem("micDrop_spotifyToken"); } catch {}
     setSpotifyStatus(null);
     setSpotifyError(null);
+    setSpotifyPlaying(null);
     spotifyTrackIdRef.current = null;
   }, []);
 
@@ -2391,7 +2396,7 @@ function MicDrop() {
       const res = await fetch("https://api.spotify.com/v1/me/player/currently-playing", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.status === 204) { spotifyTrackIdRef.current = null; return; } // nothing playing
+      if (res.status === 204) { spotifyTrackIdRef.current = null; setSpotifyPlaying(false); return; } // nothing playing
       if (res.status === 401) {
         pushDebug("spotify", "401 on currently-playing — forcing reconnect");
         disconnectSpotify();
@@ -2400,7 +2405,8 @@ function MicDrop() {
       if (!res.ok) return;
       const data = await res.json();
       const item = data?.item;
-      if (!item || !data.is_playing) { spotifyTrackIdRef.current = null; return; }
+      if (!item || !data.is_playing) { spotifyTrackIdRef.current = null; setSpotifyPlaying(!!data?.is_playing); return; }
+      setSpotifyPlaying(true);
       if (item.id === spotifyTrackIdRef.current) return; // unchanged since last poll
       spotifyTrackIdRef.current = item.id;
 
@@ -2431,6 +2437,49 @@ function MicDrop() {
       pushDebug("spotify poll error", e.message);
     }
   }, [getValidSpotifyToken, commitSongToLog, disconnectSpotify, pushDebug]);
+
+  // Remote play/pause on whatever device Spotify considers active — doesn't touch
+  // MicDrop's own audio graph at all, just tells Spotify what to do via its API.
+  // Spotify restricts this endpoint to Premium accounts; free accounts get a 403
+  // with reason PREMIUM_REQUIRED, which we surface as a plain message rather than
+  // a raw error.
+  const toggleSpotifyPlayback = useCallback(async () => {
+    const token = await getValidSpotifyToken();
+    if (!token) return;
+    const wasPlaying = spotifyPlaying;
+    const endpoint = wasPlaying ? "pause" : "play";
+    try {
+      const res = await fetch(`https://api.spotify.com/v1/me/player/${endpoint}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 204) {
+        // Spotify's success response has no body — flip optimistically, the next
+        // poll (within SPOTIFY_POLL_INTERVAL) will correct it if something's off.
+        setSpotifyPlaying(!wasPlaying);
+        setSpotifyPlaybackMsg("");
+        return;
+      }
+      if (res.status === 403) {
+        pushDebug("spotify playback", "403 — likely Premium required");
+        setSpotifyPlaybackMsg("Playback control needs Spotify Premium");
+        setTimeout(() => setSpotifyPlaybackMsg(""), 5000);
+        return;
+      }
+      if (res.status === 404) {
+        pushDebug("spotify playback", "404 — no active device");
+        setSpotifyPlaybackMsg("Open Spotify and start playback first");
+        setTimeout(() => setSpotifyPlaybackMsg(""), 5000);
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      pushDebug("spotify playback error", `${res.status}: ${body?.error?.message || "unknown"}`);
+      setSpotifyPlaybackMsg("Couldn't reach Spotify — try again");
+      setTimeout(() => setSpotifyPlaybackMsg(""), 5000);
+    } catch (e) {
+      pushDebug("spotify playback error", e.message);
+    }
+  }, [getValidSpotifyToken, spotifyPlaying, pushDebug]);
 
   // Handle the redirect back from Spotify (?code=...&state=... in the URL)
   useEffect(() => {
@@ -3216,6 +3265,28 @@ function MicDrop() {
           {trackInfo.tip && (
             <div style={{ marginTop:"8px", fontSize:"18px", color:"#777", textAlign:"center", letterSpacing:"0.08em", fontStyle:"italic" }}>
               💡 {trackInfo.tip}
+            </div>
+          )}
+          {/* Spotify remote play/pause — only meaningful when we actually know playback state */}
+          {spotifyStatus === "connected" && (
+            <div style={{ marginTop:"10px", display:"flex", flexDirection:"column", alignItems:"center", gap:"4px" }}>
+              <button
+                onClick={toggleSpotifyPlayback}
+                style={{
+                  display:"flex", alignItems:"center", gap:"8px",
+                  padding:"8px 20px", borderRadius:"999px",
+                  border:"1px solid rgba(29,185,84,0.35)", background:"rgba(29,185,84,0.08)",
+                  color:"#1DB954", fontFamily:"'Courier New',monospace",
+                  fontSize:"15px", letterSpacing:"0.1em", cursor:"pointer",
+                }}
+              >
+                {spotifyPlaying ? "⏸ Pause" : "▶ Play"}
+              </button>
+              {spotifyPlaybackMsg && (
+                <div style={{ fontSize:"13px", color:"#C0392B", fontFamily:"'Courier New',monospace", letterSpacing:"0.05em" }}>
+                  {spotifyPlaybackMsg}
+                </div>
+              )}
             </div>
           )}
           {/* Running accuracy for current song */}
