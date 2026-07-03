@@ -2564,6 +2564,14 @@ function MicDrop() {
   const trackInfoRef   = useRef(null); // ref mirror for use inside intervals
   const lastTrackKeyRef = useRef(null); // ref mirror — intervals must read this, not the lastTrackKey state directly
   const spotifyStatusRef = useRef(null); // ref mirror — same reason
+  // Silent-stream watchdog — catches the case where getUserMedia() succeeds and
+  // hands back a MediaStream, but another app (Facebook/Messenger holding the mic,
+  // an active call, etc.) means it's producing pure silence. That's not an error
+  // the browser reports — no exception is thrown — so without this, the person
+  // just sees "awaiting signal" forever with no explanation.
+  const armedAtRef = useRef(0);
+  const everHeardSignalRef = useRef(false);
+  const silentWarnedRef = useRef(false);
 
   // Keep refs in sync
   useEffect(() => { trackInfoRef.current = trackInfo; }, [trackInfo]);
@@ -2870,6 +2878,9 @@ function MicDrop() {
         // Arm after everything is ready
         setArmed(true);
         requestWakeLock();
+        armedAtRef.current = Date.now();
+        everHeardSignalRef.current = false;
+        silentWarnedRef.current = false;
 
         // If Spotify's connected, it's the authoritative track source — skip the
         // AudD mic-fingerprint loop entirely rather than running both and racing.
@@ -2939,13 +2950,26 @@ function MicDrop() {
           setRoomMeter(rNew);
           if (rNew > roomPeak) { setRoomPeak(rNew); clearTimeout(roomPeakTimer.current); roomPeakTimer.current = setTimeout(()=>setRoomPeak(0),1600); }
           setClipping(voxLvl > 95 || rNew > 95);
+
+          // Watchdog: raw RMS this low isn't "quiet room," it's a dead/muted stream —
+          // any real mic in any real environment picks up more noise floor than this.
+          const TRUE_SILENCE_RMS = 0.0001;
+          if (voxRms > TRUE_SILENCE_RMS || roomRms > TRUE_SILENCE_RMS) {
+            everHeardSignalRef.current = true;
+          }
+          if (!everHeardSignalRef.current && !silentWarnedRef.current && armedAtRef.current && Date.now() - armedAtRef.current > 8000) {
+            silentWarnedRef.current = true;
+            pushDebug("silent stream watchdog", "no real signal 8s after arming — likely a dead stream, not a quiet room");
+            setStatusMsg("Not picking up any sound — another app (Facebook, Messenger, a call) may be silently holding the mic. Force close other apps, then disarm and re-arm.");
+            setTimeout(() => setStatusMsg(""), 10000);
+          }
         }
       }
       animFrame.current = requestAnimationFrame(animate);
     };
     animFrame.current = requestAnimationFrame(animate);
     return () => { cancelAnimationFrame(animFrame.current); clearTimeout(roomPeakTimer.current); clearTimeout(voxPeakTimer.current); };
-  }, [armed, roomLevel, voxLevel, addPitchSample]);
+  }, [armed, roomLevel, voxLevel, addPitchSample, pushDebug]);
 
   useEffect(() => {
     return () => {
