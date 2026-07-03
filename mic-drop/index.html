@@ -123,6 +123,8 @@ const SPOTIFY_AUTH_URL     = "https://accounts.spotify.com/authorize";
 // users before requiring Extended Quota Mode (needs registered business + 250k MAU).
 // This flag lets us kill the feature globally in one place if the auth slot fills up.
 const SPOTIFY_BETA_ENABLED = true;
+// Metadata-only call, much cheaper than an AudD audio fingerprint — safe to poll often
+const SPOTIFY_POLL_INTERVAL = 5000;
 
 // ── PITCH DETECTION (autocorrelation) ────────────────────────────────────────
 function detectPitch(buffer, sampleRate) {
@@ -2329,7 +2331,106 @@ function MicDrop() {
     try { localStorage.removeItem("micDrop_spotifyToken"); } catch {}
     setSpotifyStatus(null);
     setSpotifyError(null);
+    spotifyTrackIdRef.current = null;
   }, []);
+
+  // Returns a valid access token, transparently refreshing via the worker if the
+  // stored one is expired or about to expire. Returns null if there's nothing
+  // usable (never connected, or refresh failed — in which case we disconnect).
+  const getValidSpotifyToken = useCallback(async () => {
+    let raw;
+    try { raw = localStorage.getItem("micDrop_spotifyToken"); } catch { return null; }
+    if (!raw) return null;
+    let tok;
+    try { tok = JSON.parse(raw); } catch { return null; }
+
+    const REFRESH_BUFFER_MS = 60000; // refresh a minute early rather than cutting it fine
+    if (tok.expires_at && Date.now() < tok.expires_at - REFRESH_BUFFER_MS) {
+      return tok.access_token;
+    }
+    if (!tok.refresh_token) { disconnectSpotify(); return null; }
+
+    try {
+      const res = await fetch(`${PROXY_BASE_URL}/spotify/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: tok.refresh_token }),
+      });
+      if (!res.ok) throw new Error(`refresh failed: ${res.status}`);
+      const data = await res.json();
+      const merged = {
+        ...tok,
+        ...data,
+        // Spotify often omits refresh_token on a refresh response — keep the old one if so
+        refresh_token: data.refresh_token || tok.refresh_token,
+        expires_at: Date.now() + (data.expires_in || 3600) * 1000,
+      };
+      localStorage.setItem("micDrop_spotifyToken", JSON.stringify(merged));
+      pushDebug("spotify", "token refreshed");
+      return merged.access_token;
+    } catch (e) {
+      pushDebug("spotify refresh error", e.message);
+      setSpotifyStatus("error");
+      setSpotifyError("Spotify session expired — please reconnect");
+      return null;
+    }
+  }, [disconnectSpotify, pushDebug]);
+
+  // Polls Spotify for the currently-playing track. This is the fix for the
+  // "song ID still checking against the previous song, now in a different key"
+  // problem — instead of waiting up to RECOGNITION_INTERVAL for a fresh AudD
+  // fingerprint, we know the instant Spotify says the track changed.
+  // Deliberately reads lastTrackKeyRef/trackInfoRef rather than the state values
+  // directly — this function gets called from inside a setInterval whose closure
+  // is fixed at arm-time, so anything it needs to be current on must come from a
+  // ref, not a closed-over state variable (see the matching fix in recognizeTrack).
+  const pollSpotifyNowPlaying = useCallback(async () => {
+    const token = await getValidSpotifyToken();
+    if (!token) return;
+    try {
+      const res = await fetch("https://api.spotify.com/v1/me/player/currently-playing", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 204) { spotifyTrackIdRef.current = null; return; } // nothing playing
+      if (res.status === 401) {
+        pushDebug("spotify", "401 on currently-playing — forcing reconnect");
+        disconnectSpotify();
+        return;
+      }
+      if (!res.ok) return;
+      const data = await res.json();
+      const item = data?.item;
+      if (!item || !data.is_playing) { spotifyTrackIdRef.current = null; return; }
+      if (item.id === spotifyTrackIdRef.current) return; // unchanged since last poll
+      spotifyTrackIdRef.current = item.id;
+
+      const title  = item.name;
+      const artist = item.artists?.[0]?.name || "Unknown";
+      const key    = `${title}||${artist}`;
+      if (key === lastTrackKeyRef.current) return; // Spotify's id changed but title/artist didn't (rare, but cheap to guard)
+
+      if (trackInfoRef.current) {
+        setCurrentSamples(prev => { commitSongToLog(trackInfoRef.current, prev); return []; });
+      }
+      setIdPhase("enriching");
+      try {
+        const er = await fetch(`${PROXY_BASE_URL}/enrich`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, artist }),
+        });
+        const ed = await er.json();
+        setTrackInfo({ title, artist, key: ed.key || "Unknown", bpm: ed.bpm || "—", genre: ed.genre || "", tip: ed.tip || "" });
+      } catch {
+        setTrackInfo({ title, artist, key: "—", bpm: "—", genre: "", tip: "" });
+      }
+      setLastTrackKey(key);
+      setIdPhase(null);
+      pushDebug("spotify track change", `${title} — ${artist}`);
+    } catch (e) {
+      pushDebug("spotify poll error", e.message);
+    }
+  }, [getValidSpotifyToken, commitSongToLog, disconnectSpotify, pushDebug]);
 
   // Handle the redirect back from Spotify (?code=...&state=... in the URL)
   useEffect(() => {
@@ -2374,7 +2475,10 @@ function MicDrop() {
         });
         if (!res.ok) throw new Error(`exchange failed: ${res.status}`);
         const data = await res.json();
-        localStorage.setItem("micDrop_spotifyToken", JSON.stringify(data));
+        // Spotify gives expires_in (seconds from now) — convert to an absolute
+        // timestamp so getValidSpotifyToken can check it later without re-deriving.
+        const stored = { ...data, expires_at: Date.now() + (data.expires_in || 3600) * 1000 };
+        localStorage.setItem("micDrop_spotifyToken", JSON.stringify(stored));
         setSpotifyStatus("connected");
         pushDebug("spotify auth", "connected successfully");
       } catch (e) {
@@ -2398,6 +2502,8 @@ function MicDrop() {
   const roomBuffer     = useRef(null);
   const pitchBuffer    = useRef(new Float32Array(2048));
   const autoTimer      = useRef(null);
+  const spotifyPollTimer = useRef(null);
+  const spotifyTrackIdRef = useRef(null); // last Spotify track id seen — avoids re-enriching on every poll
   const reportTimer    = useRef(null);
   const countdownTimer = useRef(null);
   const identifying    = useRef(false);
@@ -2405,9 +2511,13 @@ function MicDrop() {
   const smoothRef      = useRef(null);
   const pitchHistory   = useRef([]);
   const trackInfoRef   = useRef(null); // ref mirror for use inside intervals
+  const lastTrackKeyRef = useRef(null); // ref mirror — intervals must read this, not the lastTrackKey state directly
+  const spotifyStatusRef = useRef(null); // ref mirror — same reason
 
-  // Keep ref in sync
+  // Keep refs in sync
   useEffect(() => { trackInfoRef.current = trackInfo; }, [trackInfo]);
+  useEffect(() => { lastTrackKeyRef.current = lastTrackKey; }, [lastTrackKey]);
+  useEffect(() => { spotifyStatusRef.current = spotifyStatus; }, [spotifyStatus]);
 
   // ── ANALYTICS PING — fires once on load ──────────────────────────────────
   useEffect(() => {
@@ -2574,7 +2684,7 @@ function MicDrop() {
         const { title, artist } = data.result;
         const key = `${title}||${artist}`;
 
-        if (key !== lastTrackKey) {
+        if (key !== lastTrackKeyRef.current) {
           // Commit previous song before switching
           if (trackInfoRef.current) {
             setCurrentSamples(prev => {
@@ -2611,7 +2721,7 @@ function MicDrop() {
       setIdPhase(null);
       identifying.current = false;
     }
-  }, [lastTrackKey, commitSongToLog]);
+  }, [commitSongToLog]);
 
   // ── ARM / DISARM ─────────────────────────────────────────────────────────
   const toggleArmed = async () => {
@@ -2623,6 +2733,7 @@ function MicDrop() {
       setArmed(false);
       releaseWakeLock();
       clearInterval(autoTimer.current);
+      clearInterval(spotifyPollTimer.current);
       clearInterval(reportTimer.current);
       clearInterval(countdownTimer.current);
       setCountdown(null); setIdPhase(null);
@@ -2709,8 +2820,18 @@ function MicDrop() {
         setArmed(true);
         requestWakeLock();
 
-        setTimeout(() => recognizeTrack(), 300);
+        // If Spotify's connected, it's the authoritative track source — skip the
+        // AudD mic-fingerprint loop entirely rather than running both and racing.
+        if (spotifyStatusRef.current === "connected") {
+          pollSpotifyNowPlaying(); // immediate — don't wait a full poll interval
+          spotifyPollTimer.current = setInterval(pollSpotifyNowPlaying, SPOTIFY_POLL_INTERVAL);
+        } else {
+          setTimeout(() => recognizeTrack(), 300);
+        }
         autoTimer.current = setInterval(() => {
+          // Re-checked every tick, not just at arm-time, in case Spotify connects/
+          // disconnects mid-session (e.g. token refresh fails and forces a disconnect).
+          if (spotifyStatusRef.current === "connected") return;
           if (!identifying.current) recognizeTrack();
         }, RECOGNITION_INTERVAL);
         reportTimer.current = setInterval(() => {
