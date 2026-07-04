@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CULT CONNECTIONS</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080810;
+  --surface: #0f0f1a;
+  --surface2: #161624;
+  --border: #22223a;
+  --border2: #2e2e4a;
+  --gold: #C9A84C;
+  --gold2: #e8c96a;
+  --red: #C0392B;
+  --blue: #2E6DA4;
+  --green: #1e8449;
+  --orange: #d35400;
+  --text: #ede9e3;
+  --muted: #5a5a7a;
+  --muted2: #3a3a5a;
+}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+
+html{height:100%;}
+
+body{
+  height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'DM Mono',monospace;
+  overflow:hidden; /* no scroll on game screen */
+}
+
+body::before{
+  content:'';position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 60% 40% at 10% 10%,rgba(201,168,76,0.07) 0%,transparent 60%),
+    radial-gradient(ellipse 50% 60% at 90% 90%,rgba(46,109,164,0.06) 0%,transparent 60%);
+  pointer-events:none;z-index:0;
+}
+
+/* ══════════ SCREENS ══════════ */
+.screen{
+  position:fixed;inset:0;
+  display:none;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:20px;z-index:1;
+  overflow-y:auto;
+}
+.screen.active{display:flex;}
+
+/* ══════════ HOME ══════════ */
+#homeScreen{gap:4px;}
+
+.home-eyebrow{
+  font-size:0.58rem;letter-spacing:0.3em;color:var(--muted);
+  text-transform:uppercase;margin-bottom:8px;
+  animation:fadeUp 0.5s ease both;
+}
+
+.home-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(3.5rem,20vw,7rem);
+  letter-spacing:0.08em;line-height:0.88;
+  color:var(--gold);text-align:center;
+  text-shadow:0 0 60px rgba(201,168,76,0.18);
+  animation:fadeUp 0.5s 0.08s ease both;
+}
+
+.home-sub{
+  font-size:0.58rem;letter-spacing:0.18em;color:var(--muted);
+  margin:8px 0 24px;
+  animation:fadeUp 0.5s 0.15s ease both;
+}
+
+.mode-grid{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:10px;width:100%;max-width:420px;
+  animation:fadeUp 0.5s 0.22s ease both;
+}
+
+.mode-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:16px 12px;
+  cursor:pointer;transition:all 0.15s;text-align:left;
+  position:relative;overflow:hidden;
+  -webkit-user-select:none;user-select:none;
+}
+.mode-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--accent,var(--gold)),transparent);
+  opacity:0;transition:opacity 0.2s;
+}
+.mode-card:active{transform:scale(0.97);}
+.mode-card:active::before,.mode-card:hover::before{opacity:1;}
+.mode-card.solo{--accent:var(--gold);}
+.mode-card.family{--accent:var(--blue);}
+.mode-card.seinfeld{--accent:var(--red);}
+.mode-card.blitz{--accent:var(--orange);}
+
+.mode-icon{font-size:1.4rem;display:block;margin-bottom:6px;}
+.mode-name{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1.15rem;letter-spacing:0.07em;color:var(--text);display:block;margin-bottom:3px;
+}
+.mode-desc{font-size:0.52rem;letter-spacing:0.05em;color:var(--muted);line-height:1.55;}
+
+.diff-row{
+  display:flex;gap:8px;margin-top:18px;
+  animation:fadeUp 0.5s 0.3s ease both;
+}
+.diff-btn{
+  font-family:'DM Mono',monospace;font-size:0.58rem;
+  letter-spacing:0.14em;text-transform:uppercase;
+  padding:8px 14px;border-radius:20px;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--muted);
+  transition:all 0.13s;
+}
+.diff-btn.active{background:var(--surface2);border-color:var(--gold);color:var(--gold);}
+
+.ver{
+  position:fixed;bottom:12px;
+  font-size:0.48rem;letter-spacing:0.18em;color:var(--muted2);
+}
+
+/* api key section */
+.api-section{
+  width:100%;max-width:420px;
+  margin-top:14px;
+  animation:fadeUp 0.5s 0.35s ease both;
+}
+.api-toggle{
+  display:flex;justify-content:space-between;align-items:center;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:9px 14px;cursor:pointer;
+  font-size:0.58rem;letter-spacing:0.08em;color:var(--muted);
+  transition:border-color 0.15s;
+}
+.api-toggle:active{border-color:var(--border2);}
+.api-chevron{font-size:0.7rem;transition:transform 0.2s;}
+.api-chevron.open{transform:rotate(180deg);}
+.api-input-wrap{
+  background:var(--surface);border:1px solid var(--border);
+  border-top:none;border-radius:0 0 6px 6px;
+  padding:10px 12px;
+}
+.api-input{
+  width:100%;background:var(--bg);border:1px solid var(--border2);
+  border-radius:4px;padding:8px 10px;color:var(--text);
+  font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.06em;
+  outline:none;transition:border-color 0.15s;
+}
+.api-input:focus{border-color:var(--gold);}
+.api-hint{
+  font-size:0.5rem;letter-spacing:0.08em;color:var(--muted2);
+  margin-top:6px;line-height:1.6;
+}
+
+/* ══════════ FAMILY PICKER ══════════ */
+#familyScreen{gap:14px;}
+
+.screen-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(2rem,8vw,3.5rem);
+  letter-spacing:0.1em;color:var(--gold);text-align:center;
+}
+.screen-sub{font-size:0.58rem;letter-spacing:0.12em;color:var(--muted);}
+
+.player-grid{
+  display:grid;grid-template-columns:repeat(2,1fr);
+  gap:10px;width:100%;max-width:380px;
+}
+.player-card{
+  background:var(--surface);border:2px solid var(--border);
+  border-radius:8px;padding:16px 10px;
+  cursor:pointer;transition:all 0.13s;text-align:center;
+}
+.player-card:active,.player-card.selected{
+  border-color:var(--gold);background:var(--surface2);
+}
+.player-emoji{font-size:1.8rem;display:block;margin-bottom:5px;}
+.player-name{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1rem;letter-spacing:0.07em;color:var(--text);
+}
+.player-spec{font-size:0.5rem;color:var(--muted);letter-spacing:0.07em;margin-top:3px;line-height:1.5;}
+
+.btn-primary{
+  font-family:'DM Mono',monospace;font-size:0.68rem;
+  letter-spacing:0.14em;text-transform:uppercase;
+  padding:13px 28px;border-radius:5px;cursor:pointer;
+  background:var(--gold);color:#080810;border:none;font-weight:500;
+  transition:all 0.13s;width:100%;max-width:380px;
+}
+.btn-primary:active{transform:scale(0.97);}
+.btn-primary:disabled{opacity:0.3;cursor:not-allowed;}
+
+.btn-ghost{
+  font-family:'DM Mono',monospace;font-size:0.6rem;
+  letter-spacing:0.13em;text-transform:uppercase;
+  padding:10px 20px;border-radius:4px;cursor:pointer;
+  background:transparent;color:var(--muted);border:1px solid var(--border);
+  transition:all 0.13s;
+}
+
+/* ══════════ LOADING ══════════ */
+#loadScreen{gap:18px;}
+.load-logo{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:2.5rem;letter-spacing:0.1em;color:var(--gold);
+}
+.load-msg{font-size:0.62rem;letter-spacing:0.14em;color:var(--muted);}
+.load-dots{display:flex;gap:8px;justify-content:center;}
+.load-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--gold);
+  animation:bounce 1.2s ease infinite;
+}
+.load-dot:nth-child(2){animation-delay:0.2s;}
+.load-dot:nth-child(3){animation-delay:0.4s;}
+@keyframes bounce{0%,80%,100%{transform:scale(0.5);opacity:0.3;}40%{transform:scale(1);opacity:1;}}
+.load-themes{
+  font-size:0.55rem;letter-spacing:0.08em;color:var(--muted2);
+  max-width:280px;text-align:center;line-height:1.9;
+}
+
+/* ══════════ SPLASH / READY SCREEN ══════════ */
+#splashScreen{gap:0;justify-content:center;}
+
+.splash-wrap{
+  width:100%;max-width:420px;
+  display:flex;flex-direction:column;
+  align-items:center;gap:0;
+  animation:fadeUp 0.4s ease both;
+}
+
+.splash-mode-badge{
+  font-size:0.55rem;letter-spacing:0.25em;color:var(--muted);
+  text-transform:uppercase;margin-bottom:10px;
+  background:var(--surface);border:1px solid var(--border);
+  padding:4px 14px;border-radius:20px;
+}
+
+.splash-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(2.8rem,14vw,5rem);
+  letter-spacing:0.08em;line-height:0.9;
+  color:var(--gold);text-align:center;
+  text-shadow:0 0 50px rgba(201,168,76,0.18);
+  margin-bottom:6px;
+}
+
+.splash-theme{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(1rem,5vw,1.5rem);
+  letter-spacing:0.12em;color:var(--text);
+  opacity:0.7;text-align:center;
+  margin-bottom:24px;
+}
+
+.splash-divider{
+  width:40px;height:1px;background:var(--border2);
+  margin:0 auto 22px;
+}
+
+.splash-how{
+  width:100%;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:18px 16px;
+  margin-bottom:20px;
+  display:flex;flex-direction:column;gap:12px;
+}
+
+.splash-rule{
+  display:flex;align-items:flex-start;gap:12px;
+}
+
+.splash-rule-num{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1.4rem;letter-spacing:0.05em;
+  color:var(--gold);line-height:1;
+  flex-shrink:0;width:20px;
+}
+
+.splash-rule-text{
+  font-size:0.62rem;letter-spacing:0.06em;
+  color:var(--text);line-height:1.6;
+  padding-top:2px;
+}
+
+.splash-rule-text strong{color:var(--gold);}
+
+.splash-meta{
+  display:flex;justify-content:center;gap:16px;
+  margin-bottom:22px;
+}
+
+.splash-chip{
+  font-size:0.55rem;letter-spacing:0.12em;
+  color:var(--muted);
+  background:var(--surface);border:1px solid var(--border);
+  padding:5px 12px;border-radius:20px;
+  display:flex;align-items:center;gap:5px;
+}
+
+.splash-chip-dot{
+  width:5px;height:5px;border-radius:50%;
+  background:var(--gold);flex-shrink:0;
+}
+
+.splash-chip-dot.red{background:var(--red);}
+.splash-chip-dot.orange{background:var(--orange);}
+
+.btn-go{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1.8rem;letter-spacing:0.15em;
+  padding:16px 0;border-radius:8px;cursor:pointer;
+  background:var(--gold);color:#080810;border:none;
+  width:100%;transition:all 0.15s;
+  text-align:center;
+  box-shadow:0 8px 30px rgba(201,168,76,0.25);
+}
+.btn-go:active{transform:scale(0.97);box-shadow:0 4px 16px rgba(201,168,76,0.15);}
+
+.splash-no-scroll{
+  font-size:0.5rem;letter-spacing:0.14em;color:var(--muted2);
+  text-align:center;margin-top:12px;
+}
+
+/* ══════════════════════════════════════
+   GAME SCREEN — MOBILE FIRST
+   Everything fits in one viewport. No scroll.
+══════════════════════════════════════ */
+#gameScreen{
+  padding:0;
+  justify-content:flex-start;
+  overflow:hidden;
+}
+
+.game-wrap{
+  width:100%;height:100%;
+  max-width:500px;margin:0 auto;
+  display:flex;flex-direction:column;
+  padding:10px 12px 8px;
+  gap:0;
+}
+
+/* — top bar — */
+.g-topbar{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:6px;flex-shrink:0;
+}
+.g-logo{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1.2rem;letter-spacing:0.1em;color:var(--gold);
+}
+.g-badges{display:flex;gap:8px;align-items:center;}
+.g-badge{
+  font-size:0.52rem;letter-spacing:0.12em;color:var(--muted);
+  background:var(--surface);border:1px solid var(--border);
+  padding:3px 9px;border-radius:20px;
+}
+.g-score{font-size:0.58rem;letter-spacing:0.1em;color:var(--gold);font-weight:500;}
+
+/* — timer row — */
+.g-timer-row{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:4px;flex-shrink:0;
+}
+.g-timer-num{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1.9rem;letter-spacing:0.04em;color:var(--gold);
+  line-height:1;transition:color 0.3s;
+}
+.g-timer-num.warn{color:var(--orange);}
+.g-timer-num.crit{color:var(--red);animation:critPulse 0.4s ease infinite alternate;}
+@keyframes critPulse{from{opacity:1;}to{opacity:0.5;}}
+
+.g-lives{display:flex;gap:6px;align-items:center;}
+.dot{
+  width:10px;height:10px;border-radius:50%;
+  background:var(--gold);box-shadow:0 0 5px rgba(201,168,76,0.3);
+  transition:all 0.25s;
+}
+.dot.gone{background:var(--muted2);box-shadow:none;border:1px solid var(--border);}
+
+.g-timer-track{
+  height:3px;background:var(--border);border-radius:3px;
+  margin-bottom:5px;overflow:hidden;flex-shrink:0;
+}
+.g-timer-fill{
+  height:100%;border-radius:3px;background:var(--gold);
+  transition:width 1s linear,background 0.4s;
+}
+
+/* — instruction strip — ALWAYS VISIBLE — */
+.g-instruction{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:6px 10px;
+  margin-bottom:5px;flex-shrink:0;
+  display:flex;align-items:center;gap:8px;
+}
+.g-instruction-text{
+  font-size:0.58rem;letter-spacing:0.07em;color:var(--muted);
+  line-height:1.4;flex:1;
+}
+.g-theme-pill{
+  font-size:0.5rem;letter-spacing:0.08em;
+  color:var(--gold);white-space:nowrap;
+  background:rgba(201,168,76,0.08);
+  border:1px solid rgba(201,168,76,0.2);
+  border-radius:20px;padding:2px 8px;
+  flex-shrink:0;
+}
+
+/* — progress — */
+.g-prog-track{
+  height:2px;background:var(--border);border-radius:2px;
+  margin-bottom:4px;overflow:hidden;flex-shrink:0;
+}
+.g-prog-fill{height:100%;background:var(--gold);border-radius:2px;transition:width 0.4s ease;}
+
+/* — message — */
+.g-msg{
+  text-align:center;font-size:0.65rem;letter-spacing:0.1em;
+  color:var(--gold);min-height:18px;margin-bottom:3px;flex-shrink:0;
+}
+
+/* — solved rows — */
+#solvedArea{flex-shrink:0;}
+.solved-row{
+  border-radius:6px;padding:8px 11px;
+  margin-bottom:5px;animation:rowIn 0.3s ease both;
+}
+@keyframes rowIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
+.solved-label{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:0.85rem;letter-spacing:0.07em;
+}
+.solved-items{font-size:0.52rem;letter-spacing:0.05em;opacity:0.85;margin-top:1px;}
+
+/* — tile grid — FILLS REMAINING SPACE — */
+.g-grid-wrap{
+  flex:1;min-height:0; /* critical — allows grid to shrink */
+  margin-bottom:6px;
+}
+
+.tile-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  gap:6px;height:100%;
+}
+
+.tile{
+  display:flex;align-items:center;justify-content:center;
+  text-align:center;
+  font-size:clamp(0.44rem,2.8vw,0.62rem);
+  font-weight:500;letter-spacing:0.02em;
+  padding:4px;line-height:1.2;
+  word-break:break-word;text-transform:uppercase;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;cursor:pointer;
+  transition:all 0.12s ease;user-select:none;
+  position:relative;overflow:hidden;
+  /* fill the grid cell */
+  width:100%;height:100%;
+}
+.tile::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,0.025) 0%,transparent 55%);
+  pointer-events:none;
+}
+.tile:active:not(.t-solved):not(.t-frozen){transform:scale(0.94);}
+.tile.t-selected{
+  background:var(--surface2);border-color:var(--gold);
+  box-shadow:0 0 0 2px rgba(201,168,76,0.25);
+}
+.tile.t-solved{opacity:0;pointer-events:none;border-color:transparent;background:transparent;}
+.tile.t-solved::after{display:none;}
+.tile.t-frozen{cursor:not-allowed;opacity:0.35;}
+.tile.t-shake{animation:tShake 0.38s ease;}
+@keyframes tShake{0%,100%{transform:translateX(0);}25%{transform:translateX(-5px);}75%{transform:translateX(5px);}}
+.tile.t-pop{animation:tPop 0.28s ease;}
+@keyframes tPop{0%{transform:scale(1);}50%{transform:scale(1.06);}100%{transform:scale(1);}}
+
+/* — controls — */
+.g-ctrl{
+  display:flex;gap:6px;flex-shrink:0;
+}
+.btn-sm{
+  font-family:'DM Mono',monospace;
+  font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;
+  padding:9px 0;border-radius:5px;cursor:pointer;
+  transition:all 0.12s;font-weight:500;flex:1;
+  -webkit-user-select:none;user-select:none;
+}
+.btn-sm:active{transform:scale(0.96);}
+#submitBtn{background:var(--gold);color:#080810;border:none;flex:2;}
+#submitBtn:disabled{opacity:0.3;cursor:not-allowed;transform:none;}
+#shuffleBtn{background:transparent;color:var(--text);border:1px solid var(--border);}
+#clearBtn{background:transparent;color:var(--muted);border:1px solid var(--border);}
+#quitBtn{background:transparent;color:var(--muted2);border:1px solid var(--muted2);flex:0.6;font-size:0.52rem;}
+
+/* ══════════ END SCREEN ══════════ */
+#endScreen{gap:14px;text-align:center;overflow-y:auto;}
+
+.end-headline{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(2.8rem,14vw,5.5rem);
+  letter-spacing:0.1em;
+}
+.end-headline.win{color:var(--gold);text-shadow:0 0 40px rgba(201,168,76,0.2);}
+.end-headline.lose{color:var(--red);text-shadow:0 0 40px rgba(192,57,43,0.2);}
+
+.stats-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:8px;width:100%;max-width:360px;
+}
+.stat-box{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:7px;padding:12px 8px;
+}
+.stat-val{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1.8rem;letter-spacing:0.04em;color:var(--gold);
+}
+.stat-key{font-size:0.5rem;letter-spacing:0.12em;color:var(--muted);margin-top:2px;}
+
+.unsolved-section{width:100%;max-width:400px;}
+.unsolved-title{
+  font-size:0.55rem;letter-spacing:0.18em;color:var(--muted);
+  margin-bottom:8px;text-align:center;
+}
+.unsolved-cat{
+  border-radius:6px;padding:8px 12px;margin-bottom:6px;
+  font-size:0.55rem;letter-spacing:0.05em;text-align:center;line-height:1.8;
+}
+
+.end-actions{display:flex;gap:8px;width:100%;max-width:360px;}
+.end-actions .btn-primary{flex:2;}
+.end-actions .btn-ghost{flex:1;}
+
+.session-tag{font-size:0.5rem;letter-spacing:0.1em;color:var(--muted2);}
+
+/* ── star display ── */
+.g-stars{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1.1rem;letter-spacing:0.06em;color:var(--gold);
+  text-shadow:0 0 10px rgba(201,168,76,0.3);
+}
+
+/* ── streak row ── */
+.g-streak-row{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:5px;flex-shrink:0;
+}
+.g-streak-label{
+  font-size:0.48rem;letter-spacing:0.14em;color:var(--muted);
+  text-transform:uppercase;white-space:nowrap;
+}
+.g-streak-pip-row{
+  display:flex;gap:3px;flex:1;
+}
+.streak-pip{
+  flex:1;height:4px;border-radius:2px;
+  background:var(--border);transition:background 0.3s;
+}
+.streak-pip.lit{background:var(--gold);}
+.streak-pip.bonus{background:var(--green);animation:pipPulse 0.6s ease;}
+@keyframes pipPulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+/* ── end screen stars ── */
+.stars-session-row{
+  font-size:0.62rem;letter-spacing:0.1em;color:var(--muted);
+  text-align:center;margin-top:-4px;
+}
+
+/* ── star pop animation ── */
+.star-pop{
+  position:fixed;
+  font-size:1.8rem;
+  z-index:600;
+  animation:starFloat 1s ease both;
+  pointer-events:none;
+}
+@keyframes starFloat{
+  0%{opacity:1;transform:translateY(0) scale(1);}
+  100%{opacity:0;transform:translateY(-60px) scale(1.4);}
+}
+
+/* ── no stars message ── */
+.gruber-toast{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+  background:var(--surface);border:1px solid var(--gold);
+  border-radius:8px;padding:10px 18px;
+  font-size:0.62rem;letter-spacing:0.08em;color:var(--gold);
+  z-index:500;white-space:nowrap;text-align:center;
+  animation:toastIn 0.3s ease both,toastOut 0.3s 2.2s ease both;
+  max-width:90vw;white-space:normal;line-height:1.5;
+}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+@keyframes toastOut{to{opacity:0;}}
+
+/* ── hint drawer needs star tag ── */
+.hint-star-cost{
+  display:inline-block;
+  background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);
+  border-radius:4px;padding:2px 8px;
+  font-size:0.52rem;letter-spacing:0.1em;color:var(--gold);
+  margin-left:6px;
+}
+
+/* ── splash rules update ── */
+.hint-btn{
+  font-family:'DM Mono',monospace;
+  font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;
+  padding:9px 0;border-radius:5px;cursor:pointer;
+  transition:all 0.12s;font-weight:500;flex:1;
+  background:transparent;color:var(--gold);
+  border:1px solid rgba(201,168,76,0.3);
+}
+.hint-btn:active{transform:scale(0.96);}
+.hint-btn:disabled{opacity:0.3;cursor:not-allowed;transform:none;}
+
+.hint-drawer{
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--surface);
+  border-top:1px solid var(--border2);
+  border-radius:16px 16px 0 0;
+  padding:16px 16px 24px;
+  z-index:200;
+  transform:translateY(100%);
+  transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  max-width:500px;margin:0 auto;
+}
+.hint-drawer.open{transform:translateY(0);}
+
+.hint-drawer-handle{
+  width:36px;height:3px;background:var(--border2);
+  border-radius:3px;margin:0 auto 14px;
+}
+
+.hint-drawer-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1.2rem;letter-spacing:0.1em;color:var(--gold);
+  margin-bottom:4px;
+}
+
+.hint-drawer-sub{
+  font-size:0.55rem;letter-spacing:0.1em;color:var(--muted);
+  margin-bottom:14px;
+}
+
+.hint-cat-list{
+  display:flex;flex-direction:column;gap:8px;
+  margin-bottom:14px;
+}
+
+.hint-cat-row{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:7px;padding:10px 12px;
+  display:flex;flex-direction:column;gap:6px;
+}
+
+.hint-cat-label{
+  font-size:0.58rem;letter-spacing:0.08em;color:var(--muted);
+  font-style:italic;
+}
+
+.hint-tier-row{display:flex;gap:6px;}
+
+.hint-tier-btn{
+  font-family:'DM Mono',monospace;
+  font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;
+  padding:6px 10px;border-radius:4px;cursor:pointer;
+  transition:all 0.12s;flex:1;text-align:center;
+  border:1px solid var(--border);background:transparent;color:var(--muted);
+}
+.hint-tier-btn:active{transform:scale(0.95);}
+.hint-tier-btn.free{border-color:rgba(201,168,76,0.3);color:var(--gold);}
+.hint-tier-btn.cost{border-color:rgba(211,84,0,0.3);color:var(--orange);}
+.hint-tier-btn.big-cost{border-color:rgba(192,57,43,0.3);color:var(--red);}
+.hint-tier-btn.used{opacity:0.3;cursor:not-allowed;text-decoration:line-through;}
+
+.hint-reveal-box{
+  background:var(--bg);border:1px solid var(--border2);
+  border-radius:6px;padding:10px 12px;
+  font-size:0.62rem;letter-spacing:0.06em;color:var(--text);
+  line-height:1.6;margin-top:6px;
+  animation:fadeUp 0.25s ease both;
+}
+
+.hint-reveal-tag{
+  font-size:0.48rem;letter-spacing:0.15em;color:var(--muted);
+  display:block;margin-bottom:3px;text-transform:uppercase;
+}
+
+.hint-close-row{
+  display:flex;justify-content:center;margin-top:4px;
+}
+
+.hint-close-btn{
+  font-family:'DM Mono',monospace;
+  font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;
+  padding:9px 28px;border-radius:4px;cursor:pointer;
+  background:transparent;color:var(--muted);border:1px solid var(--border);
+  transition:all 0.12s;
+}
+
+.hint-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.5);
+  z-index:199;display:none;
+}
+.hint-overlay.open{display:block;}
+
+/* streak banner */
+.streak-banner{
+  position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  background:var(--gold);color:#080810;
+  padding:7px 22px;border-radius:30px;
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1.1rem;letter-spacing:0.1em;
+  z-index:500;white-space:nowrap;
+  animation:bannerIn 0.35s ease both,bannerOut 0.35s 1.9s ease both;
+}
+@keyframes bannerIn{from{opacity:0;transform:translateX(-50%) translateY(-16px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+@keyframes bannerOut{to{opacity:0;}}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+</style>
+</head>
+<body>
+
+<!-- ══════════ HOME ══════════ -->
+<div class="screen active" id="homeScreen">
+  <p class="home-eyebrow">The pop culture trivia experience</p>
+  <h1 class="home-title">CULT<br>CONNECTIONS</h1>
+  <p class="home-sub">AI-generated · Infinite puzzles · No googling</p>
+
+  <div class="mode-grid">
+    <div class="mode-card solo" onclick="startMode('solo')">
+      <span class="mode-icon">🎸</span>
+      <span class="mode-name">Solo</span>
+      <span class="mode-desc">Music, film, TV, blues. The full mix.</span>
+    </div>
+    <div class="mode-card family" onclick="startMode('family')">
+      <span class="mode-icon">👨‍👩‍👧‍👦</span>
+      <span class="mode-name">Family</span>
+      <span class="mode-desc">Pick a player. Their wheelhouse, their rules.</span>
+    </div>
+    <div class="mode-card seinfeld" onclick="startMode('seinfeld')">
+      <span class="mode-icon">🥨</span>
+      <span class="mode-name">Seinfeld</span>
+      <span class="mode-desc">Deep cuts only. No soup for you.</span>
+    </div>
+    <div class="mode-card blitz" onclick="startMode('blitz')">
+      <span class="mode-icon">⚡</span>
+      <span class="mode-name">Blitz</span>
+      <span class="mode-desc">45 seconds. Wrong = -15 secs. Pure panic.</span>
+    </div>
+  </div>
+
+  <div class="diff-row">
+    <button class="diff-btn active" onclick="setDiff(this,'easy')">Easy</button>
+    <button class="diff-btn" onclick="setDiff(this,'medium')">Medium</button>
+    <button class="diff-btn" onclick="setDiff(this,'hard')">Hard</button>
+  </div>
+  <span class="ver" id="verLine">V9.0 · MOBILE FIRST · SEASONAL CONTENT · 25+ FREE PUZZLES</span>
+
+  <!-- Trial / access status -->
+  <div class="api-section" id="accessSection">
+    <div class="api-toggle" id="accessStatus">🎬 Free trial — see days remaining</div>
+  </div>
+</div>
+
+<!-- ══════════ FAMILY PICKER ══════════ -->
+<div class="screen" id="familyScreen">
+  <h2 class="screen-title">WHO'S PLAYING?</h2>
+  <p class="screen-sub">Puzzles lean into your territory</p>
+  <div class="player-grid">
+    <div class="player-card" onclick="selectPlayer(this,'scott')">
+      <span class="player-emoji">🎸</span>
+      <div class="player-name">Scott</div>
+      <div class="player-spec">Seinfeld · Blues · Guitar · Classic Film</div>
+    </div>
+    <div class="player-card" onclick="selectPlayer(this,'kids')">
+      <span class="player-emoji">⚡</span>
+      <div class="player-name">The Kids</div>
+      <div class="player-spec">Harry Potter · The Office · Friends · Pop</div>
+    </div>
+    <div class="player-card" onclick="selectPlayer(this,'mixed')">
+      <span class="player-emoji">🎯</span>
+      <div class="player-name">Mixed</div>
+      <div class="player-spec">Everyone suffers equally</div>
+    </div>
+    <div class="player-card" onclick="selectPlayer(this,'grudge')">
+      <span class="player-emoji">🔥</span>
+      <div class="player-name">Grudge Match</div>
+      <div class="player-spec">Scott vs Kids — alternating each round</div>
+    </div>
+  </div>
+  <button class="btn-primary" id="familyGoBtn" disabled onclick="launchFamily()">Let's Go →</button>
+  <button class="btn-ghost" onclick="showScreen('homeScreen')" style="margin-top:8px;">← Back</button>
+</div>
+
+<!-- ══════════ PURCHASE / UNLOCK ══════════ -->
+<div class="screen" id="purchaseScreen">
+  <h2 class="screen-title">UNLOCK FULL ACCESS</h2>
+  <p class="screen-sub">One-time purchase · No subscription · No auto-renewal</p>
+  <div class="player-grid">
+    <div class="player-card" onclick="purchaseTier('square_eyes')">
+      <span class="player-emoji">📺</span>
+      <div class="player-name">Square Eyes</div>
+      <div class="player-spec">1 month · $1.50 USD</div>
+    </div>
+    <div class="player-card" onclick="purchaseTier('couch_potato')">
+      <span class="player-emoji">🛋️</span>
+      <div class="player-name">Couch Potato</div>
+      <div class="player-spec">6 months · $7.50 USD</div>
+    </div>
+    <div class="player-card" onclick="purchaseTier('pop_culture_vulture')">
+      <span class="player-emoji">🦅</span>
+      <div class="player-name">Pop Culture Vulture</div>
+      <div class="player-spec">12 months · $10.00 USD</div>
+    </div>
+  </div>
+  <div class="api-hint" style="margin-top:12px;">The 25 free puzzles are always free — this just unlocks everything else, for the length of your pass.</div>
+  <button class="btn-ghost" onclick="showScreen('homeScreen')" style="margin-top:8px;">← Back</button>
+</div>
+
+<!-- ══════════ LOADING ══════════ -->
+<div class="screen" id="loadScreen">
+  <div class="load-logo">CULT CONNECTIONS</div>
+  <div class="load-msg" id="loadMsg">GENERATING YOUR PUZZLE...</div>
+  <div class="load-dots">
+    <div class="load-dot"></div>
+    <div class="load-dot"></div>
+    <div class="load-dot"></div>
+  </div>
+  <div class="load-themes" id="loadThemes"></div>
+</div>
+
+<!-- ══════════ SPLASH / READY ══════════ -->
+<div class="screen" id="splashScreen">
+<div class="splash-wrap">
+  <div class="splash-mode-badge" id="splashModeBadge">SOLO MODE · EASY</div>
+  <div class="splash-title">CULT<br>CONNECTIONS</div>
+  <div class="splash-theme" id="splashTheme">BLUES, FILM & STRINGS</div>
+  <div class="splash-divider"></div>
+
+  <div class="splash-how">
+    <div class="splash-rule">
+      <div class="splash-rule-num">1</div>
+      <div class="splash-rule-text">Find 4 tiles that share a hidden connection. Select them and hit <strong>Submit</strong>.</div>
+    </div>
+    <div class="splash-rule">
+      <div class="splash-rule-num">2</div>
+      <div class="splash-rule-text">Earn <strong>⭐ 1 star</strong> for each group solved without hints. Perfect puzzle = ⭐⭐⭐⭐.</div>
+    </div>
+    <div class="splash-rule">
+      <div class="splash-rule-num">3</div>
+      <div class="splash-rule-text">Stuck with 3 tiles selected? Tap <strong>💡 Hint</strong> — costs 1 ⭐ to reveal the 4th tile. No star awarded for that group.</div>
+    </div>
+    <div class="splash-rule">
+      <div class="splash-rule-num">4</div>
+      <div class="splash-rule-text">Complete <strong>10 puzzles in a row</strong> without a game over or timeout to earn a <strong>bonus ⭐</strong>.</div>
+    </div>
+  </div>
+
+  <div class="splash-meta">
+    <div class="splash-chip" id="splashTimerChip">
+      <div class="splash-chip-dot"></div>
+      <span id="splashTimerLabel">90 SECONDS</span>
+    </div>
+    <div class="splash-chip">
+      <div class="splash-chip-dot red"></div>
+      <span id="splashPenaltyLabel">-10 SECS PER MISS</span>
+    </div>
+    <div class="splash-chip">
+      <div class="splash-chip-dot orange"></div>
+      <span id="splashDiffLabel">EASY</span>
+    </div>
+  </div>
+
+  <button class="btn-go" onclick="goFromSplash()">GO →</button>
+  <div class="splash-no-scroll">TIMER STARTS WHEN YOU TAP GO</div>
+</div>
+</div>
+
+<!-- ══════════ GAME ══════════ -->
+<div class="screen" id="gameScreen">
+<div class="game-wrap">
+
+  <!-- top bar -->
+  <div class="g-topbar">
+    <div class="g-logo">CULT</div>
+    <div class="g-badges">
+      <div class="g-badge" id="puzzleBadge">PUZZLE #1</div>
+      <div class="g-stars" id="starDisplay">⭐ 0</div>
+    </div>
+  </div>
+
+  <!-- streak counter -->
+  <div class="g-streak-row" id="streakRow">
+    <div class="g-streak-label">PUZZLE STREAK</div>
+    <div class="g-streak-pip-row" id="streakPips"></div>
+    <div class="g-streak-label" id="streakCount">0 / 10</div>
+  </div>
+
+  <!-- timer + lives -->
+  <div class="g-timer-row">
+    <div class="g-timer-num" id="timerNum">1:30</div>
+    <div class="g-lives" id="livesRow"></div>
+  </div>
+  <div class="g-timer-track">
+    <div class="g-timer-fill" id="timerFill"></div>
+  </div>
+
+  <!-- INSTRUCTION STRIP — always visible, tells you what to do + theme -->
+  <div class="g-instruction">
+    <div class="g-instruction-text">Find 4 tiles that share a hidden connection. Select them and hit <strong>Submit</strong>.</div>
+    <div class="g-theme-pill" id="themePill">...</div>
+  </div>
+
+  <!-- progress -->
+  <div class="g-prog-track">
+    <div class="g-prog-fill" id="progFill"></div>
+  </div>
+
+  <!-- message -->
+  <div class="g-msg" id="msgArea"></div>
+
+  <!-- solved rows -->
+  <div id="solvedArea"></div>
+
+  <!-- tiles — fills remaining space -->
+  <div class="g-grid-wrap">
+    <div class="tile-grid" id="tileGrid"></div>
+  </div>
+
+  <!-- controls -->
+  <div class="g-ctrl">
+    <button class="btn-sm" id="shuffleBtn" onclick="doShuffle()">⇄</button>
+    <button class="btn-sm" id="clearBtn" onclick="doClear()">Clear</button>
+    <button class="btn-sm" id="submitBtn" disabled onclick="doSubmit()">Submit →</button>
+    <button class="hint-btn" id="hintBtn" onclick="doTileHint()">💡 Hint ★</button>
+    <button class="btn-sm" id="quitBtn" onclick="confirmQuit()">✕</button>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════ HINT OVERLAY + DRAWER ══════════ -->
+<div class="hint-overlay" id="hintOverlay" onclick="closeHintDrawer()"></div>
+<div class="hint-drawer" id="hintDrawer">
+  <div class="hint-drawer-handle"></div>
+  <div class="hint-drawer-title">💡 TILE HINT</div>
+  <div class="hint-drawer-sub" id="hintDrawerSub">Costs 1 ⭐ · Reveals the 4th tile · No star awarded for this group</div>
+  <div class="hint-cat-list" id="hintCatList"></div>
+  <div class="hint-close-row">
+    <button class="hint-close-btn" onclick="closeHintDrawer()">← Back to game</button>
+  </div>
+</div>
+
+<!-- ══════════ END ══════════ -->
+<div class="screen" id="endScreen">
+  <div class="end-headline" id="endHeadline">NAILED IT</div>
+
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val" id="statStars">0</div><div class="stat-key">STARS THIS PUZZLE</div></div>
+    <div class="stat-box"><div class="stat-val" id="statSolved">0/4</div><div class="stat-key">SOLVED</div></div>
+    <div class="stat-box"><div class="stat-val" id="statMistakes">0</div><div class="stat-key">MISTAKES</div></div>
+  </div>
+  <div class="stars-session-row" id="starsSessionRow"></div>
+
+  <div class="unsolved-section" id="unsolvedSection"></div>
+
+  <div class="end-actions">
+    <button class="btn-primary" onclick="nextPuzzle()">NEXT →</button>
+    <button class="btn-ghost" onclick="showScreen('homeScreen')">HOME</button>
+  </div>
+  <div class="session-tag" id="sessionTag"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
