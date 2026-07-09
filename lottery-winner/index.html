@@ -214,7 +214,7 @@ function ProUpgradeModal(props) {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        setCheckoutStatus({ type:"error", msg:"Checkout failed — " + (data.error || data.message || "please try again.") });
+        setCheckoutStatus({ type:"error", msg:"Checkout failed — please try again." });
         setLoading(false);
       }
     } catch(e) {
@@ -689,17 +689,6 @@ function ScorecardModal(props) {
           })
         ),
 
-        // Good deeds
-        entry.deeds && entry.deeds.length > 0 && React.createElement("div", { style:{
-          background:"#0a0d0a", border:"1px solid #1e2e1e", borderRadius:"6px",
-          padding:"0.75rem", marginBottom:"1rem", fontSize:"0.78rem", color:"#8fae8f", lineHeight:1.8
-        }},
-          React.createElement("div", { style:{ fontSize:"0.55rem", color:"#4a7a4a", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"0.4rem" } }, "Good Deeds"),
-          entry.deeds.map(function(d, i) {
-            return React.createElement("div", { key:i }, d);
-          })
-        ),
-
         // Leaderboard rank
         React.createElement("div", { style:{ textAlign:"center", fontSize:"0.75rem", color:"#555", marginBottom:"1rem" } }, rankStr),
 
@@ -728,17 +717,17 @@ function ScorecardModal(props) {
               var appUrl = "https://scvd-app.github.io/Easy-Come-Easy-Go";
               var scoreStr = entry.score !== null ? entry.score.toFixed(1) : "infinity";
               var el = document.getElementById("eceg-scorecard");
+              var summaryLine = fmtShortWin(entry.winAmount) + " win → " + fmtShortPassive(entry.passive) + "/mo = " + scoreStr;
+              var shareText = "I just played Ez C Ez G and I've got receipts.\n\n" +
+                summaryLine + "\n" + scoreLabel.label + " · " + entry.strategy + "\n\n" +
+                "Wanna give it a try?\n🎮 " + appUrl;
 
               function shareAsText() {
-                var summaryLine = fmtShortWin(entry.winAmount) + " win → " + fmtShortPassive(entry.passive) + "/mo = " + scoreStr;
-                var shareText = "I just played Ez C Ez G and I've got receipts.\n\n" +
-                  summaryLine + "\n" + scoreLabel.label + " · " + entry.strategy + "\n\n" +
-                  "Wanna give it a try?\n" + appUrl;
                 if (navigator.share) {
                   navigator.share({ title:"Ez C Ez G", url: appUrl, text: shareText })
-                    .catch(function(){ navigator.clipboard && navigator.clipboard.writeText(shareText + "\n" + appUrl); });
+                    .catch(function(){ navigator.clipboard && navigator.clipboard.writeText(shareText); });
                 } else {
-                  navigator.clipboard && navigator.clipboard.writeText(shareText + "\n" + appUrl);
+                  navigator.clipboard && navigator.clipboard.writeText(shareText);
                 }
               }
 
@@ -755,7 +744,7 @@ function ScorecardModal(props) {
                     var file = new File([blob], "eceg-score-" + scoreStr + ".png", { type:"image/png" });
                     var shareData = {
                       title: "Ez C Ez G — " + scoreStr,
-                      text: shareText + "\n\n🎮 " + appUrl,
+                      text: shareText,
                       files: [file]
                     };
                     if (navigator.canShare(shareData)) {
@@ -1054,7 +1043,6 @@ function fmtFull(n) {
 const C = {
   gold: "#C9A84C", black: "#0a0a0a", dark: "#141414",
   red: "#C0392B", green: "#27ae60", white: "#f5f3ee", dim: "#777",
-  amber: "#E8A33D",
 };
 
 function initialGS() {
@@ -1071,7 +1059,6 @@ function initialGS() {
     legacyScore: 0,
     gamblingTotal: 0,
     restrainedChoices: 0,
-    familyPressure: 0, friendPressure: 0, familyAskCount: 0, friendAskCount: 0, familyFriendSeen: [],
     isStructured: false,
     paulsonContact: 0,
     wifePortfolioValue: 0,
@@ -1128,8 +1115,7 @@ function nodeRoot(gs) {
   if (!gs.house) choices.push({ label: "🏠 Buy a house", next: "buy_house" });
   choices.push({ label: "🎉 Fun Stuff", next: "fun_stuff" });
   choices.push({ label: "📈 Invest", next: "invest" });
-  choices.push({ label: "💼 Minimise the tax bill", next: "generosity" });
-  choices.push({ label: "📵 Everyone wants a piece", next: "family_friends_menu" });
+  choices.push({ label: "🎁 Be generous", next: "generosity" });
   const hasActed = gs.car || gs.house || gs.quitJob || gs.investments.length > 0 || gs.holidays.length > 0 || gs.givens.length > 0;
   var text;
   if (gs.paulsonResigned && gs.kpPath === "empire") {
@@ -1381,52 +1367,14 @@ function nodeInvCryptoL(gs) { return { text: "Two million into MoonShiba." + (gs
 
 function nodeGenerosity(gs) {
   return {
-    text: "Your accountant mentioned a few structures worth considering. Genuinely deductible, genuinely useful, and it happens to help people. Where does it go?",
+    text: "Who gets a slice?",
     choices: [
       { label: "👨‍👩‍👧‍👦 Family gifts — $500,000 spread around", next: "give_family", cost: 500000 },
       { label: "💒 Pay off your parents' mortgage", next: "give_parents" },
       { label: "❤️ Set up a charity foundation — $1,000,000", next: "give_charity", cost: 1000000 },
       { label: "👋 Buy your best mate a house", next: "give_mate" },
-      { label: "🕊️ Fund anti-pigeon spikes for every statue downtown", next: "give_pigeon", cost: 210000 },
     ],
   };
-}
-function nodeGivePigeon(gs) { return { text: "The council calls it a 'heritage preservation and public amenity initiative'. You call it what it is: you were sick of the Queen Victoria statue looking like a war crime and you had $210,000 doing nothing. Every statue in the CBD gets spikes. Pigeon numbers are completely unaffected — they just relocate to the war memorial, which was not part of the budget. The statues, however, are immaculate. There's a small plaque now. It has your name on it. You did not ask for the plaque. You have not removed the plaque.", outcome: true, cost: 210000, choices: [{ label: "→ What's next?", next: "root" }], action: function(g) { return Object.assign({}, g, { givens: g.givens.concat(["anti-pigeon statue spikes"]), legacyScore: (g.legacyScore||0) + 2 }); } }; }
-
-function nodeMumDadResponse(gs) {
-  return {
-    text: "You're still holding the phone. That's the whole call — no ask, no advice, no angle. Just relief, and love, and an open door. What do you do with that?",
-    choices: [
-      { label: "🙏 \"Thanks Mum and Dad\" — and get on with your day", next: "mumdad_thanks" },
-      { label: "💐 Send them a hamper with flowers", next: "mumdad_hamper", cost: 350 },
-      { label: "🎁 Do something nice for them", next: "mumdad_gift_choice" },
-    ]
-  };
-}
-function nodeMumDadThanks(gs) {
-  return { text: "\"Thanks Mum and Dad.\" That's it. That's the whole message. They don't need more than that — they never did. You get on with your day feeling, unaccountably, about six years old and completely fine with it.", outcome: true, choices: [{ label: "→ What's next?", next: "root" }], action: function(g) { return Object.assign({}, g, { legacyScore: (g.legacyScore||0) + 2 }); } };
-}
-function nodeMumDadHamper(gs) {
-  return { text: "A ridiculous hamper turns up two days later — good cheese, flowers Mum will photograph from four angles, a card Dad definitely didn't write but definitely signed. Mum calls to say it's 'far too much' in a tone that makes clear it is exactly enough.", outcome: true, cost: 350, choices: [{ label: "→ What's next?", next: "root" }], action: function(g) { return Object.assign({}, g, { givens: g.givens.concat(["mum and dad hamper"]), legacyScore: (g.legacyScore||0) + 3 }); } };
-}
-function nodeMumDadGiftChoice(gs) {
-  return {
-    text: "Something real, then. Nothing they asked for — they never ask for anything. That's rather the point.",
-    choices: [
-      { label: "🚗 Buy Mum a Mercedes — $95,000", next: "mumdad_mercedes", cost: 95000 },
-      { label: "🏍️ Buy Dad a Harley — $35,000", next: "mumdad_harley", cost: 35000 },
-      { label: "🎁 Do both — $130,000", next: "mumdad_both", cost: 130000 },
-    ]
-  };
-}
-function nodeMumDadMercedes(gs) {
-  return { text: "A C-Class, champagne colour, obviously. Mum's never had anything new in her life — not once. The dealer hands her the keys and her face does something you'll remember for the rest of yours. Dad stands off to the side pretending to check the tyre pressure so nobody sees him wipe his eyes.", outcome: true, cost: 95000, choices: [{ label: "→ What's next?", next: "root" }], action: function(g) { return Object.assign({}, g, { givens: g.givens.concat(["mum's mercedes"]), legacyScore: (g.legacyScore||0) + 6 }); } };
-}
-function nodeMumDadHarley(gs) {
-  return { text: "Dad has wanted a Harley since roughly 1987 and has talked himself out of it every single year since, always for a sensible reason. There are no sensible reasons left. He rides it around the block twice before he'll even let anyone else touch it, grinning like a much younger man.", outcome: true, cost: 35000, choices: [{ label: "→ What's next?", next: "root" }], action: function(g) { return Object.assign({}, g, { givens: g.givens.concat(["dad's harley"]), legacyScore: (g.legacyScore||0) + 6 }); } };
-}
-function nodeMumDadBoth(gs) {
-  return { text: "The Mercedes and the Harley arrive the same weekend. Mum cries. Dad cries and pretends it's hay fever, indoors, in winter. Neither of them mentions money once — they're too busy arguing over whose new vehicle they're taking to Bunnings.", outcome: true, cost: 130000, choices: [{ label: "→ What's next?", next: "root" }], action: function(g) { return Object.assign({}, g, { givens: g.givens.concat(["mum's mercedes","dad's harley"]), legacyScore: (g.legacyScore||0) + 10 }); } };
 }
 function nodeGiveFamily(gs) { return { text: "Half a million spread across the family." + (gs.house ? " You host everyone at the " + gs.houseName + " to mark the occasion." : "") + " Three relatives immediately ask for more. Two stop calling when you say no. Welcome to new money.", outcome: true, cost: 500000, choices: [{ label: "→ What's next?", next: "root" }], action: function(g) { return Object.assign({}, g, { givens: g.givens.concat(["family gifts"]) }); } }; }
 function nodePoliticalDo(gs) {
@@ -1437,31 +1385,6 @@ function nodeGiveParentsDone(gs) { return { text: "Done. Their mortgage is gone.
 function nodeGiveCharity(gs) { return { text: "A million into a foundation. You fund scholarships, mental health programs, conservation. Your legacy starts taking shape. Unexpected satisfaction.", outcome: true, cost: 1000000, choices: [{ label: "→ What's next?", next: "root" }], action: function(g) { return Object.assign({}, g, { givens: g.givens.concat(["charity foundation"]) }); } }; }
 function nodeGiveMate(gs) { return { text: "Which mate?", choices: [{ label: "Solid mate — modest place — $650,000", next: "give_mate_done", cost: 650000 }, { label: "Best mate — proper house — $950,000", next: "give_mate_done", cost: 950000 }] }; }
 function nodeGiveMateDone(gs) { return { text: "Keys handed over. Your mate stands in his new house speechless." + (gs.house ? " It's modestly proportioned compared to the " + gs.houseName + ", but he doesn't care one bit." : "") + " This friendship is cemented for life.", outcome: true, choices: [{ label: "→ What's next?", next: "root" }], action: function(g) { return Object.assign({}, g, { givens: g.givens.concat(["mate's house"]) }); } }; }
-
-function nodeFamilyFriendsMenu(gs) {
-  var seen = gs.familyFriendSeen || [];
-  var famP = gs.familyPressure || 0, frnP = gs.friendPressure || 0;
-  var avail = [];
-  for (var i = 0; i < NOTIFICATIONS.length; i++) {
-    var n = NOTIFICATIONS[i];
-    if (n.circle !== "family" && n.circle !== "friend") continue;
-    if (n.minFamilyPressure && famP < n.minFamilyPressure) continue;
-    if (n.minFriendPressure && frnP < n.minFriendPressure) continue;
-    var nid = n.id !== undefined ? String(n.id) : String(i);
-    if (seen.indexOf(nid) < 0) avail.push({ n: n, id: nid });
-  }
-  if (avail.length === 0) {
-    return {
-      text: "You check your phone. Nobody's after anything right now. It won't last.",
-      choices: [{ label: "← Back", next: "root" }]
-    };
-  }
-  var choices = avail.map(function(a) {
-    return { label: "💬 " + a.n.from + " — " + a.n.preview, next: "__notif__", notifId: a.id };
-  });
-  choices.push({ label: "← Back", next: "root" });
-  return { text: "Your phone's been going off. A few people want something.", choices: choices };
-}
 
 
 // ── BILLIONAIRE PATH NODES ────────────────────────────────
@@ -1697,9 +1620,9 @@ function nodePoliticoRoot(gs) {
   var son = gs.sonName || "Bryce";
   var path = gs.politicoPath || 0;
   var choices = [];
-  if (path < 1) choices.push({ label:"📋 Water treatment contract — $8M, hire " + son, next:"politico_contract" });
-  if (path < 2 && path >= 1) choices.push({ label:"🏭 Council industrial precinct — 40% of valuation", next:"politico_precinct" });
-  if (path < 3 && path >= 2) choices.push({ label:"⚓ Regional port contract — 10 year exclusive", next:"politico_port" });
+  if (path < 2) choices.push({ label:"📋 Water treatment contract — $8M, hire " + son, next:"politico_contract" });
+  if (path < 3 && path >= 1) choices.push({ label:"🏭 Council industrial precinct — 40% of valuation", next:"politico_precinct" });
+  if (path < 4 && path >= 2) choices.push({ label:"⚓ Regional port contract — 10 year exclusive", next:"politico_port" });
   choices.push({ label:"🚶 Walk away from the arrangement", next:"politico_exit" });
   var text = path === 0
     ? "The Hon. Murray Cresswell MP settles into his chair and gets straight to the point. 'I'm in a position to direct some significant opportunities your way. Nothing improper — just making sure the right people are considered. In return, I need you to find a role for my son " + son + ". He's between things at the moment. Good lad.' He slides a folder across the table. You look at the numbers."
@@ -1865,7 +1788,6 @@ function nodePaulsonMediaDo(gs) { return { text: "The acquisition closes. You ar
 // Node lookup table
 const NODES = {
   root: nodeRoot,
-  family_friends_menu: nodeFamilyFriendsMenu,
   quit_job: nodeQuitJob, quit_polite: nodeQuitPolite, quit_car: nodeQuitCar,
   quit_rent_car: nodeQuitRentCar, quit_manure: nodeQuitManure, quit_band: nodeQuitBand,
   buy_car: nodeBuyCar,
@@ -1919,9 +1841,7 @@ const NODES = {
   paulson_media: nodePaulsonMedia, paulson_media_do: nodePaulsonMediaDo, structure_yes: nodeStructureYes, structure_no: nodeStructureNo,
   wife_portfolio: nodeWifePortfolio, wife_small: nodeWifeSmall, wife_mid: nodeWifeMid, wife_large: nodeWifeLarge,
   give_family: nodeGiveFamily, give_parents: nodeGiveParents, give_parents_done: nodeGiveParentsDone,
-  give_charity: nodeGiveCharity, give_mate: nodeGiveMate, give_mate_done: nodeGiveMateDone, give_pigeon: nodeGivePigeon,
-  mumdad_response: nodeMumDadResponse, mumdad_thanks: nodeMumDadThanks, mumdad_hamper: nodeMumDadHamper,
-  mumdad_gift_choice: nodeMumDadGiftChoice, mumdad_mercedes: nodeMumDadMercedes, mumdad_harley: nodeMumDadHarley, mumdad_both: nodeMumDadBoth,
+  give_charity: nodeGiveCharity, give_mate: nodeGiveMate, give_mate_done: nodeGiveMateDone,
 };
 
 // ── RANDOM EVENTS ─────────────────────────────────────────
@@ -2067,63 +1987,47 @@ var NOTIFICATIONS = [
   },
 
   // ── FAMILY & SOCIAL ──
-  { id:"mum_reno", type:"sms", tier:"neutral", circle:"family", from:"Mum", preview:"Heard the news!! So proud of you...",
+  { type:"sms", tier:"neutral", from:"Mum", preview:"Heard the news!! So proud of you...",
     body:"Heard the news!! So proud of you sweetheart. Your father and I were thinking — if you ever wanted to help us with the kitchen renovation we've been putting off... only if you want to! No pressure at all. Love you. Call me. xx",
     acceptLabel:"Transfer $45,000 for the reno", rejectLabel:"Call her later",
     onAccept:{ cost:45000, passiveAdd:0, msg:"The kitchen is done in six weeks. Your mum sends photos every day. Your dad rings to say it's 'very nice' which from him is effusive praise. Worth every cent." },
     onReject:{ cost:0, passiveAdd:0, msg:"You call her. She's thrilled just to hear your voice. The kitchen comes up twice. You change the subject both times. She lets it go. For now." }
   },
-  { id:"uncle_barry", type:"sms", tier:"neutral", circle:"family", from:"Uncle Barry", preview:"Mate! Big winner hey!!",
+  { type:"sms", tier:"neutral", from:"Uncle Barry", preview:"Mate! Big winner hey!!",
     body:"Mate!! Big winner hey! Good on ya. Listen — I've got this opportunity, mate of mine has a property development up the coast, needs a silent investor, minimum $200k, returns are incredible. Happy to put in a word. Give us a call.",
     acceptLabel:"Invest $200,000 with Uncle Barry's mate", rejectLabel:"Thanks Barry, I'm good",
     onAccept:{ cost:200000, passiveAdd:0, msg:"The development stalls at the planning stage. Barry's mate goes quiet. Barry says he's 'working on it'. The $200,000 is almost certainly gone. At Christmas Barry brings very good wine and doesn't mention it. You don't either." },
     onReject:{ cost:0, passiveAdd:0, msg:"Barry takes it well. He calls you 'smart' in a way that suggests he's slightly annoyed. He texts again three weeks later with a different opportunity. You don't reply to that one either." }
   },
-  { id:"cousin_damo", type:"sms", tier:"neutral", circle:"family", from:"Cousin Damo", preview:"Oi legend!! Heard about the lotto...",
+  { type:"sms", tier:"neutral", from:"Cousin Damo", preview:"Oi legend!! Heard about the lotto...",
     body:"Oi LEGEND!! Heard about the lotto. Absolute gun mate. Hey so I've been working on this app idea for about 3 years now, just need a bit of seed funding to get it off the ground, like $50k would do it, happy to give you 30% equity. It's basically Uber but for lawn mowing. Let me know!!",
     acceptLabel:"Give Damo $50,000 for the lawn app", rejectLabel:"Pass, mate",
     onAccept:{ cost:50000, passiveAdd:0, msg:"Damo spends $8,000 on a logo. The app is never built. At the next family barbecue he tells everyone he's 'between development cycles'. You nod. The $50,000 buys you the right to never mention it." },
     onReject:{ cost:0, passiveAdd:0, msg:"Damo says 'no worries legend' and you don't hear from him for four months. Then he texts asking if you know any investors." }
   },
-  { id:"old_school_mate", type:"sms", tier:"neutral", circle:"friend", from:"Old school mate", preview:"Bro!! Massive congrats...",
+  { type:"sms", tier:"neutral", from:"Old school mate", preview:"Bro!! Massive congrats...",
     body:"Bro!! Massive congrats, you deserve it. Hey completely unrelated — remember when I helped you move that bookshelf back in 2019? Just saying. Anyway hope you're well, we should catch up for a beer sometime, my shout obviously ha ha... unless you want to get it.",
     acceptLabel:"Shout him dinner — $380", rejectLabel:"Suggest he owes you for the other bookshelf",
     onAccept:{ cost:380, passiveAdd:0, msg:"Great dinner. He mentions the bookshelf twice more. You don't. The friendship survives." },
     onReject:{ cost:0, passiveAdd:0, msg:"He sends back three laughing emojis and then goes quiet for a suspiciously long time." }
   },
-  { id:"sister_europe", type:"sms", tier:"neutral", circle:"family", from:"Sister", preview:"Hey!! So amazing, so happy for you...",
+  { type:"sms", tier:"neutral", from:"Sister", preview:"Hey!! So amazing, so happy for you...",
     body:"Hey!! So amazing, so happy for you!! We're all so proud. Hey so you know how Tom and I have been wanting to take the kids to Europe? We've been saving for two years but it's just so expensive... we'd obviously pay you back. Maybe $15,000? Only if it's easy for you. No pressure!",
     acceptLabel:"Sort the Europe trip — $15,000", rejectLabel:"Suggest they keep saving",
     onAccept:{ cost:15000, passiveAdd:0, msg:"The family sends photos from Rome, Paris, London. Your nephew calls it 'the best holiday ever'. Your sister cries when she thanks you. She pays back $4,000 over the next year without being asked. You tell her to stop." },
     onReject:{ cost:0, passiveAdd:0, msg:"She completely understands. She texts three weeks later to say they found flights on sale and they're going anyway. You feel both relieved and slightly guilty." }
   },
-  { id:"dad_lunch", type:"call", tier:"neutral", circle:"family", from:"Dad", preview:"Just checking in son...",
+  { type:"call", tier:"neutral", from:"Dad", preview:"Just checking in son...",
     body:"Just checking in, son. Your mother says you've been busy. Good. Listen — don't go mad with it. I knew a bloke who won a lot of money once. Spent it all in three years. Cars and holidays. Nothing to show for it. Invest in land. That's what I'd do. Anyway. How are you?",
     acceptLabel:"Have the conversation — invite him for lunch", rejectLabel:"Tell him you have it under control",
     onAccept:{ cost:220, passiveAdd:0, msg:"Lunch is excellent. He orders the second-cheapest thing on the menu out of habit. You insist on paying. He argues briefly then accepts. He gives you three pieces of financial advice, all of them correct, none of them you didn't already know. It's a good afternoon." },
     onReject:{ cost:0, passiveAdd:0, msg:"'Good,' he says. 'Just checking.' He asks about the weather where you are. You talk for seven minutes. He says 'righto' three times. You both hang up feeling fine." }
   },
-  { id:"work_colleague", type:"sms", tier:"neutral", circle:"friend", from:"Work colleague", preview:"Hey mate, heard the news congrats!",
+  { type:"sms", tier:"neutral", from:"Work colleague", preview:"Hey mate, heard the news congrats!",
     body:"Hey mate, heard the news congrats! That's amazing. Hey did you see they replaced you with two contractors and a 'productivity initiative'? Your old job posting is literally on Seek. Anyway hope you're living your best life. Dave says hi.",
     acceptLabel:"Like the message", rejectLabel:"Leave on read",
     onAccept:{ cost:0, passiveAdd:0, msg:"You double-tap it. Then you close the app and go for a drive." },
     onReject:{ cost:0, passiveAdd:0, msg:"You screenshot it and send it to no one. You just keep it. For reasons." }
-  },
-
-  // ── UNCLE RAY — the will-chaser (unlocks once family pressure builds) ──
-  { id:"uncle_ray", type:"sms", tier:"neutral", circle:"family", minFamilyPressure:3, from:"Uncle Ray", preview:"Hey stranger! Been too long...",
-    body:"Hey stranger! Been way too long, hasn't it. Ten years? Feels like it. Anyway I saw the news and thought — life's too short, we should really keep in touch more. Family's family at the end of the day, hey. How's the money going? Just interested, not FOR anything obviously ha. Anyway I'm around if you ever want to catch up. Or if you need someone to talk to. About anything. Financial or otherwise.",
-    acceptLabel:"Send $8,000 — keep the peace", rejectLabel:"Politely keep your distance",
-    onAccept:{ cost:8000, passiveAdd:0, msg:"Ray sends a laughing-crying emoji and 'you're a legend'. He mentions, unprompted, that he 'never got round to updating his will' and that you 'should really come round for a chat about that sort of thing sometime'. You do not go round." },
-    onReject:{ cost:0, passiveAdd:0, msg:"Ray goes quiet for a bit, then likes an old photo of you from 2014. You're not sure what that means. Neither, probably, is he." }
-  },
-
-  // ── ROBBO — the dodgy pitch (unlocks once friend pressure builds) ──
-  { id:"robbo", type:"sms", tier:"borderline", circle:"friend", minFriendPressure:3, from:"Robbo", preview:"BROTHER. Been thinking about you...",
-    body:"BROTHER. Been thinking about you, heard the news, absolute scenes. Look I don't normally do this but I've got something huge — I'm in early on a thing, can't say too much yet, but it's basically guaranteed 4x in six months. Minimum in is $25k. I've already got three mates in. Would hate for you to miss it purely because I didn't mention it, you know? Let me know today ideally, spots are filling.",
-    acceptLabel:"In for $25,000 — Robbo's sure thing", rejectLabel:"Pass on the sure thing",
-    onAccept:{ cost:25000, passiveAdd:0, msg:"Robbo goes quiet for six weeks. Then: 'mate so slight update, it's more of a medium-term hold now.' Then nothing. You see him a year later at a mutual friend's engagement party. He tells a very confident story about 'diversifying out' of it. You let him have it." },
-    onReject:{ cost:0, passiveAdd:0, msg:"Robbo says 'all good brother, your loss haha' and posts a screenshot of 'gains' three weeks later with no context. You are not tagged. You notice anyway." }
   },
 
   // ── POLITICO APPROACH ──
@@ -2169,28 +2073,16 @@ var NOTIFICATIONS = [
 ];
 
 function getNotification(gs, shownIds) {
-  var famP = gs.familyPressure || 0, frnP = gs.friendPressure || 0;
   var available = [];
   for (var i = 0; i < NOTIFICATIONS.length; i++) {
     var n = NOTIFICATIONS[i];
     if (n.gatesPath || n.paulsonStructureTrigger || n.paulsonContact || n.politicoTrigger) continue;
     if (n.id === "paulson_2" || n.id === "paulson_3" || n.id === "paulson_4") continue;
-    if (n.minFamilyPressure && famP < n.minFamilyPressure) continue;
-    if (n.minFriendPressure && frnP < n.minFriendPressure) continue;
     var nid = n.id !== undefined ? String(n.id) : String(i);
-    if (shownIds.indexOf(nid) < 0) {
-      var weight = n.circle === "family" ? (1 + famP) : n.circle === "friend" ? (1 + frnP) : 1;
-      available.push({ notif: n, id: nid, weight: weight });
-    }
+    if (shownIds.indexOf(nid) < 0) available.push({ notif: n, id: nid });
   }
   if (available.length === 0) return null;
-  var totalWeight = available.reduce(function(s, a){ return s + a.weight; }, 0);
-  var roll = Math.random() * totalWeight;
-  for (var j = 0; j < available.length; j++) {
-    roll -= available[j].weight;
-    if (roll <= 0) return available[j];
-  }
-  return available[available.length - 1];
+  return available[Math.floor(Math.random() * available.length)];
 }
 
 
@@ -2734,7 +2626,7 @@ function AnimatedNumber(props) {
     }
     requestAnimationFrame(tick);
   }, [value]);
-  return React.createElement("span", null, (Math.round(display) < 0 ? "-" : "") + prefix + Math.abs(Math.round(display)).toLocaleString("en-AU") + suffix);
+  return React.createElement("span", null, prefix + Math.round(display).toLocaleString("en-AU") + suffix);
 }
 
 // ── REVEAL SCREEN ─────────────────────────────────────────
@@ -2945,8 +2837,7 @@ function HUD(props) {
   var target = calcTarget(winAmount);
   var pct = Math.min((passiveIncome / target) * 100, 100);
   var y = Math.floor(weeksElapsed / 52), w = weeksElapsed % 52;
-  var negative = cash < 0;
-  var low = !negative && cash < winAmount * 0.08;
+  var low = cash < winAmount * 0.08;
   var daysEl = daysElapsed;
 
   // Row 1: Cash | Passive | Time | Buttons
@@ -2959,8 +2850,8 @@ function HUD(props) {
       // Cash
       React.createElement("div", { style: { textAlign:"center", flex:"1 1 0" } },
         React.createElement("div", { style: { fontSize:"0.52rem", letterSpacing:"0.15em", color:C.dim, textTransform:"uppercase" } }, "Cash"),
-        React.createElement("div", { style: { fontSize:"1.25rem", fontWeight:"bold", color: negative ? C.amber : low ? C.red : C.gold, animation:(low||negative) ? "warn 1.4s ease-in-out infinite" : "none", lineHeight:1.1 } },
-          React.createElement(AnimatedNumber, { value: cash })
+        React.createElement("div", { style: { fontSize:"1.25rem", fontWeight:"bold", color:low ? C.red : C.gold, animation:low ? "warn 1.4s ease-in-out infinite" : "none", lineHeight:1.1 } },
+          React.createElement(AnimatedNumber, { value: Math.max(0, cash) })
         )
       ),
 
@@ -3747,7 +3638,6 @@ function NotificationInbox(props) {
   var onClose = props.onClose;
   var onProUpgrade = props.onProUpgrade || function(){};
   var count = queue.length + inbox.length;
-  var expandedS = useState(null); var expandedKey = expandedS[0], setExpandedKey = expandedS[1];
 
   function renderMessage(notif, i, isPending) {
     var isKP = notif.type === "kp" || notif.sender === "K.P.";
@@ -3810,27 +3700,11 @@ function NotificationInbox(props) {
           : React.createElement(React.Fragment, null,
               queue.map(function(notif, i) { return renderMessage(notif, i, true); }),
               inbox.map(function(notif, i) {
-                var key = "i"+i;
-                var isOpen = expandedKey === key;
-                var isKPm = notif.type==="kp"||notif.sender==="K.P.";
-                var isPaulsonm = notif.type==="paulson"||notif.sender==="Richard Paulson";
-                return React.createElement("div", {
-                  key:key,
-                  onClick: function(){ setExpandedKey(isOpen ? null : key); },
-                  style:{ padding:"0.85rem 1rem", borderBottom:"1px solid #1a1a1a", opacity: isOpen ? 1 : 0.55, cursor:"pointer" }
-                },
-                  React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center" } },
-                    React.createElement("div", { style:{ fontSize:"0.78rem", color: isKPm ? "#C0392B88" : "#888" } },
-                      isKPm ? "⚡ K.P." : isPaulsonm ? "📊 Richard Paulson" : (notif.from||notif.sender||"Message")
-                    ),
-                    React.createElement("div", { style:{ fontSize:"0.65rem", color:"#444" } }, isOpen ? "▲" : "▼")
+                return React.createElement("div", { key:"i"+i, style:{ padding:"0.85rem 1rem", borderBottom:"1px solid #1a1a1a", opacity:0.55 } },
+                  React.createElement("div", { style:{ fontSize:"0.78rem", color: notif.type==="kp"||notif.sender==="K.P." ? "#C0392B88" : "#888" } },
+                    notif.type==="kp"||notif.sender==="K.P." ? "⚡ K.P." : notif.type==="paulson"||notif.sender==="Richard Paulson" ? "📊 Richard Paulson" : (notif.from||notif.sender||"Message")
                   ),
-                  React.createElement("div", { style:{ fontSize:"0.72rem", color:"#555", lineHeight:1.5 } }, notif.preview || ""),
-                  isOpen && notif.body && React.createElement("div", { style:{ fontSize:"0.72rem", color:"#888", lineHeight:1.6, marginTop:"0.5rem", whiteSpace:"pre-wrap" } }, notif.body),
-                  isOpen && isKPm && notif.cta === "pro" && React.createElement("button", {
-                    onClick: function(e) { e.stopPropagation(); onProUpgrade(); },
-                    style:{ marginTop:"0.75rem", width:"100%", background:"linear-gradient(135deg,#7a0000,#C0392B)", border:"none", borderRadius:"6px", padding:"0.65rem", color:"#fff", fontSize:"0.8rem", fontWeight:"bold", cursor:"pointer", letterSpacing:"0.08em", fontFamily:"Georgia,serif" }
-                  }, "Buy Pro — Come have a drink 🥃")
+                  React.createElement("div", { style:{ fontSize:"0.72rem", color:"#555", lineHeight:1.5 } }, notif.preview || "")
                 );
               })
             )
@@ -4147,23 +4021,6 @@ function App() {
     }
   }, [daysElapsed, gameState.quitJob, screen]);
 
-  // ── MUM AND DAD — the only ones who don't want anything ──
-  useEffect(function() {
-    if (screen !== "game") return;
-    if (daysElapsed >= 2 && shownNotifsRef.current.indexOf("mumdad_call") < 0) {
-      shownNotifsRef.current = shownNotifsRef.current.concat(["mumdad_call"]);
-      setPendingNotif({
-        id: "mumdad_call", type:"call", tier:"legit",
-        from:"Mum & Dad", preview:"We just wanted to say...",
-        body:"Hi love. We just wanted to say — we're so, so happy for you. You don't have to worry anymore. That's all we care about. Whatever you do with it, however you spend it, we're proud of you and we love you. We're always here if you need us — for anything, not just this. Call us when you get a chance.",
-        acceptLabel:"Answer", rejectLabel:"Call them back later",
-        mumDadTrigger: true,
-        onAccept:{ cost:0, passiveAdd:0, msg:"You answer. Mum's voice catches a little. Dad gets on the extension halfway through and doesn't say much, but he's there. Neither of them asks for anything. Neither of them has an opinion on what you should do with it. It's oddly disarming." },
-        onReject:{ msg:"You'll call them back. You mean to. The moment passes, but the message sits there, unlike every other one in your inbox." }
-      });
-    }
-  }, [daysElapsed, screen]);
-
   // ── STEVE'S TEXT — fires 3 weeks after Greg blocked OR after manure quit ──
   useEffect(function() {
     if (gameState.hasBoughtBusiness) return;
@@ -4176,14 +4033,10 @@ function App() {
     if (daysElapsed < 21) return;
     if (shownNotifsRef.current.indexOf("steve_text") >= 0) return;
     shownNotifsRef.current = shownNotifsRef.current.concat(["steve_text"]);
-    var stevePreview = manureQuit ? "Mate how did you know things had gone to poop..." : "Mate. Since you left the place has gone sideways...";
-    var steveBody = manureQuit
-      ? "Mate how did you know things had gone to poop since you left? We all wish that you could buy the place out — we would make it work for you — you know what Greg is like, he won't listen to anyone!\n\n— Steve"
-      : "Mate.\n\nSince you left the place has gone sideways. Greg won't listen to anyone. Half the team is looking for other jobs. I keep telling him what needs fixing — he won't hear it.\n\nI know it's a big ask but... I wish you could buy the place. We'd make it work. The whole team would. Anyway. Hope you're doing well out there.\n\n— Steve";
     setPendingNotif({
       id: "steve_text", type:"sms", tier:"legit",
-      from:"Steve", preview:stevePreview,
-      body:steveBody,
+      from:"Steve", preview:"Mate. Since you left the place has gone sideways...",
+      body:"Mate.\n\nSince you left the place has gone sideways. Greg won't listen to anyone. Half the team is looking for other jobs. I keep telling him what needs fixing — he won't hear it.\n\nI know it's a big ask but... I wish you could buy the place. We'd make it work. The whole team would. Anyway. Hope you're doing well out there.\n\n— Steve",
       acceptLabel:"Tell Steve you're interested", rejectLabel:"Not right now mate",
       steveContactTrigger: true,
       onAccept:{ cost:0, passiveAdd:0, msg:"You text Steve back. Three words: 'Get a valuation.' Steve replies in forty seconds with a thumbs up and then immediately a spreadsheet he clearly had ready." },
@@ -4195,13 +4048,13 @@ function App() {
   useEffect(function() {
     if (screen !== "game") return;
     if (tierScreen === "tycoon_chase") {
-      if (!gameState.tycoonMode && passiveIncome >= MOGUL_PASSIVE_TARGET) { setTierScreen("mogul"); return; }
+      if (passiveIncome >= MOGUL_PASSIVE_TARGET) { setTierScreen("mogul"); return; }
       if (totalAssets >= TYCOON_ASSET_TARGET) { setTierScreen("tycoon"); return; }
     }
     if (tierScreen === "none" && passiveIncome > 0) {
       if (passiveIncome >= calcTarget(winAmount)) { setTimeout(function(){setTierScreen("suburban");},600); }
     }
-  }, [passiveIncome, totalAssets, tierScreen, winAmount, screen, gameState.tycoonMode]);
+  }, [passiveIncome, totalAssets, tierScreen, winAmount, screen]);
 
   // ── CLOCK ──
   useEffect(function() {
@@ -4213,7 +4066,6 @@ function App() {
       if (nw <= weeksRef.current) return;
       weeksRef.current = nw;
       setWeeksElapsed(nw);
-      setGameState(function(gs){return Object.assign({},gs,{familyPressure:Math.max(0,(gs.familyPressure||0)-1),friendPressure:Math.max(0,(gs.friendPressure||0)-1)});});
       var weeklyPassive = passRef.current / 4.33;
       setCash(function(c){return c + weeklyPassive;});
       // Passive glow every 4 weeks
@@ -4386,20 +4238,9 @@ function App() {
     (gs.holidays||[]).forEach(function(h){assets.push("✈️ "+h);});
     (gs.bigToys||[]).forEach(function(t){assets.push("🏎️ "+t);});
     (gs.investments||[]).slice(0,4).forEach(function(inv){assets.push("📈 "+inv.type);});
-    var GIVEN_LABELS = {
-      "family gifts": "👨‍👩‍👧‍👦 Family gifts — $500,000 spread around",
-      "parents' mortgage": "💒 Paid off parents' mortgage",
-      "charity foundation": "❤️ Charity foundation established",
-      "mate's house": "👋 Bought a mate a house",
-      "anti-pigeon statue spikes": "🕊️ Funded anti-pigeon spikes for every statue downtown",
-      "mum's mercedes": "🚗 Bought Mum a Mercedes",
-      "dad's harley": "🏍️ Bought Dad a Harley",
-      "mum and dad hamper": "💐 Sent Mum and Dad a hamper"
-    };
-    var deeds = (gs.givens||[]).map(function(g){ return GIVEN_LABELS[g] || ("🎁 " + g); });
     var now = new Date();
     var dateStr = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
-    var entry = { name:playerName||"Anonymous", score:score, winAmount:winAmount, passive:passiveIncome, strategy:strategy, timeStr:timeStr, assets:assets, deeds:deeds, date:dateStr, ending:ending, history:gs.netWorthHistory||[] };
+    var entry = { name:playerName||"Anonymous", score:score, winAmount:winAmount, passive:passiveIncome, strategy:strategy, timeStr:timeStr, assets:assets, date:dateStr, ending:ending, history:gs.netWorthHistory||[] };
     var newBoard = saveToLeaderboard(entry);
     setBoard(newBoard);
     var rank = newBoard.findIndex(function(e){return e.name===entry.name&&e.date===entry.date&&e.score===entry.score;});
@@ -4455,11 +4296,6 @@ function App() {
     if (choice.next==="__finance__"){setShowFinance({});return;}
     if (choice.next==="__tycoon__"){setShowTycoon(true);return;}
     if (choice.next==="__bill_finale__"){setShowBillFinale(true);return;}
-    if (choice.next==="__notif__"){
-      var picked = NOTIFICATIONS.filter(function(n){return (n.id!==undefined?String(n.id):"")===choice.notifId;})[0];
-      if (picked) { shownNotifsRef.current = shownNotifsRef.current.concat([choice.notifId]); setPendingNotif(picked); }
-      return;
-    }
     var cost=choice.cost||0;
     var pAdd=(choice.passiveAdd||0)+(node.passiveAdd||0);
     var aAdd=(choice.annualAdd||0)+(node.annualAdd||0);
@@ -4546,24 +4382,19 @@ function App() {
       return;
     }
     if(notif.gatesPath){setGameState(function(gs){return Object.assign({},gs,{billionaireMode:true});});setNodeKey("bill_root");setNotifResult({msg:notif.onAccept.msg,cost:0,passiveAdd:0});return;}
-    if(notif.mumDadTrigger){setNodeKey("mumdad_response");setNotifResult({msg:notif.onAccept.msg,cost:0,passiveAdd:0});return;}
     if(notif.paulsonStructureTrigger){setGameState(function(gs){return Object.assign({},gs,{paulsonContact:Math.max(2,gs.paulsonContact||0)});});setNodeKey("paulson_structure");setNotifResult({msg:notif.onAccept.msg,cost:0,passiveAdd:0});return;}
     if(notif.paulsonContact){
       var pc=notif.paulsonContact,pCost=notif.onAccept.cost||0,pPA=notif.onAccept.passiveAdd||0;
-      var wentNegative=pCost>0 && cashRef.current<pCost;
-      if(pCost>0)setCash(function(c){return c-pCost;});
+      if(pCost>0)setCash(function(c){return Math.max(0,c-pCost);});
       if(pPA>0)setPassiveIncome(function(p){return p+pPA;});
       setGameState(function(gs){return Object.assign({},gs,{paulsonContact:Math.max(gs.paulsonContact||0,pc),billionaireMode:pc>=4?true:gs.billionaireMode});});
       if(pc>=4)setNodeKey("paulson_opportunity");
-      var pMsg=notif.onAccept.msg + (wentNegative ? " Richard doesn't blink at the number. \"Yes, this sends you negative,\" he says. \"But you're in the big leagues now — the bank works for you, not the other way around. Understand there's good debt and there's bad debt. Bad debt buys you a car that depreciates the moment you drive it off the lot. Good debt buys an asset that pays you back more than it costs to hold. I will only ever put you into good debt. Pull the trigger — I'll set up a line of credit for you with the bank.\"" : "");
-      setNotifResult({msg:pMsg,cost:pCost,passiveAdd:pPA});
+      setNotifResult({msg:notif.onAccept.msg,cost:pCost,passiveAdd:pPA});
       return;
     }
     var oa2=notif.onAccept;
-    if(oa2.cost>0)setCash(function(c){return c-oa2.cost;});
+    if(oa2.cost>0)setCash(function(c){return Math.max(0,c-oa2.cost);});
     if(oa2.passiveAdd>0)setPassiveIncome(function(p){return p+oa2.passiveAdd;});
-    if(notif.circle==="family")setGameState(function(gs){return Object.assign({},gs,{familyPressure:Math.min(9,(gs.familyPressure||0)+3),familyAskCount:(gs.familyAskCount||0)+1,familyFriendSeen:(gs.familyFriendSeen||[]).concat([String(notif.id)])});});
-    if(notif.circle==="friend")setGameState(function(gs){return Object.assign({},gs,{friendPressure:Math.min(9,(gs.friendPressure||0)+3),friendAskCount:(gs.friendAskCount||0)+1,familyFriendSeen:(gs.familyFriendSeen||[]).concat([String(notif.id)])});});
     setNotifResult({msg:oa2.msg,cost:oa2.cost||0,passiveAdd:oa2.passiveAdd||0});
   }, [pendingNotif]);
 
@@ -4578,8 +4409,6 @@ function App() {
     } else if(pendingNotif && pendingNotif.onReject && pendingNotif.onReject.msg) {
       setNotifResult({msg:pendingNotif.onReject.msg, cost:0, passiveAdd:0});
     }
-    if(pendingNotif && pendingNotif.circle==="family")setGameState(function(gs){return Object.assign({},gs,{friendPressure:Math.min(9,(gs.friendPressure||0)+3),familyFriendSeen:(gs.familyFriendSeen||[]).concat([String(pendingNotif.id)])});});
-    if(pendingNotif && pendingNotif.circle==="friend")setGameState(function(gs){return Object.assign({},gs,{familyPressure:Math.min(9,(gs.familyPressure||0)+3),familyFriendSeen:(gs.familyFriendSeen||[]).concat([String(pendingNotif.id)])});});
     setPendingNotif(null);
   },[pendingNotif]);
   var handleNotifResultDone = useCallback(function(){setNotifResult(null);},[]);

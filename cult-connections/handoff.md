@@ -1,46 +1,62 @@
 # Cult Connections — Project Handoff
 
-**Session:** 1 (migration from Claude artifact to SCVD-App pattern)
-**Date:** 4 July 2026
-**Status:** BETA — ready for GitHub, not yet deployed, no Stripe/worker live yet
-**Version:** v9
+**Session:** 2 (content expansion, tier naming, live bug hunt)
+**Date:** 4 July 2026 (late session)
+**Status:** ✅ LIVE, playable, monetization tiers named — but see 🚨 CRITICAL BUG below, found in this session's final minutes, NOT YET FIXED
+**Version:** v9 (app.js has had several small live pushes since — see Session 1 handoff for full v9 build history)
 
 ---
 
-## Overview
+## 🚨 CRITICAL — Puzzle repetition bug confirmed live, fix identified but not yet shipped
 
-Pop culture Connections-style trivia game. Migrated from a standalone Claude artifact (7 prior iterations) into the SCVD GitHub Pages + Cloudflare Worker pattern, matching Mic Drop / ECEG / Chasin' Curves.
+**Symptom (confirmed via 20 screenshots from a single ~9-minute, 32-puzzle play session):** puzzles from the `mixed` bank repeat in a perfectly deterministic, identical 5-cycle — `EVERYONE SUFFERS EQUALLY → CROSS-GENERATIONAL → FAMILY CHALLENGE → POP CULTURE MASHUP → KATH & KIM MEETS THE WORLD → repeat`, exact same order, every single lap, 4 times in a row observed. This means the shuffle-bag rotation fix built earlier in Session 1 is **not actually preventing repetition in practice**, whatever the underlying cause turns out to be.
 
-## Stack
+**Confirmed code defect (verified by direct simulation, not just review):** `app.js` contains **two separate `function shuffle(arr){...}` declarations** — the new one written for the rotation fix (returns a shuffled copy), and an older pre-existing one used by the in-game "shuffle tiles" button (mutates in place, **no return statement**). In JavaScript, when a function name is declared twice in the same scope, the **later declaration in the file wins for every call in the entire script**, regardless of where each declaration or call site sits. I verified this both by extracting the exact live code and running it in Node with a mocked `localStorage`, and by an isolated test of the hoisting behavior itself. Result: every call to the new rotation logic silently invokes the *old* shuffle instead, which returns `undefined`, which causes `getFallback()` to throw immediately.
 
-Vanilla JS single-file split into `index.html` + `app.js`, no build tools, no React (unlike Chasin' Curves — this one never needed component state complexity). Cloudflare Worker planned for payment/token verification only — **not yet built**.
+**The contradiction worth understanding before "fixing" this:** a throw inside `getFallback()` should make the game get stuck on the loading screen, not cycle cleanly through 5 puzzles the way the screenshots show. Two possible explanations, not mutually exclusive:
+
+1. **Most likely: browser/CDN caching.** We spent a large chunk of Session 1 fighting exactly this class of problem (GitHub Pages serving a stale file despite a successful-looking deploy). It's very plausible the phone was still running an **older cached `app.js`** — specifically the version *before* the shuffle-bag fix, which still has the original bug (an in-memory counter that never resets mid-session, producing exactly this kind of clean deterministic repeat). This fits the observed symptom perfectly and doesn't require anything to have silently swallowed a crash.
+2. **Less likely but not ruled out:** something in the live browser environment (not reproduced in this Node simulation) is catching the throw and falling back to a sequential order without surfacing an error. Worth checking Chrome's DevTools console on-device for actual thrown errors before assuming #1 is the full story.
+
+**The fix is unambiguous either way** — rename the new function (e.g. `shuffle` → `shuffleArray`) so it can never collide with the older tile-shuffle function again. This should be done regardless of which explanation above turns out to be correct.
+
+**Recommended steps for next session, in order:**
+1. Rename the rotation-logic `shuffle` function to `shuffleArray` (and update its two call sites inside `getShuffleBag` and `getFallback`) to eliminate the naming collision permanently
+2. Before considering this closed, **actually test live in a real browser** — open Chrome DevTools on the phone or desktop, hard-refresh to guarantee the latest `app.js`, and play through more than one full bag-cycle (6+ puzzles) watching the console for errors, not just eyeballing whether puzzles repeat
+3. Confirm `localStorage` under key `cc_bag_mixed` (and the other player pools) actually contains a sensible array of remaining indices between puzzles, using DevTools' Application/Storage tab
+4. Once confirmed fixed, this is a good moment to also verify the `scott` bank rotation is behaving correctly given it's now grown from 7 to 8 puzzles this session — worth confirming the "bag becomes invalid if bank size changed, reshuffle fresh" logic in `getShuffleBag` actually triggers correctly when new content is added mid-flight
 
 ---
 
-## What changed this session (v7 artifact → v9)
+## What else happened this session
 
-### Content bug fixes
-- Seinfeld fallback bank: "Merv Griffin set" was wrongly attributed to Newman (it's Kramer's scheme) — fixed in both `scott` and `seinfeld` banks
-- "George's real jobs" wrongly listed Vandelay Industries (his fake company) as a real job — replaced with Real Estate Broker / NY Yankees / Play Now Sporting Goods / Kruger Industrial Smoothing
-- Kath & Kim pack: "Dragons Abreast" appeared as both a location and a hobby in the same puzzle — kept under hobbies only
-- Verified with a scripted same-puzzle duplicate scanner — clean
+### Content bug fixes (verified via web search before shipping, learning from an earlier mistake this same evening where an unverified "fix" introduced two new factual errors)
+- **Crossroads Film Characters**: swapped "Lightning Boy" (Eugene's own alias, not a real fourth character) for **Jack Butler** (the actual antagonist), per Scott's direct knowledge of the film
+- **Newman's Seinfeld category** — a second-pass correction was needed after an earlier fix (in Session 1) turned out to itself contain two factual errors (Bosco belongs to George, not Newman; "Race Walking Cheat" doesn't exist — that episode is about Jerry, not Newman, and it's a sprint not race-walking). Replaced with four properly source-verified items: Hoards Mail In Storage, Bottle Return Scheme, Flea Infestation, Reads Elaine's Mail
+- **Les Paul Legendary Players**: swapped Joe Perry for **Slash**, per Scott's correction (Slash is well-documented, including by Gibson itself, as reviving Les Paul's popularity in the late 80s via Guns N' Roses) — worth noting Slash now appears in three different puzzles across the bank (not a bug, just a recurrence pattern worth having in mind for future content)
 
-### Content model change — live AI generation removed entirely
-- Previously: player could paste an Anthropic API key to get infinite live-generated puzzles via `api.anthropic.com`, falling back to 25 static puzzles if no key
-- **Now:** no live generation, no API key input anywhere in the app. All puzzles come from the static `FALLBACK_BANKS` object
-- Reasoning: removes the need for a player-held API key (never viable for a public product), removes per-user inference cost, removes the risk of AI-generated cross-contamination bugs shipping live. Trade-off accepted: content freshness now depends on manual authoring instead of infinite generation
-- `POOLS` (the old AI-prompt theme list) is kept in the code as a **content backlog checklist**, not live logic — it's dead code functionally, but useful as a list of themes to hand-author into real puzzles
+### New content shipped
+- **"Guitar Heroes & The Blues"** — new fully-verified puzzle added to the `scott` bank (now 8 puzzles, up from 7): Famous Electric Guitar Models (Gibson SG, Ibanez JEM 777, Fender Starcaster, Fender Jaguar), Gibson Les Paul Legendary Players (Jimmy Page, Duane Allman, Peter Green, Slash), Robert Johnson Songs (Cross Road Blues, Sweet Home Chicago, Love in Vain, Hellhound on My Trail — the exact four credited by the Rock and Roll Hall of Fame), Classic Film One-Word Titles (Jaws, Rocky, Alien, Grease)
+- Confirmed via editing mistake (caught immediately, corrected): while inserting the above, two existing categories (Led Zeppelin Albums, George's Fake Jobs) were briefly accidentally deleted from the Crossroads puzzle. Restored and verified before shipping — a good reminder to re-verify puzzle category counts (must be exactly 4 per puzzle) after any edit near an existing puzzle block
 
-### New content — theme backlog only, NOT yet built as real puzzles
-Added to `POOLS` as theme ideas for the next authoring cycle, split by generation (the existing `scott`/`kids`/`mixed` player buckets are being reused as the Gen X / Gen Z split rather than building new tagging infrastructure):
-- **`scott` pool (Gen X):** 80s/90s tennis (Cash, McEnroe, Agassi, Sampras), classic F1 (Senna, Prost, Mansell), retro sportswear (Reebok/Nike/Adidas/Puma)
-- **`kids` pool (Gen Z):** modern tennis, modern F1 / Drive to Survive, streetwear/sneaker culture
-- **`mixed` pool:** Big Four tennis, brand logos, equipment (racquets/bats) as a smaller/harder category
-- **IMPORTANT: none of this exists as actual playable puzzles yet.** These are prompt-style theme strings, not `FALLBACK_BANKS`-format puzzle objects. First real content task is converting these into full hand-authored, QA'd puzzles.
+### Content backlog — ideas only, NOT yet built as real puzzles
+Carried over from Session 1, now added to:
+1. Viral Challenges & Crazes (Ice Bucket Challenge, Mannequin Challenge, Harlem Shake, Gangnam Style — sourced)
+2. Famous Internet Catchphrases (All Your Base Are Belong To Us, Damn Daniel, Sure Jan, Oh Hi Mark — sourced)
+3. Viral Animal Stars (Grumpy Cat, Doge, Nyan Cat confirmed; a 4th — likely Harambe — needs fresh verification before use)
+4. Disney (classic animation studio era only — keep strictly separate from Pixar, since Disney distributes Pixar and mixing them risks real ambiguity about which studio a puzzle means)
+5. Pixar (standalone productions only)
+6. Action Movie Stars (Scott's own wheelhouse — Stallone/Schwarzenegger/Willis/Statham-type territory)
+7. Disney Princesses (`kids` pool)
+8. US Presidents — **historical facts only** (non-consecutive terms, assassinations, Mount Rushmore, related presidents). Deliberately avoid anything from roughly the last 2-3 administrations to sidestep contemporary political sensitivity across the AU/UK/Ireland audience
+9. **Men Who Walked on the Moon** — fully sourced via NASA/Wikipedia, exactly 12 people ever, divides perfectly into 3 non-overlapping sets of 4 with zero repeats:
+   - Armstrong, Aldrin, Shepard, Cernan
+   - Conrad, Bean, Scott, Young
+   - Irwin, Duke, Mitchell, Schmitt
+10. Movies by decade (kindling, from Session 1) — 80s and 90s lists strong and ready; 2000s needs a genre outlier added (too much Ferrell/McKay-lane currently); 2010s should stay deliberately thin rather than padded; 2020s: Everything Everywhere All at Once confirmed good, avoid "anything Marvel" as too vague — franchise-specific mining (in-universe objects, actor crossovers, structural features like MCU Phase 1 vs Phase 3) is the better strategy than flat franchise trivia
 
-### Monetization — designed this session, not yet implemented
-- **Model:** 30-day full-access free trial (all content), then reverts to the 25 original fallback puzzles for free forever. One-time (non-recurring) purchase restores full access for a fixed duration
-- **Tiers** (mirrors ECEG's one-time-purchase pattern, not Mic Drop's subscription pattern):
+### Monetization — names finalized
+Tier structure confirmed with Scott, mirrors ECEG's one-time-purchase pattern:
 
 | Tier | Duration | Price |
 |---|---|---|
@@ -48,55 +64,41 @@ Added to `POOLS` as theme ideas for the next authoring cycle, split by generatio
 | Couch Potato | 6 months | $7.50 USD |
 | Pop Culture Vulture | 12 months | $10.00 USD |
 
-- No "forever" tier for now — parked pending a possible future multi-app bundle (see Future Ideas below)
-- Trial clock: `localStorage` timestamp only, no backend, no enforcement against clearing site data/reinstalling — acceptable honour-system gate at this stage, not real security
-- **Not yet built:** Stripe Price IDs (need 3 new ones created against a *new* Cult Connections product — cannot reuse ECEG's IDs even at matching amounts), Cloudflare Worker (`/create-checkout`, `/verify-token`, webhook, KV namespace), actual token format (planned to mirror ECEG's `cc_[tier]_[days]_[nonce]_[hmac32]` pattern)
-- `app.js` already has the client-side scaffold wired and waiting: `CC_TIERS`, `getAccessState()`, `redeemToken()`, `purchaseTier()`, purchase screen UI. It currently points at a placeholder worker URL (`cult-connections.emblen-scott.workers.dev`) that doesn't exist yet.
+No forever tier — deliberately parked pending a possible future cross-app bundle (see Session 1 handoff). Cloudflare Worker and Stripe Price IDs for these three tiers are still the primary outstanding infrastructure task, unchanged from Session 1.
 
-### Content freshness cadence — decided, not yet operationalised
-- Public commitment: new content pack every **90 days**
-- Internal stretch goal only, never promised publicly: 30 days
-- Target volume per pack: roughly 40–60 new puzzles (not yet built)
-- "Great Minds" (a separate, unbuilt Family Feud-style survey concept once discussed for trend-sourcing content) — explicitly parked. Not part of this app. Revisit only as part of 90-day content planning discussions, not as a build item.
+### Portfolio-wide context gathered this session (worth knowing even though it's not Cult Connections-specific)
+- Full review conducted of Mic Drop, Easy Come Easy Go, and Chasin' Curves handoffs/code via the `scvd-context` repo
+- **Chasin' Curves gap found and fixed**: `app.js` was missing entirely from the `chasin-curves` folder in `scvd-context` (only `index.html`, `worker.js`, `handoff.md` were present) — Scott pushed the missing file, verified byte-for-byte match with what was uploaded
+- Mic Drop: live, real payments, chasing 3 P1 audio bugs (iOS mimeType, PWA home-screen silence, mic-loss distortion)
+- ECEG: Stripe sandbox confirmed end-to-end, a real token-collision security bug was fixed this cycle (every buyer of a tier previously got an identical, shareable token), two items marked urgent — delete the stray `eceg` worker, get `worker.js` out of a personal Downloads folder (nearly lost twice now)
 
 ---
 
-## Open Actions (in rough priority order)
+## 🏗️ Infrastructure note (carried forward, still true)
 
-| # | Task |
-|---|------|
-| 1 | Create Cloudflare Worker `cult-connections` (mirror ECEG's worker pattern: Stripe checkout, webhook, HMAC token, KV) |
-| 2 | Create 3 new Stripe Price IDs for CC's own product (Square Eyes / Couch Potato / Pop Culture Vulture) |
-| 3 | Wire real worker URL into `app.js` (`CC_WORKER` constant, currently a placeholder) |
-| 4 | Hand-author first real Sport + Fashion puzzle packs from the `POOLS` theme backlog |
-| 5 | Push `index.html` + `app.js` to GitHub Pages under SCVD-App org |
-| 6 | Get Steve (Ireland) testing post-deploy for UK/Ireland cultural fit on the existing content |
-| 7 | Decide fate of a possible cross-app bundle deal (3-4 games, $50–100 one-time) — deferred until 4+ apps are live and the "Field of Dreams" directory site exists. Would need shared entitlement/auth, not CC-specific — do not build CC-specific SSO |
+The original `Cult-Connections` GitHub repo was deleted and rebuilt from scratch during Session 1 due to an unrecoverable stuck GitHub Pages deployment lock (see Session 1 handoff for full details). The current repo has clean history starting from that rebuild. `scvd-context/cult-connections/` remains the durable source of truth for all files.
+
+**GitHub Mobile app** was successfully trialled this session for the first time — multiple small `app.js` pushes went cleanly with no repeat of Session 1's deployment drama. Good tool for quick fixes when away from a laptop.
 
 ---
 
-## Known Limitations
+## Known Limitations (carried forward + new)
 
 | Issue | Notes |
 |-------|-------|
-| Trial clock is client-side only | Resettable by clearing site data / reinstalling — acceptable at current stage, not real enforcement |
-| No backend yet at all | App is currently 100% static — Worker doesn't exist, so purchase flow is UI-only until built |
-| Sport/Fashion "content" is prompts, not puzzles | Nothing playable exists for these categories yet — see Open Actions #4 |
-| POOLS object is now dead code functionally | Kept intentionally as an authoring checklist — don't delete without converting entries to real puzzles first |
+| **Puzzle rotation may still be broken in practice** | See critical bug section above — top priority for next session |
+| Trial clock is client-side only | Resettable by clearing site data/reinstalling — acceptable at current stage |
+| No backend yet at all | Purchase flow is UI-only until the Worker is built |
+| Sport/Fashion/movie/viral/Disney/Pixar/Presidents/Moonwalkers content | All still backlog ideas, not built as playable puzzles |
+| `scott` bank content is Slash-heavy | Now appears in 3 separate puzzles — not a bug, but worth diversifying next content pass |
 
 ---
 
-## Future Ideas (explicitly parked, not scheduled)
+## Open Actions (priority order for next session)
 
-- **Cross-app bundle** — 3-4 SCVD games for $50–100 one-time, tied to the "Field of Dreams" directory milestone (4+ live apps) already in the master roadmap. Requires shared entitlement/auth across apps — do not build for CC alone.
-- **Domain-level SSO (auth.scvd.app)** — evaluated for CC this session and deliberately deferred. Real justification for it is protecting Mic Drop's subscription revenue and enabling the future bundle, not CC's low-stakes single-purchase model.
-- **"Great Minds" survey/trend engine** — crowd-sourcing cultural relevance data from CC's players for future content decisions. Low priority. Would require a backend, which cuts against CC's current static-hosting choice — only worth reopening if this becomes a real cross-app initiative, not a CC-only feature.
-- **Cosmetic-only IAP** (tile themes/skins) — raised as a lower-friction alternative to gating during discussion, not chosen, but worth remembering as an option if the trial/tier model underperforms.
-
----
-
-## Brand/Content Notes
-
-- Target audience: Gen X and Gen Z, Australia/UK/Ireland — deliberately using "UK" rather than "Britain" to stay inclusive of Scotland/Wales/Ireland-adjacent references
-- Generational content split reuses existing `scott`/`kids`/`mixed` player-profile buckets rather than new tagging infrastructure
-- SCVD integrity model applies: no ads, no auto-renewal, everyone pays the same price
+| # | Task |
+|---|------|
+| 1 | **Fix the shuffle function naming collision** (rename to `shuffleArray`), then verify live in an actual browser with DevTools open — don't just assume it's fixed from code review alone |
+| 2 | Build the Cloudflare Worker + Stripe Price IDs for the three named tiers |
+| 3 | Start converting backlog content (Moonwalkers is the most ready — fully sourced, perfectly bounded at 12 people / 3 puzzle variations) into real hand-authored puzzles |
+| 4 | Get Steve (Ireland) testing for UK/Ireland cultural fit now that the app is stable and installable |
