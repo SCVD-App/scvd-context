@@ -1085,6 +1085,7 @@ function initialGS() {
     paulsonResigned: false, // Paulson walked
     familyDrift: 0,        // 0-3, increases on empire path
     kpProFired: false,     // fourth-wall Pro pitch fired
+    mogulAcknowledged: false, // player has chosen to keep going past City Mogul
     // Paulson personal favour arc (clean alternative route to billionaire mode)
     paulsonFavorPath: null,      // null | "declined" | "invested" | "resolved_win"
     paulsonFavorInvestMonth: 0,  // month snapshot at time of investment, for the resolution delay
@@ -4110,13 +4111,13 @@ function App() {
   useEffect(function() {
     if (screen !== "game") return;
     if (tierScreen === "tycoon_chase") {
-      if (passiveIncome >= MOGUL_PASSIVE_TARGET) { setTierScreen("mogul"); return; }
+      if (passiveIncome >= MOGUL_PASSIVE_TARGET && !gameState.mogulAcknowledged) { setTierScreen("mogul"); return; }
       if (totalAssets >= TYCOON_ASSET_TARGET) { setTierScreen("tycoon"); return; }
     }
     if (tierScreen === "none" && passiveIncome > 0) {
       if (passiveIncome >= calcTarget(winAmount)) { setTimeout(function(){setTierScreen("suburban");},600); }
     }
-  }, [passiveIncome, totalAssets, tierScreen, winAmount, screen]);
+  }, [passiveIncome, totalAssets, tierScreen, winAmount, screen, gameState.mogulAcknowledged]);
 
   // ── CLOCK ──
   useEffect(function() {
@@ -4567,7 +4568,7 @@ function App() {
   // ── TIER SCREENS ──
   if(tierScreen==="suburban"){return React.createElement(React.Fragment,null,React.createElement("style",null,CSS),React.createElement(SuburbanLegendScreen,{passiveIncome:passiveIncome,weeksElapsed:weeksElapsed,winAmount:winAmount,gameState:gameState,onSailOff:function(){handleSailOff("suburban");},onKeepGoing:handleEnterTycoon,onRestart:function(){buildScorecard("suburban");setScreen("ended");}}));}
   if(tierScreen==="mogul"){return React.createElement(React.Fragment,null,React.createElement("style",null,CSS),React.createElement(CityMogulScreen,{passiveIncome:passiveIncome,weeksElapsed:weeksElapsed,totalAssets:totalAssets,gameState:gameState,onSailOff:function(){handleSailOff("mogul");},onKeepGoing:function(){
-    setGameState(function(gs){return Object.assign({},gs,{tycoonMode:true});});
+    setGameState(function(gs){return Object.assign({},gs,{tycoonMode:true,mogulAcknowledged:true});});
     setShowTycoon(true);
     setTierScreen("tycoon_chase");
   },onRestart:function(){buildScorecard("mogul");setScreen("ended");}}));}
