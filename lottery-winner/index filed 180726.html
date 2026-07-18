@@ -1245,7 +1245,7 @@ function nodeInvest(gs) {
       { label: "🏦 Term deposit — 4.5% p.a., zero risk", next: "inv_term" },
       { label: "🏢 Buy a small business", next: "inv_business" },
       ...(gs.hasMadePoliticalDonation ? [] : [{ label: "🏛️ Political donation — open the right doors — $500,000", next: "inv_political", cost: 500000 }]),
-      ...(gs.steveContacted && !gs.hasBoughtBusiness ? [{ label: "🏢 Buy the old business — put Steve in charge", next: "buy_business" }] : []),
+      ...(gs.steveContacted && !gs.hasBoughtBusiness ? [{ label: "🏢 Buy the old business — put Steve in charge — $2,000,000", next: "buy_business", cost: 2000000 }] : []),
       { label: "🧓 Top up superannuation", next: "inv_super" },
       { label: "💎 Your mate Craig's crypto startup", next: "inv_crypto" },
     ],
@@ -3638,39 +3638,32 @@ function NotificationInbox(props) {
   var onClose = props.onClose;
   var onProUpgrade = props.onProUpgrade || function(){};
   var count = queue.length + inbox.length;
-  var expandedS = useState(null); var expandedIdx = expandedS[0], setExpandedIdx = expandedS[1];
 
-  function renderMessage(notif, i, isPending, expanded, onToggle) {
+  function renderMessage(notif, i, isPending) {
     var isKP = notif.type === "kp" || notif.sender === "K.P.";
     var isPaulson = notif.type === "paulson" || notif.sender === "Richard Paulson";
     var senderColor = isKP ? "#C0392B" : isPaulson ? "#C9A84C" : "#f5f3ee";
     var bgColor = isKP ? "#1a0000" : isPending && i===0 ? "#1a1a00" : "transparent";
     var borderColor = isKP ? "#C0392B22" : "#1a1a1a";
-    var showBody = isPending || expanded;
 
-    return React.createElement("div", {
-      key:(isPending?"q":"i")+i,
-      onClick: !isPending && onToggle ? function(){ onToggle(); } : undefined,
-      style:{
-        padding:"0.85rem 1rem", borderBottom:"1px solid "+borderColor,
-        background: bgColor, cursor: !isPending ? "pointer" : "default"
-      }},
+    return React.createElement("div", { key:(isPending?"q":"i")+i, style:{
+      padding:"0.85rem 1rem", borderBottom:"1px solid "+borderColor,
+      background: bgColor
+    }},
       React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:"0.3rem" } },
         React.createElement("div", { style:{ fontSize:"0.78rem", color:senderColor, fontWeight:"bold" } },
           isKP ? "⚡ K.P." : isPaulson ? "📊 Richard Paulson" : (notif.from || notif.sender || "Message")
         ),
-        isPending && i===0
-          ? React.createElement("div", { style:{ fontSize:"0.6rem", color:"#C9A84C", textTransform:"uppercase", letterSpacing:"0.1em" } }, "New")
-          : !isPending && React.createElement("div", { style:{ fontSize:"0.65rem", color:"#555" } }, expanded ? "▲" : "▼")
+        isPending && i===0 && React.createElement("div", { style:{ fontSize:"0.6rem", color:"#C9A84C", textTransform:"uppercase", letterSpacing:"0.1em" } }, "New")
       ),
       React.createElement("div", { style:{ fontSize:"0.78rem", color:"#888", fontWeight:"bold", marginBottom:"0.25rem" } },
         notif.preview || ""
       ),
-      notif.body && showBody && React.createElement("div", { style:{ fontSize:"0.72rem", color:"#666", lineHeight:1.6, marginTop:"0.25rem" } },
+      notif.body && React.createElement("div", { style:{ fontSize:"0.72rem", color:"#666", lineHeight:1.6, marginTop:"0.25rem" } },
         notif.body
       ),
       // KP Pro CTA
-      isKP && notif.cta === "pro" && showBody && React.createElement("button", {
+      isKP && notif.cta === "pro" && React.createElement("button", {
         onClick: function(e) { e.stopPropagation(); onProUpgrade(); },
         style:{ marginTop:"0.75rem", width:"100%", background:"linear-gradient(135deg,#7a0000,#C0392B)", border:"none", borderRadius:"6px", padding:"0.65rem", color:"#fff", fontSize:"0.8rem", fontWeight:"bold", cursor:"pointer", letterSpacing:"0.08em", fontFamily:"Georgia,serif" }
       }, "Buy Pro — Come have a drink 🥃")
@@ -3707,9 +3700,11 @@ function NotificationInbox(props) {
           : React.createElement(React.Fragment, null,
               queue.map(function(notif, i) { return renderMessage(notif, i, true); }),
               inbox.map(function(notif, i) {
-                var expanded = expandedIdx === i;
-                return React.createElement("div", { key:"i"+i, style:{ opacity: expanded ? 0.95 : 0.55 } },
-                  renderMessage(notif, i, false, expanded, function(){ setExpandedIdx(expanded ? null : i); })
+                return React.createElement("div", { key:"i"+i, style:{ padding:"0.85rem 1rem", borderBottom:"1px solid #1a1a1a", opacity:0.55 } },
+                  React.createElement("div", { style:{ fontSize:"0.78rem", color: notif.type==="kp"||notif.sender==="K.P." ? "#C0392B88" : "#888" } },
+                    notif.type==="kp"||notif.sender==="K.P." ? "⚡ K.P." : notif.type==="paulson"||notif.sender==="Richard Paulson" ? "📊 Richard Paulson" : (notif.from||notif.sender||"Message")
+                  ),
+                  React.createElement("div", { style:{ fontSize:"0.72rem", color:"#555", lineHeight:1.5 } }, notif.preview || "")
                 );
               })
             )
