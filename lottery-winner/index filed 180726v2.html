@@ -1085,9 +1085,6 @@ function initialGS() {
     paulsonResigned: false, // Paulson walked
     familyDrift: 0,        // 0-3, increases on empire path
     kpProFired: false,     // fourth-wall Pro pitch fired
-    // Paulson personal favour arc (clean alternative route to billionaire mode)
-    paulsonFavorPath: null,      // null | "declined" | "invested" | "resolved_win"
-    paulsonFavorInvestMonth: 0,  // month snapshot at time of investment, for the resolution delay
   };
 }
 
@@ -1725,42 +1722,6 @@ function nodePoliticoExit(gs) {
   };
 }
 
-// ── PAULSON'S PERSONAL FAVOUR ARC — clean alternative route to the top ──
-function nodePaulsonFavor(gs) {
-  return {
-    text: "Richard's voice is different tonight — no measured pauses, none of the usual 'let me run the numbers.' 'Priya's platform settles trade finance in minutes instead of weeks. I've read the code review myself, cover to cover, twice. This is real. Five million, wired by Friday close. I know exactly what I'm asking of you. If this goes wrong I will cover every dollar personally — I've already spoken to my own broker about what I'd need to liquidate to do it. I wouldn't survive doing this for a client I didn't respect. Your call.'",
-    choices: [
-      { label: "🤝 Wire the $5,000,000 — as a personal favour to Richard", next: "paulson_favor_do", cost: 5000000 },
-      { label: "❌ Not this one, Richard", next: "paulson_favor_decline" },
-    ]
-  };
-}
-
-function nodePaulsonFavorDo(gs) {
-  return {
-    text: "The transfer goes through Thursday night. Richard doesn't call to confirm — that's not like him. Three days later, a text: 'Received. Thank you. I won't forget this.' Then nothing, for a while. You've done what he asked. Now you wait.",
-    outcome: true, cost: 5000000,
-    choices: [{ label: "→ What's next?", next: "root" }],
-    action: function(g) {
-      var curMonth = (g.netWorthHistory && g.netWorthHistory.length) ? g.netWorthHistory[g.netWorthHistory.length-1].month : 0;
-      return Object.assign({}, g, {
-        paulsonFavorPath: "invested",
-        paulsonFavorInvestMonth: curMonth,
-        legacyScore: (g.legacyScore||0) + 10
-      });
-    }
-  };
-}
-
-function nodePaulsonFavorDecline(gs) {
-  return {
-    text: "'I understand,' Richard says, and he sounds like he means it — but there's something under it, disappointment maybe, or just tiredness. 'I had to ask. I won't ask again.' The line goes quiet a second too long before he hangs up. Your relationship with Richard continues exactly as it was. Mostly.",
-    outcome: true,
-    choices: [{ label: "→ What's next?", next: "root" }],
-    action: function(g) { return Object.assign({}, g, { paulsonFavorPath: "declined" }); }
-  };
-}
-
 // RANDOM EVENTS specific to politico path
 var POLITICO_EVENTS = [
   function(gs) {
@@ -1873,9 +1834,6 @@ const NODES = {
   politico_precinct: nodePoliticoPrecinct, politico_precinct_do: nodePoliticoPrecinctDo,
   politico_port: nodePoliticoPort, politico_port_do: nodePoliticoPortDo,
   politico_exit: nodePoliticoExit,
-  paulson_favor: nodePaulsonFavor,
-  paulson_favor_do: nodePaulsonFavorDo,
-  paulson_favor_decline: nodePaulsonFavorDecline,
   paulson_structure: nodePaulsonStructure,
   paulson_opportunity: nodePaulsonOpportunity,
   paulson_tech: nodePaulsonTech, paulson_tech_do: nodePaulsonTechDo,
@@ -4003,23 +3961,8 @@ function App() {
       shownNotifsRef.current = shownNotifsRef.current.concat(["paulson_4"]);
       var p4 = NOTIFICATIONS.filter(function(n){return n.id==="paulson_4";})[0];
       if (p4) setTimeout(function(){setPendingNotif(p4);},3000);
-      return;
     }
-    // Paulson personal favour — clean alternative route to billionaire mode. Gated on pc>=3 (after the $3M co-investment deal) so the personal ask lands only once real money has already changed hands between you and Richard.
-    if (pc >= 3 && !gameState.billionaireMode && !gameState.paulsonFavorPath && shownNotifsRef.current.indexOf("paulson_favor") < 0) {
-      shownNotifsRef.current = shownNotifsRef.current.concat(["paulson_favor"]);
-      setTimeout(function() {
-        setPendingNotif({ id:"paulson_favor", type:"call", tier:"legit", from:"Richard Paulson",
-          preview:"This isn't Southrock business. This is personal.",
-          body:"This isn't Southrock business — I wouldn't normally ever mix the two. My daughter-in-law, Priya, has spent four years building a settlement platform for cross-border trade finance. Genuinely different technology, not another token — I've read the code review myself, twice. Her seed round closes Friday and she's five million short. I believe in this completely — enough that if I had the liquidity free right now, I'd fund it myself. I don't. I know exactly how this looks, a man in my position asking a client for money, and I wouldn't ask if I didn't mean it. If it fails, I will personally make you whole, every cent — you know what my word is worth. But Friday doesn't wait, not even for me.",
-          acceptLabel:"Hear him out", rejectLabel:"This isn't how we do business",
-          paulsonFavorTrigger:true,
-          onReject:{cost:0,passiveAdd:0,msg:"'I understand,' Richard says, and he sounds like he means it. 'I had to ask. I won't ask again.' The line goes quiet a second too long before he hangs up."},
-          onAccept:{cost:0,passiveAdd:0,msg:""} });
-      }, 3000);
-      return;
-    }
-  }, [passiveIncome, gameState.paulsonContact, gameState.billionaireMode, gameState.paulsonFavorPath, screen]);
+  }, [passiveIncome, gameState.paulsonContact, gameState.billionaireMode, screen]);
 
   // ── RESTRAINT TRIGGERED ──
   useEffect(function() {
@@ -4184,15 +4127,6 @@ function App() {
           var actualPassive = passRef.current * 12;
           var diff = actualPassive - termDepositAlt;
           queueNotif({ sender:"Richard Paulson", preview:"Year one complete.", body:"Twelve months in. A term deposit on your win would have paid roughly $" + termDepositAlt.toLocaleString() + " this year. Your passive income generated $" + Math.round(actualPassive).toLocaleString() + ". Difference: " + (diff >= 0 ? "+" : "") + "$" + Math.round(diff).toLocaleString() + ". " + (diff >= 0 ? "You've outperformed the do-nothing strategy." : "Still building — stay the course."), type:"paulson" });
-        }
-
-        // Paulson's personal favour — resolves 3 months after investing
-        if (gs.paulsonFavorPath === "invested" && !pm.favorResolved && (month - (gs.paulsonFavorInvestMonth||0)) >= 3) {
-          setGameState(function(g){return Object.assign({},g,{paulsonFavorPath:"resolved_win",billionaireMode:true,paulsonMilestones:Object.assign({},g.paulsonMilestones,{favorResolved:true}),legacyScore:(g.legacyScore||0)+15});});
-          setCash(function(c){return c + 18000000;});
-          setPassiveIncome(function(p){return p + 240000;});
-          queueNotif({ sender:"Richard Paulson", type:"paulson", preview:"Priya's platform. It worked.",
-            body:"Three of the big four banks signed on this week. The Series A closed at a number that made my own broker go quiet for a moment, which doesn't happen often. Your $5M is now worth considerably more than that, and there's a settlement fee structure that will pay out monthly for years. I don't say this lightly: thank you. Not for the money. For believing me when I had nothing but my word to offer you. — Richard" });
         }
 
         // ── KP MILESTONES ──
@@ -4367,9 +4301,6 @@ function App() {
     if (choice.next==="__finance__"){setShowFinance({});return;}
     if (choice.next==="__tycoon__"){setShowTycoon(true);return;}
     if (choice.next==="__bill_finale__"){setShowBillFinale(true);return;}
-    if (choice.next==="root" && !showTycoonRef.current && (gsRef.current.tycoonMode||gsRef.current.billionaireMode)) {
-      setShowTycoon(true);
-    }
     var cost=choice.cost||0;
     var pAdd=(choice.passiveAdd||0)+(node.passiveAdd||0);
     var aAdd=(choice.annualAdd||0)+(node.annualAdd||0);
@@ -4451,15 +4382,8 @@ function App() {
     }
     if(notif.politicoTrigger){
       var sn=pickSonName(); setGameState(function(gs){return Object.assign({},gs,{sonName:sn});});
-      setShowTycoon(false);
       setNodeKey("politico_root");
       setNotifResult({msg:"The dinner is excellent. Murray Cresswell MP is charming and very clear about what he wants. His son's name is "+sn+".",cost:0,passiveAdd:0});
-      return;
-    }
-    if(notif.paulsonFavorTrigger){
-      setShowTycoon(false);
-      setNodeKey("paulson_favor");
-      setNotifResult({msg:"You didn't expect the call, or the tone. Richard sounds nothing like himself.",cost:0,passiveAdd:0});
       return;
     }
     if(notif.gatesPath){setGameState(function(gs){return Object.assign({},gs,{billionaireMode:true});});setNodeKey("bill_root");setNotifResult({msg:notif.onAccept.msg,cost:0,passiveAdd:0});return;}
@@ -4582,7 +4506,7 @@ function App() {
   else if(pendingOutcome){content=React.createElement(OutcomeCard,{text:pendingOutcome.text,onContinue:handleOutcome});}
   else if((gameState.tycoonMode||gameState.billionaireMode)&&showTycoon){content=React.createElement(TycoonDashboard,{cash:cash,passiveIncome:passiveIncome,gameState:gameState,totalAssets:totalAssets,onAcquire:handleAcquire,onFinance:handleFinanceOpen,onSailOff:function(){handleSailOff(totalAssets>=10000000?"mogul":"suburban");}});}
   else if(gameState.billionaireMode&&!gameState.billFoundationPct&&!atHomeRef.current){content=React.createElement(DecisionCard,{nodeKey:nodeKey.startsWith("bill_")?nodeKey:"bill_root",gameState:gameState,cash:cash,onChoice:function(c,n){atHomeRef.current=false;handleChoice(c,n);},onBack:handleBack,onFinance:handleFinanceOpen});}
-  else if(nodeKey.startsWith("politico_")||nodeKey.startsWith("paulson_favor")){content=React.createElement(DecisionCard,{nodeKey:nodeKey,gameState:gameState,cash:cash,onChoice:handleChoice,onBack:handleBack,onFinance:handleFinanceOpen});}
+  else if(nodeKey.startsWith("politico_")){content=React.createElement(DecisionCard,{nodeKey:nodeKey,gameState:gameState,cash:cash,onChoice:handleChoice,onBack:handleBack,onFinance:handleFinanceOpen});}
   else{content=React.createElement(React.Fragment,null,React.createElement(DecisionCard,{nodeKey:nodeKey,gameState:gameState,cash:cash,onChoice:handleChoice,onBack:handleBack,onFinance:handleFinanceOpen}),nodeKey==="root"&&React.createElement(StatusBar,{gameState:gameState,annualCosts:annualCosts}));}
 
   return React.createElement("div",{style:{minHeight:"100vh",background:C.black,color:C.white,fontFamily:"Georgia,serif"}},
