@@ -3933,7 +3933,7 @@ function App() {
   var proStatusS = useState(function(){ return loadProStatus(); }); var proStatus = proStatusS[0], setProStatus = proStatusS[1];
   var showProS = useState(false); var showPro = showProS[0], setShowPro = showProS[1];
   var showGlobalLBoardS = useState(false); var showGlobalLBoard = showGlobalLBoardS[0], setShowGlobalLBoard = showGlobalLBoardS[1];
-  var showSplashS = useState(function(){ return !loadProStatus(); }); var showSplash = showSplashS[0], setShowSplash = showSplashS[1];
+  var showSplashS = useState(true); var showSplash = showSplashS[0], setShowSplash = showSplashS[1];
   var shownNotifsRef = useRef([]);
   var lastNotifWeek = useRef(0);
 
