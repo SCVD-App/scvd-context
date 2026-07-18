@@ -1624,9 +1624,9 @@ function nodePoliticoRoot(gs) {
   var son = gs.sonName || "Bryce";
   var path = gs.politicoPath || 0;
   var choices = [];
-  if (path < 2) choices.push({ label:"📋 Water treatment contract — $8M, hire " + son, next:"politico_contract" });
-  if (path < 3 && path >= 1) choices.push({ label:"🏭 Council industrial precinct — 40% of valuation", next:"politico_precinct" });
-  if (path < 4 && path >= 2) choices.push({ label:"⚓ Regional port contract — 10 year exclusive", next:"politico_port" });
+  if (path < 1) choices.push({ label:"📋 Water treatment contract — $8M, hire " + son, next:"politico_contract" });
+  if (path < 2 && path >= 1) choices.push({ label:"🏭 Council industrial precinct — 40% of valuation", next:"politico_precinct" });
+  if (path < 3 && path >= 2) choices.push({ label:"⚓ Regional port contract — 10 year exclusive", next:"politico_port" });
   choices.push({ label:"🚶 Walk away from the arrangement", next:"politico_exit" });
   var text = path === 0
     ? "The Hon. Murray Cresswell MP settles into his chair and gets straight to the point. 'I'm in a position to direct some significant opportunities your way. Nothing improper — just making sure the right people are considered. In return, I need you to find a role for my son " + son + ". He's between things at the moment. Good lad.' He slides a folder across the table. You look at the numbers."
@@ -1648,7 +1648,7 @@ function nodePoliticoContractDo(gs) {
   var son = gs.sonName || "Bryce";
   return {
     text: "The contract is awarded three weeks later following a 'thorough and transparent process'. " + son + " starts on Monday. He's friendly, enthusiastic, and has not yet done anything that could be described as work. His email signature includes the phrase 'Synergising outcomes across the stakeholder ecosystem.' You have $42,000/month arriving from the government. This is fine.",
-    outcome: true, passiveAdd: 42000,
+    outcome: true,
     choices: [{ label:"→ What's next?", next:"politico_root" }],
     action: function(g) {
       return Object.assign({}, g, {
@@ -1675,7 +1675,7 @@ function nodePoliticoPrecinctDo(gs) {
   var son = gs.sonName || "Bryce";
   return {
     text: "The precinct is yours at $5.8M — $8.2M below market. " + son + "'s nameplate arrives before the settlement papers. He sends a company-wide email introducing himself as Director of Strategic Partnerships and inviting everyone to 'ideate' with him. The warehouses are fully leased. $68,000/month. Murray's community foundation received a $400,000 donation last week. Coincidence.",
-    outcome: true, passiveAdd: 68000, cost: 5800000,
+    outcome: true,
     choices: [{ label:"→ What's next?", next:"politico_root" }],
     action: function(g) {
       return Object.assign({}, g, {
@@ -1702,7 +1702,7 @@ function nodePoliticoPortDo(gs) {
   var son = gs.sonName || "Bryce";
   return {
     text: "The port contract is signed. $320,000/month for ten years, government guaranteed. " + son + " attends his first board meeting and asks whether the company has considered 'pivoting to Web3'. The other directors stare at him. You stare at the $320,000/month. Murray sends a card. Handwritten. Good stationery.",
-    outcome: true, passiveAdd: 320000,
+    outcome: true,
     choices: [{ label:"→ What's next?", next:"politico_root" }],
     action: function(g) {
       return Object.assign({}, g, {
