@@ -1118,6 +1118,7 @@ function nodeRoot(gs) {
   choices.push({ label: gs.car ? "🚗 Buy another car" : "🚗 Buy a car", next: "buy_car" });
   if (!gs.house) choices.push({ label: "🏠 Buy a house", next: "buy_house" });
   choices.push({ label: "🎉 Fun Stuff", next: "fun_stuff" });
+  choices.push({ label: "🏦 Visit the bank — borrow, repay, or see Vido", next: "__finance__" });
   choices.push({ label: "📈 Invest", next: "invest" });
   choices.push({ label: "🎁 Be generous", next: "generosity" });
   const hasActed = gs.car || gs.house || gs.quitJob || gs.investments.length > 0 || gs.holidays.length > 0 || gs.givens.length > 0;
@@ -3323,6 +3324,11 @@ function TycoonDashboard(props) {
           )
         );
       })
+    ),
+
+    // Bank / broker access
+    React.createElement("button", { onClick:function(){ onFinance({}); }, style:{ width:"100%", background:"#0d1f30", border:"1px solid #4a9eff44", borderRadius:"8px", padding:"0.75rem", color:"#4a9eff", fontSize:"0.85rem", fontWeight:"bold", cursor:"pointer", marginBottom:"0.6rem" } },
+      "🏦  Visit the bank — borrow, repay, or see Vido"
     ),
 
     // Sail off button
