@@ -1,0 +1,110 @@
+[
+  {
+    "id": "old-business-single-charge",
+    "label": "Old business purchase charges once, not twice (menu choice no longer carries its own cost)",
+    "marker": "label: \"🏢 Buy the old business — put Steve in charge\", next: \"buy_business\" }] : []),",
+    "category": "purchase integrity"
+  },
+  {
+    "id": "archived-messages-expandable",
+    "label": "Archived inbox messages (Paulson, K.P.) are tap-to-expand, not dead previews",
+    "marker": "function renderMessage(notif, i, isPending, expanded, onToggle)",
+    "category": "inbox"
+  },
+  {
+    "id": "murray-arc-escapes-tycoon-dashboard",
+    "label": "Accepting Murray's dinner invite drops showTycoon so politico_root can actually render",
+    "marker": "if(notif.politicoTrigger){\n      var sn=pickSonName(); setGameState(function(gs){return Object.assign({},gs,{sonName:sn});});\n      setShowTycoon(false);",
+    "category": "murray arc"
+  },
+  {
+    "id": "politico-single-shot-contract",
+    "label": "Water treatment contract is a single-shot unlock, not infinitely repeatable",
+    "marker": "if (path < 1) choices.push({ label:\"📋 Water treatment contract",
+    "category": "murray arc"
+  },
+  {
+    "id": "politico-single-shot-precinct",
+    "label": "Industrial precinct is a single-shot unlock, not infinitely repeatable",
+    "marker": "if (path < 2 && path >= 1) choices.push({ label:\"🏭 Council industrial precinct",
+    "category": "murray arc"
+  },
+  {
+    "id": "politico-single-shot-port",
+    "label": "Port contract is a single-shot unlock, not infinitely repeatable",
+    "marker": "if (path < 3 && path >= 2) choices.push({ label:\"⚓ Regional port contract",
+    "category": "murray arc"
+  },
+  {
+    "id": "politico-contract-no-double-passive",
+    "label": "Water treatment contract doesn't silently double-count its $42k/mo passive add",
+    "mustNotContain": "outcome: true, passiveAdd: 42000,",
+    "category": "murray arc"
+  },
+  {
+    "id": "politico-precinct-no-double-passive",
+    "label": "Industrial precinct doesn't silently double-count its $68k/mo passive add",
+    "mustNotContain": "outcome: true, passiveAdd: 68000, cost: 5800000,",
+    "category": "murray arc"
+  },
+  {
+    "id": "politico-port-no-double-passive",
+    "label": "Port contract doesn't silently double-count its $320k/mo passive add",
+    "mustNotContain": "outcome: true, passiveAdd: 320000,",
+    "category": "murray arc"
+  },
+  {
+    "id": "paulson-favor-arc-exists",
+    "label": "Paulson's personal favour arc (clean alternative route to billionaire mode) exists",
+    "marker": "function nodePaulsonFavor(gs)",
+    "category": "paulson arc"
+  },
+  {
+    "id": "paulson-favor-gated-on-3m-deal",
+    "label": "Paulson favour only fires after the $3M co-investment deal (paulsonContact>=3), not on first contact",
+    "marker": "if (pc >= 3 && !gameState.billionaireMode && !gameState.paulsonFavorPath && shownNotifsRef.current.indexOf(\"paulson_favor\") < 0)",
+    "category": "paulson arc"
+  },
+  {
+    "id": "tycoon-dashboard-restore-generalized",
+    "label": "Returning to root from any narrative arc restores the Tycoon Dashboard (generalized via showTycoonRef, not hardcoded per-arc)",
+    "marker": "if (choice.next===\"root\" && !showTycoonRef.current && (gsRef.current.tycoonMode||gsRef.current.billionaireMode)) {",
+    "category": "tycoon mode"
+  },
+  {
+    "id": "mogul-screen-no-bounce-loop",
+    "label": "City Mogul screen doesn't bounce the player back when they choose to keep going toward $100M",
+    "marker": "if (passiveIncome >= MOGUL_PASSIVE_TARGET && !gameState.mogulAcknowledged) { setTierScreen(\"mogul\"); return; }",
+    "category": "tycoon mode"
+  },
+  {
+    "id": "splash-always-shows",
+    "label": "Splash screen shows for every player on open, Pro or not (not silently skipped for returning Pro users)",
+    "marker": "var showSplashS = useState(true); var showSplash = showSplashS[0], setShowSplash = showSplashS[1];",
+    "category": "onboarding"
+  },
+  {
+    "id": "bank-menu-access-root",
+    "label": "Bank/Finance broker is reachable from the main menu, not just via blocked purchases",
+    "marker": "choices.push({ label: \"🏦 Visit the bank — borrow, repay, or see Vido\", next: \"__finance__\" });",
+    "category": "finance"
+  },
+  {
+    "id": "bank-menu-access-tycoon",
+    "label": "Bank/Finance broker is reachable from the Tycoon Dashboard directly",
+    "marker": "onClick:function(){ onFinance({}); }, style:{ width:\"100%\", background:\"#0d1f30\", border:\"1px solid #4a9eff44\", borderRadius:\"8px\", padding:\"0.75rem\", color:\"#4a9eff\", fontSize:\"0.85rem\", fontWeight:\"bold\", cursor:\"pointer\", marginBottom:\"0.6rem\" } },\n      \"🏦  Visit the bank",
+    "category": "finance"
+  },
+  {
+    "id": "good-deeds-in-scorecard-data",
+    "label": "Game Report scorecard entry captures givens (good deeds) off game state",
+    "marker": "givens:gs.givens||[]",
+    "category": "scorecard"
+  },
+  {
+    "id": "good-deeds-in-scorecard-display",
+    "label": "Game Report scorecard renders a Good Deeds section",
+    "marker": "\"Good Deeds\"",
+    "category": "scorecard"
+  }
+]
