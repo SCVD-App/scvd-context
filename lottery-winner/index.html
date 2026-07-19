@@ -689,6 +689,17 @@ function ScorecardModal(props) {
           })
         ),
 
+        // Good deeds
+        entry.givens && entry.givens.length > 0 && React.createElement("div", { style:{
+          background:"#0d0d0d", border:"1px solid #C0392B33", borderRadius:"6px",
+          padding:"0.75rem", marginBottom:"1rem", fontSize:"0.78rem", color:"#e88", lineHeight:1.8
+        }},
+          React.createElement("div", { style:{ fontSize:"0.55rem", color:"#555", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"0.4rem" } }, "Good Deeds"),
+          entry.givens.map(function(g, i) {
+            return React.createElement("div", { key:i }, "❤️ " + g);
+          })
+        ),
+
         // Leaderboard rank
         React.createElement("div", { style:{ textAlign:"center", fontSize:"0.75rem", color:"#555", marginBottom:"1rem" } }, rankStr),
 
@@ -4318,7 +4329,7 @@ function App() {
     (gs.investments||[]).slice(0,4).forEach(function(inv){assets.push("📈 "+inv.type);});
     var now = new Date();
     var dateStr = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
-    var entry = { name:playerName||"Anonymous", score:score, winAmount:winAmount, passive:passiveIncome, strategy:strategy, timeStr:timeStr, assets:assets, date:dateStr, ending:ending, history:gs.netWorthHistory||[] };
+    var entry = { name:playerName||"Anonymous", score:score, winAmount:winAmount, passive:passiveIncome, strategy:strategy, timeStr:timeStr, assets:assets, givens:gs.givens||[], date:dateStr, ending:ending, history:gs.netWorthHistory||[] };
     var newBoard = saveToLeaderboard(entry);
     setBoard(newBoard);
     var rank = newBoard.findIndex(function(e){return e.name===entry.name&&e.date===entry.date&&e.score===entry.score;});
