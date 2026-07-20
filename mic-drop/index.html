@@ -245,6 +245,22 @@ function gradeFromAccuracy(pct) {
   return               { label:"🔪 CORONER",      color:"#ff2200", tier:"red"    };
 }
 
+// Strips common Markdown the coaching endpoint occasionally emits despite
+// being asked for plain prose (headers, bold/italic markers, stray bullets).
+// Safety net, not a full parser — the real fix belongs in the worker's
+// prompt (see mic-drop/worker.js /coaching), this just stops raw syntax
+// from ever reaching the screen in the meantime.
+function stripCoachingMarkdown(text) {
+  if (!text) return text;
+  return text
+    .replace(/^#{1,6}\s*/gm, "")          // headers
+    .replace(/\*\*(.*?)\*\*/g, "$1")      // bold
+    .replace(/\*(.*?)\*/g, "$1")          // italics
+    .replace(/^[-*]\s+/gm, "")            // bullets
+    .replace(/\n{2,}/g, " ")              // collapse paragraph breaks into one flowing block
+    .trim();
+}
+
 function scoreColor(pct) {
   if (pct >= 95) return "#C9A84C";
   if (pct >= 90) return "#00cc55";
@@ -1313,7 +1329,7 @@ function ProSongCard({ song }) {
                 <span className="spin" style={{ display:"inline-block", marginRight:"8px" }}>◈</span>Analysing your performance...
               </div>
             ) : coaching ? (
-              <div style={{ fontSize:"14px", color:"#aaa", fontFamily:"'Courier New',monospace", lineHeight:1.8, letterSpacing:"0.04em" }}>{coaching}</div>
+              <div style={{ fontSize:"14px", color:"#aaa", fontFamily:"'Courier New',monospace", lineHeight:1.8, letterSpacing:"0.04em" }}>{stripCoachingMarkdown(coaching)}</div>
             ) : (
               <div style={{ fontSize:"13px", color:"#333", fontFamily:"'Courier New',monospace" }}>Loading your coaching...</div>
             )}
@@ -2579,6 +2595,16 @@ function VoiceIdModal({ onClose }) {
     setPasses(next);
     if (next.length >= VOICEID_PASSES.length) {
       localStorage.removeItem("micDrop_voiceIdProgress");
+      // Persist the calibrated range for the main recognition pipeline to
+      // read at arm time — see VOICEID_HP_MIN / VOICEID_HP_FLOOR below.
+      const combinedBins = new Array(VOICEID_NBINS).fill(0);
+      next.forEach(p => p.bins.forEach((c, i) => combinedBins[i] += c));
+      const range = voiceIdPercentileRange(combinedBins);
+      if (range) {
+        localStorage.setItem("micDrop_voiceProfile", JSON.stringify({
+          loHz: range.loHz, hiHz: range.hiHz, savedAt: Date.now(),
+        }));
+      }
       setStage("results");
     }
   };
@@ -3288,10 +3314,30 @@ function MicDrop() {
         const source   = audioCtxTemp.createMediaStreamSource(stream);
 
         // VOX — narrowband bandpass filter for pitch detection
-        // Isolates human singing voice (200Hz–3kHz) — rejects backing track bleed
+        // Isolates human singing voice — rejects backing track bleed.
+        // HP cutoff personalizes DOWN for calibrated lower voices (Voice ID
+        // Pro feature) so their real fundamental isn't clipped before pitch
+        // detection ever sees it — e.g. a bass/baritone can sit at 80–150Hz,
+        // below the stock 200Hz default. Deliberately one-directional for now:
+        // this only ever lowers the cutoff, never raises it above 200Hz for
+        // higher voices — that's a separate, stricter change worth its own
+        // testing pass once we've got more real-world calibration data.
+        let hpCutoff = 200;
+        try {
+          const profileRaw = localStorage.getItem("micDrop_voiceProfile");
+          if (profileRaw) {
+            const profile = JSON.parse(profileRaw);
+            if (profile && typeof profile.loHz === "number") {
+              hpCutoff = Math.min(200, Math.max(60, profile.loHz - 20));
+            }
+          }
+        } catch (e) {
+          // Malformed/missing profile — fall back to the stock default silently.
+        }
+        pushDebug("vox HP cutoff", `${hpCutoff} Hz${hpCutoff < 200 ? " (personalized)" : " (default)"}`);
         const hpFilter = audioCtxTemp.createBiquadFilter();
         hpFilter.type            = "highpass";
-        hpFilter.frequency.value = 200;   // cuts bass rumble and low music content
+        hpFilter.frequency.value = hpCutoff;   // cuts bass rumble and low music content — personalized when a Voice ID profile exists
         hpFilter.Q.value         = 0.9;   // tighter rolloff than before
 
         const lpFilter = audioCtxTemp.createBiquadFilter();
