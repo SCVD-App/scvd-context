@@ -175,7 +175,18 @@ function freqToNearestCents(freq) {
 // Falls back to the OS default if no built-in mic can be identified, rather
 // than failing outright — a heuristic label match shouldn't be able to break
 // recording for anyone.
+// Labels that are virtual/dynamic routing pointers, not a pinned physical
+// device — Chrome/Android exposes these (e.g. "Default", "Communications")
+// but selecting them doesn't actually lock the input; the OS can still
+// silently re-route them to a connected Bluetooth device. Must be excluded
+// separately from the Bluetooth pattern below, since they don't mention
+// Bluetooth by name.
+const VIRTUAL_ROUTE_PATTERN = /^default$|^communications$/i;
 const BLUETOOTH_MIC_PATTERN = /bluetooth|hands.?free|headset|airpods|buds|hfp|sco/i;
+// The bottom-facing mic used in speakerphone mode — closest match to how
+// someone actually holds a phone to sing into it. Preferred over any other
+// physical input if present.
+const PREFERRED_MIC_PATTERN = /speakerphone|bottom|back mic/i;
 
 async function getBuiltInMicStream(constraints, onLog) {
   let unlockStream;
@@ -189,8 +200,19 @@ async function getBuiltInMicStream(constraints, onLog) {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const audioInputs = devices.filter(d => d.kind === "audioinput");
     allLabels = audioInputs.map(d => d.label || "(blank label)");
-    const builtIn = audioInputs.find(d => d.label && !BLUETOOTH_MIC_PATTERN.test(d.label));
-    if (builtIn) { builtInId = builtIn.deviceId; chosenLabel = builtIn.label; }
+
+    // Real, pinned, non-Bluetooth physical devices only.
+    const physical = audioInputs.filter(d =>
+      d.label && !BLUETOOTH_MIC_PATTERN.test(d.label) && !VIRTUAL_ROUTE_PATTERN.test(d.label)
+    );
+    const preferred = physical.find(d => PREFERRED_MIC_PATTERN.test(d.label));
+    const chosen =
+      preferred ||
+      physical[0] ||
+      audioInputs.find(d => d.label && !BLUETOOTH_MIC_PATTERN.test(d.label)) || // last resort: even a virtual entry, just not Bluetooth-named
+      null;
+
+    if (chosen) { builtInId = chosen.deviceId; chosenLabel = chosen.label; }
   } catch (e) {
     if (onLog) onLog("mic select — enumerateDevices failed", e.message);
   } finally {
