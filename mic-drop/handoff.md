@@ -13,6 +13,7 @@
 | # | Task | Priority |
 |---|------|----------|
 | 1 | Test distortion fix in the Jaguar — blocked, Adrienne has the keys (spare key unconfirmed since last July's move) | 🔴 P1 — last untested vehicle |
+| 2 | **Landscape layout support — re-flagged, see field insight below** | 🔴 P1 — the Jaguar's vent mount physically cannot hold the phone in portrait at all; app currently has zero orientation handling and just squeezes its portrait layout into whatever the OS hands it |
 | 2 | Fix worker's `/coaching` prompt — explicit "no Markdown, plain prose, 2 sentences max" instruction | 🟠 P2 — client-side strip shipped as a safety net, root cause still in Cloudflare |
 | 3 | Compare Al's fresh vs. warmed-up Voice ID results once he tests this evening | 🟠 P2 |
 | 4 | Bump remaining small text in Voice ID flow (retry message, results-screen tips still ~13px) to match the instruction-text fix | 🟡 P3 — only flagged as a possible issue, not confirmed painful yet |
@@ -74,6 +75,18 @@ Voice ID's per-pass instruction text bumped from 12px → 21px (Scott's own acce
 | Lorna | Oppo (device, not a regular tester) | — | Used for one round of today's device-matrix testing — clean on phone speaker, not yet tested on Bluetooth beyond the Klipsch pass. |
 
 **Device-matrix testing today (distortion investigation):** Scott's phone, Lorna's Oppo, Samsung tablet, Nokia G42 5G — all Android. No iOS device tested against this specific bug; worth doing if the opportunity arises, since Android's SCO/HFP mechanism is platform-specific and this hasn't been ruled in or out on iOS.
+
+---
+
+## 🌍 Real-World Field Insight — Landscape Mode
+
+*Originally captured Session 12, dropped from the Session 13 rewrite in error, restored 20 July.*
+
+Scott discovered (Session 12) that mounting the phone in **landscape orientation in a vent-mounted holder in the Jaguar** naturally rotates the phone so the mic (at the base of the phone in portrait) points toward the driver's seating position — while leaving the volume controls (top of phone in portrait) still accessible at the top of the landscape orientation. This means landscape mode isn't just a "looks great on a dash" nice-to-have — it's a **free audio-capture quality improvement** tied directly to how people actually mount phones in cars.
+
+**New confirmation, 20 July:** the Jaguar's vent mount can *only* hold the phone landscape — same physical constraint as mounting for Waze or any mapping app. There is no portrait option in that mount. Confirmed today that the app currently has **zero orientation handling** (no media queries, no rotation logic at all) — meaning in the one mounting position the Jaguar's holder actually allows, the app doesn't adapt, it just renders its portrait layout however it happens to reflow into a wide, short viewport. This isn't a missing enhancement, it's a real usability gap for hands-free use in this specific, already-owned car.
+
+Worth considering: the mic-position training step in Voice ID / future calibration work could double as validating/reinforcing this orientation benefit for car users specifically.
 
 ---
 
@@ -150,7 +163,24 @@ Format: `micdrop_[type]_[days]_[hmac32]`, HMAC-SHA256 signed. Not single-use, no
 
 ---
 
-## 📋 Critical Operating Rules (Unchanged + New)
+## 🎨 Cosmetic Skins Roadmap
+
+*Rediscovered 20 July — surfaced from a separate, previously untracked conversation that took place around 8 July, between Session 12 and Session 13. Not built this session; folding in now so it doesn't get lost a second time.*
+
+Free with Pro, not sold separately. **Prerequisite for all of these:** inline styles need refactoring into a shared theme object first — no skin work starts until that's done.
+
+| Skin | Vibe |
+|------|------|
+| Neve console | Classic analogue mixing desk |
+| Hot pink | Bold, playful, high-contrast |
+| Space Shuttle | Glass-cockpit, NASA instrumentation |
+| Old Skool *(added ~8 July 2026)* | A slight, respectful nod to early-2000s desktop media players — two-pane compact layout, green LCD digital readout font, chunky bevelled transport buttons, bouncing spectrum-analyser bars (reuses the same `AnalyserNode` approach as Mic Drop's dual-analyser setup). Deliberately a subtle wink, not a direct homage — no borrowed names, mascots, or slogans from any specific product. Most users should just read it as "warm retro"; only some will clock the specific reference, and that's the intent. |
+
+---
+
+## 📋 Filing note
+
+Scott's working handoff-versioning system: superseded files get renamed to `handoff DD-MM HHMM` (the date/time they were *replaced*, not drafted) and moved into `mic-drop/archive/` — tidied up this session after the archive folder was found sitting empty since creation. Worth checking `archive/` for any other stray/forked handoff versions before assuming the live `handoff.md` is the complete picture — this Old Skool skin addition is proof at least one useful update can exist outside the mainline chain.
 
 1. Always paste-replace whole files — no manual line edits.
 2. Always confirm worker name in browser tab before editing.
