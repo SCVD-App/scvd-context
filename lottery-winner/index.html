@@ -1100,6 +1100,7 @@ function initialGS() {
     // Paulson personal favour arc (clean alternative route to billionaire mode)
     paulsonFavorPath: null,      // null | "declined" | "invested" | "resolved_win"
     paulsonFavorInvestMonth: 0,  // month snapshot at time of investment, for the resolution delay
+    lastTradingSession: null,    // Baz's Trading Desk — result of most recent 3-trade session
   };
 }
 
@@ -1260,6 +1261,7 @@ function nodeInvest(gs) {
       { label: "📊 Managed fund / ETF — set and forget", next: "inv_etf" },
       { label: "🏦 Term deposit — 4.5% p.a., zero risk", next: "inv_term" },
       { label: "🏢 Buy a small business", next: "inv_business" },
+      { label: "🎲 Baz's Trading Desk — high risk, high reward", next: "trading_desk" },
       ...(gs.hasMadePoliticalDonation ? [] : [{ label: "🏛️ Political donation — open the right doors — $500,000", next: "inv_political", cost: 500000 }]),
       ...(gs.steveContacted && !gs.hasBoughtBusiness ? [{ label: "🏢 Buy the old business — put Steve in charge", next: "buy_business" }] : []),
       { label: "🧓 Top up superannuation", next: "inv_super" },
@@ -1774,6 +1776,69 @@ function nodePaulsonFavorDecline(gs) {
   };
 }
 
+// ── BAZ'S TRADING DESK — high-variance repeatable gamble, bridge from small-business income to Tycoon-scale capital ──
+function rollTradeRound(third) {
+  var r = Math.random();
+  var mult, tag;
+  if (r < 0.40) { mult = 0; tag = "Wiped out"; }
+  else if (r < 0.68) { mult = 0.3; tag = "Stopped out"; }
+  else if (r < 0.88) { mult = 1.5; tag = "Modest gain"; }
+  else if (r < 0.97) { mult = 3.5; tag = "Strong gain"; }
+  else { mult = 8; tag = "Trade of the day"; }
+  return { mult: mult, tag: tag, result: Math.round(third * mult) };
+}
+
+function rollTradingSession(stake) {
+  var third = stake / 3;
+  var rounds = [rollTradeRound(third), rollTradeRound(third), rollTradeRound(third)];
+  var totalWinnings = rounds.reduce(function(sum, r) { return sum + r.result; }, 0);
+  return { stake: stake, rounds: rounds, totalWinnings: totalWinnings };
+}
+
+function nodeTradingDesk(gs) {
+  return {
+    text: "Baz picks up on the second ring. 'Mate! Perfect timing, market's moving.' He doesn't do managed funds. Doesn't do 'safe.' He splits your stake three ways and runs three separate plays with it — 'never all-in on one call, that's how you get wiped in a single afternoon.' 'Some days I make you look like a genius. Some days I don't. That's the game.'",
+    choices: [
+      { label: "💵 Small stake — $250,000", next: "trading_desk_confirm_small", cost: 250000 },
+      { label: "💰 Serious stake — $1,000,000", next: "trading_desk_confirm_medium", cost: 1000000 },
+      { label: "🎰 All in — $5,000,000", next: "trading_desk_confirm_large", cost: 5000000 },
+      { label: "🚪 Not today", next: "invest" },
+    ]
+  };
+}
+
+function makeTradingDeskConfirm(stake) {
+  return function(gs) {
+    return {
+      text: "Baz puts you on hold for a second. 'Righto — splitting it three ways, running three separate plays, let's see what the market gives us today.' You hear typing. A lot of typing.",
+      outcome: true,
+      action: function(g) { return Object.assign({}, g, { lastTradingSession: rollTradingSession(stake) }); },
+      choices: [{ label: "→ See what happened", next: "trading_desk_result" }]
+    };
+  };
+}
+var nodeTradingDeskConfirmSmall = makeTradingDeskConfirm(250000);
+var nodeTradingDeskConfirmMedium = makeTradingDeskConfirm(1000000);
+var nodeTradingDeskConfirmLarge = makeTradingDeskConfirm(5000000);
+
+function nodeTradingDeskResult(gs) {
+  var s = gs.lastTradingSession || { stake: 0, rounds: [], totalWinnings: 0 };
+  var lines = s.rounds.map(function(r, i) {
+    return "Trade " + (i + 1) + " — " + r.tag + ": " + fmtFull(r.result) + " back.";
+  }).join(" ");
+  var net = s.totalWinnings - s.stake;
+  var closer = net > s.stake ? "Baz is thrilled. 'Told you, mate. Told you.'"
+    : net > 0 ? "Baz sounds relieved more than triumphant."
+    : net === 0 ? "Baz goes quiet for a second. 'Break-even's still a result, mate.'"
+    : "Baz doesn't say much. 'Market's a cruel mistress. Same time next week?'";
+  return {
+    text: "The session closes. " + lines + " Net across the three trades: " + (net >= 0 ? "+" : "") + fmtFull(net) + ". " + closer,
+    outcome: true,
+    cashAdd: s.totalWinnings,
+    choices: [{ label: "→ Back to business", next: "invest" }]
+  };
+}
+
 // RANDOM EVENTS specific to politico path
 var POLITICO_EVENTS = [
   function(gs) {
@@ -1889,6 +1954,11 @@ const NODES = {
   paulson_favor: nodePaulsonFavor,
   paulson_favor_do: nodePaulsonFavorDo,
   paulson_favor_decline: nodePaulsonFavorDecline,
+  trading_desk: nodeTradingDesk,
+  trading_desk_confirm_small: nodeTradingDeskConfirmSmall,
+  trading_desk_confirm_medium: nodeTradingDeskConfirmMedium,
+  trading_desk_confirm_large: nodeTradingDeskConfirmLarge,
+  trading_desk_result: nodeTradingDeskResult,
   paulson_structure: nodePaulsonStructure,
   paulson_opportunity: nodePaulsonOpportunity,
   paulson_tech: nodePaulsonTech, paulson_tech_do: nodePaulsonTechDo,
@@ -4146,6 +4216,11 @@ function App() {
       if (nw <= weeksRef.current) return;
       weeksRef.current = nw;
       setWeeksElapsed(nw);
+      // Family drift tier 1 — fires week 3 regardless of playstyle
+      if (nw === 3 && (gsRef.current.familyDrift||0) < 1 && !(gsRef.current.paulsonMilestones||{}).familyDrift1) {
+        setGameState(function(g){return Object.assign({},g,{familyDrift:1,paulsonMilestones:Object.assign({},g.paulsonMilestones,{familyDrift1:true})});});
+        queueNotif({ sender:"Mum", type:"family", preview:"Haven't heard from you in a while.", body:"Just checking in. Your sister said you've been busy. Give me a call when you get a chance. Dad wants to know if you're coming for Christmas.\n\n— Mum" });
+      }
       var weeklyPassive = passRef.current / 4.33;
       setCash(function(c){return c + weeklyPassive;});
       // Passive glow every 4 weeks
@@ -4247,14 +4322,10 @@ function App() {
           });
         }
 
-        // Family drift — empire path
-        if (kpGs.kpPath === "empire") {
+        // Family drift — universal, regardless of playstyle (tier 1 fires week 3, see CLOCK effect)
+        {
           var fd = kpGs.familyDrift || 0;
           var pm2 = kpGs.paulsonMilestones || {};
-          if (month >= 3 && fd < 1 && !pm2.familyDrift1) {
-            setGameState(function(g){return Object.assign({},g,{familyDrift:1,paulsonMilestones:Object.assign({},g.paulsonMilestones,{familyDrift1:true})});});
-            queueNotif({ sender:"Mum", type:"family", preview:"Haven't heard from you in a while.", body:"Just checking in. Your sister said you've been busy. Give me a call when you get a chance. Dad wants to know if you're coming for Christmas.\n\n— Mum" });
-          }
           if (month >= 6 && fd < 2 && !pm2.familyDrift2) {
             setGameState(function(g){return Object.assign({},g,{familyDrift:2,paulsonMilestones:Object.assign({},g.paulsonMilestones,{familyDrift2:true})});});
             queueNotif({ sender:"Mum", type:"family", preview:"Your sister's engagement dinner.", body:"We had the dinner last Saturday. We kept a seat for you. She understood.\n\n— Mum" });
