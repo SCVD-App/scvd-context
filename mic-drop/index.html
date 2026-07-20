@@ -2449,7 +2449,7 @@ function VoiceIdResults({ passes, onClose, onRedo }) {
         <div style={{ height: "140px", display: "flex", alignItems: "flex-end", gap: "2px", marginBottom: "10px" }}>
           {display.map((h, i) => <div key={i} style={{ flex: 1, height: `${(h / maxBin) * 130}px`, background: "#C9A84C", borderRadius: "1px 1px 0 0" }} />)}
         </div>
-        <div style={{ fontSize: "24px", fontWeight: "500", color: "#fff", fontFamily: "Georgia,serif" }}>{range.loHz}\u2013{range.hiHz} Hz</div>
+        <div style={{ fontSize: "24px", fontWeight: "500", color: "#fff", fontFamily: "Georgia,serif" }}>{range.loHz}{"\u2013"}{range.hiHz} Hz</div>
         {primary && (
           <div style={{ fontSize: "13px", color: "#C9A84C", marginTop: "4px" }}>
             {primary.label} range{overlaps.length > 1 ? ` — overlaps ${overlaps.slice(1).map(o => o.label).join(" and ")}` : ""}
