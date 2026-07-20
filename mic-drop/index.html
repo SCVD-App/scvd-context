@@ -177,25 +177,27 @@ function freqToNearestCents(freq) {
 // recording for anyone.
 const BLUETOOTH_MIC_PATTERN = /bluetooth|hands.?free|headset|airpods|buds|hfp|sco/i;
 
-async function getBuiltInMicStream(constraints) {
+async function getBuiltInMicStream(constraints, onLog) {
   let unlockStream;
   try {
     unlockStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (e) {
-    // Permission itself failed — let the caller's own getUserMedia call surface the real error.
     throw e;
   }
-  let builtInId = null;
+  let builtInId = null, chosenLabel = "(unknown — no label available)", allLabels = [];
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const audioInputs = devices.filter(d => d.kind === "audioinput");
+    allLabels = audioInputs.map(d => d.label || "(blank label)");
     const builtIn = audioInputs.find(d => d.label && !BLUETOOTH_MIC_PATTERN.test(d.label));
-    builtInId = builtIn ? builtIn.deviceId : null;
+    if (builtIn) { builtInId = builtIn.deviceId; chosenLabel = builtIn.label; }
   } catch (e) {
-    // enumerateDevices can fail on some browsers — fall through to OS default.
+    if (onLog) onLog("mic select — enumerateDevices failed", e.message);
   } finally {
     unlockStream.getTracks().forEach(t => t.stop());
   }
+
+  if (onLog) onLog("mic select", `chose: "${chosenLabel}" | all inputs: ${allLabels.join(" | ") || "(none)"}`);
 
   return navigator.mediaDevices.getUserMedia({
     audio: {
@@ -3257,7 +3259,7 @@ function MicDrop() {
           autoGainControl:  false,
           channelCount:     1,        // mono — prevents Bluetooth stereo mode switching
           googHighpassFilter: false,  // Chrome hint: disable internal HP filter (we do our own)
-        });
+        }, pushDebug);
         mediaStream.current    = stream;
         cleanStreamRef.current = null;
 
