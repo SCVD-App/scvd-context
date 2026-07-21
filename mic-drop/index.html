@@ -24,6 +24,13 @@
     body { display: flex; justify-content: center; }
     #root { width: 100%; max-width: 420px; }
 
+    /* Landscape driving mode — phone mounted sideways (e.g. Jaguar vent mount).
+       Threshold matches the JS isLandscape check below (orientation: landscape
+       AND short viewport, so tablets/resized desktop windows keep the portrait layout). */
+    @media (orientation: landscape) and (max-height: 520px) {
+      #root { max-width: 100%; }
+    }
+
     @keyframes pulse       { from { opacity:1; } to { opacity:0.3; } }
     @keyframes scroll-left { 0% { transform:translateX(100vw); } 100% { transform:translateX(-100%); } }
     @keyframes fadeIn      { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
@@ -269,20 +276,24 @@ function scoreColor(pct) {
 }
 
 // ── LED METER ─────────────────────────────────────────────────────────────────
-function LEDMeter({ level, peakHold, label, icon }) {
+function LEDMeter({ level, peakHold, label, icon, compact }) {
   const active = Math.round((level/100)*NUM_LEDS);
   const peak   = Math.round((peakHold/100)*NUM_LEDS) - 1;
+  const ledH   = compact ? 5 : 8;
+  const ledW   = compact ? "22px" : "30px";
+  const ledGap = compact ? "2px" : "3px";
+  const colH   = compact ? "138px" : "220px";
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"6px", width:"100%" }}>
-      <div style={{ fontSize:"14px", letterSpacing:"0.18em", color:"#666", fontFamily:"'Courier New',monospace", textTransform:"uppercase" }}>{icon} {label}</div>
-      <div style={{ display:"flex", flexDirection:"column-reverse", gap:"3px", height:"220px" }}>
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap: compact?"3px":"6px", width:"100%" }}>
+      <div style={{ fontSize: compact?"11px":"14px", letterSpacing:"0.18em", color:"#666", fontFamily:"'Courier New',monospace", textTransform:"uppercase" }}>{icon} {label}</div>
+      <div style={{ display:"flex", flexDirection:"column-reverse", gap:ledGap, height:colH }}>
         {Array.from({ length:NUM_LEDS }).map((_,i) => {
           const on   = i < active;
           const isPk = i === peak && peakHold > 0;
           const col  = i >= NUM_LEDS-2 ? "#ff2200" : i >= NUM_LEDS-6 ? "#ffaa00" : "#00ff66";
           return (
             <div key={i} style={{
-              width:"30px", height:"8px", borderRadius:"2px",
+              width:ledW, height:`${ledH}px`, borderRadius:"2px",
               backgroundColor: on||isPk ? col : "rgba(255,255,255,0.05)",
               boxShadow: on||isPk ? `0 0 7px ${col}99` : "none",
               transition:"background-color 0.04s",
@@ -295,9 +306,10 @@ function LEDMeter({ level, peakHold, label, icon }) {
 }
 
 // ── FADER ─────────────────────────────────────────────────────────────────────
-function Fader({ value, onChange, label, color }) {
+function Fader({ value, onChange, label, color, compact }) {
   const trackRef = useRef(null);
   const drag     = useRef(false);
+  const H = compact ? 140 : 220;
   const calc = (y) => {
     const r = trackRef.current.getBoundingClientRect();
     return Math.round((1 - Math.max(0, Math.min(1, (y-r.top)/r.height))) * 100);
@@ -318,18 +330,18 @@ function Fader({ value, onChange, label, color }) {
       window.removeEventListener("touchend",  onTE);
     };
   }, []);
-  const thumbTop = (1 - value/100) * 200;
+  const thumbTop = (1 - value/100) * (H - 20);
   const dbLabel  = value === 0 ? "-∞" : value === 100 ? "0 dB" : `${Math.round(-24+(value/100)*24)} dB`;
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"10px", userSelect:"none" }}>
-      <div style={{ fontSize:"14px", letterSpacing:"0.18em", color:"#666", fontFamily:"'Courier New',monospace", textTransform:"uppercase" }}>{label}</div>
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap: compact?"6px":"10px", userSelect:"none" }}>
+      <div style={{ fontSize: compact?"11px":"14px", letterSpacing:"0.18em", color:"#666", fontFamily:"'Courier New',monospace", textTransform:"uppercase" }}>{label}</div>
       <div ref={trackRef}
         onMouseDown={(e) => { drag.current=true; onChange(calc(e.clientY)); }}
         onTouchStart={(e) => { drag.current=true; onChange(calc(e.touches[0].clientY)); }}
-        style={{ position:"relative", width:"30px", height:"220px", cursor:"pointer" }}
+        style={{ position:"relative", width: compact?"22px":"30px", height:`${H}px`, cursor:"pointer" }}
       >
-        <div style={{ position:"absolute", left:"50%", transform:"translateX(-50%)", top:0, width:"4px", height:"100%", background:"linear-gradient(to bottom,#2a2a2a,#111)", borderRadius:"2px", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.9)" }}/>
-        {[100,75,50,25,0].map(pct => (
+        <div style={{ position:"absolute", left:"50%", transform:"translateX(-50%)", top:0, width: compact?"3px":"4px", height:"100%", background:"linear-gradient(to bottom,#2a2a2a,#111)", borderRadius:"2px", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.9)" }}/>
+        {!compact && [100,75,50,25,0].map(pct => (
           <div key={pct} style={{ position:"absolute", right:"-20px", top:`${(1-pct/100)*100}%`, transform:"translateY(-50%)", fontSize:"17px", color:"#333", fontFamily:"'Courier New',monospace" }}>
             {pct===100?"∞":pct===75?"-6":pct===50?"-12":pct===25?"-24":"-∞"}
           </div>
@@ -344,7 +356,7 @@ function Fader({ value, onChange, label, color }) {
           ))}
         </div>
       </div>
-      <div style={{ fontSize:"15px", color, fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>{dbLabel}</div>
+      <div style={{ fontSize: compact?"12px":"15px", color, fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>{dbLabel}</div>
     </div>
   );
 }
@@ -2643,6 +2655,96 @@ function VoiceIdModal({ onClose }) {
   );
 }
 
+// ── LANDSCAPE SESSION VIEW ──────────────────────────────────────────────────
+// Field-confirmed need (Session 12/13): the Jaguar's vent mount can only hold
+// the phone landscape — which also happens to be the orientation where the
+// base-mounted mic points at the driver. Scoped to the core driving screen
+// (track ID, pitch feedback, mixer, arm/identify). Secondary nav — Support,
+// About, Backstage, Invite, Voice ID, token entry — stays portrait-only for
+// now; rotate back to reach it. Flagging that as a deliberate scope cut, not
+// an oversight — building compact variants of every modal in one session
+// would mean rushing all of them.
+function LandscapeSession({
+  armed, trackInfo, isIdentifying, idPhase, countdown, pitchCents, statusMsg, clipping,
+  roomMeter, roomPeak, roomLevel, setRoomLevel, voxMeter, voxPeak, voxLevel, setVoxLevel,
+  toggleArmed, recognizeTrack, sessionLog, sessionAccuracy,
+  spotifyStatus, spotifyPlaying, toggleSpotifyPlayback,
+}) {
+  return (
+    <div style={{ width:"100%", display:"flex", flexDirection:"row", gap:"16px", padding:"10px 16px 14px", alignItems:"stretch", boxSizing:"border-box" }}>
+
+      {/* LEFT — identity, pitch feedback, transport */}
+      <div style={{ flex:"1.35 1 0", display:"flex", flexDirection:"column", justifyContent:"space-between", minWidth:0 }}>
+
+        {/* Mini header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ fontSize:"15px", fontWeight:"900", letterSpacing:"0.1em", color:"#fff", fontFamily:"Georgia,serif", textTransform:"uppercase" }}>🎤 MIC DROP</div>
+          <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+            {clipping && <span className="clip-pulse" style={{ fontSize:"12px", color:"#ff2200", fontWeight:"bold" }}>⚠ CLIP</span>}
+            {armed && <span className="live-pulse" style={{ fontSize:"12px", color:"#ff4422", letterSpacing:"0.15em" }}>● LIVE</span>}
+          </div>
+        </div>
+
+        {/* Track / pitch / countdown */}
+        <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", gap:"6px", minHeight:0, overflow:"hidden" }}>
+          {trackInfo ? (
+            <div>
+              <div style={{ fontSize:"14px", color:"#fff", fontWeight:"bold", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{trackInfo.title}</div>
+              <div style={{ fontSize:"12px", color:"#aaa", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{trackInfo.artist}</div>
+              <div style={{ fontSize:"11px", color:"#aaa", marginTop:"2px", display:"flex", alignItems:"center", gap:"6px" }}>
+                <span>Key of <span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.key}</span> · <span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.bpm}</span> BPM</span>
+                {spotifyStatus === "connected" && (
+                  <button onClick={toggleSpotifyPlayback} style={{ background:"none", border:"none", color:"#1DB954", fontSize:"13px", cursor:"pointer", padding:0 }}>
+                    {spotifyPlaying ? "⏸" : "▶"}
+                  </button>
+                )}
+              </div>
+              <div style={{ marginTop:"6px" }}>
+                <PitchIndicator cents={pitchCents} />
+              </div>
+            </div>
+          ) : armed && isIdentifying ? (
+            <CountdownDisplay phase={idPhase} countdown={countdown} />
+          ) : armed ? (
+            <div style={{ fontSize:"12px", letterSpacing:"0.15em", color:"#2a2a2a" }}>TAP IDENTIFY TO BEGIN</div>
+          ) : (
+            <div style={{ fontSize:"12px", letterSpacing:"0.15em", color:"#2a2a2a" }}>ARM THE MIC TO START</div>
+          )}
+          {statusMsg && !isIdentifying && (
+            <div style={{ fontSize:"11px", color:"#C9A84C", letterSpacing:"0.06em" }}>{statusMsg}</div>
+          )}
+        </div>
+
+        {/* Transport — row instead of stacked, to save vertical space */}
+        <div style={{ display:"flex", gap:"8px" }}>
+          <button className={`arm-btn${armed?" armed":""}`} onClick={toggleArmed} style={{ flex:"1 1 0", minWidth:0, padding:"12px 4px", fontSize:"12px", letterSpacing:"0.15em" }}>
+            {armed ? "⏹ DISARM" : "⏺ ARM"}
+          </button>
+          {armed && (
+            <button className="identify-btn" disabled={isIdentifying} onClick={recognizeTrack} style={{ flex:"1 1 0", minWidth:0, padding:"12px 4px", fontSize:"11px" }}>
+              {isIdentifying ? "◈ ID..." : "◈ IDENTIFY"}
+            </button>
+          )}
+          {sessionLog.length > 0 && sessionAccuracy !== null && (
+            <div title="Rotate to portrait for the full session report" style={{ flex:"0 0 auto", minWidth:0, padding:"12px 10px", fontSize:"11px", borderRadius:"14px", border:"2px solid rgba(46,109,164,0.5)", background:"rgba(46,109,164,0.1)", color:"#2E6DA4", fontFamily:"'Courier New',monospace", fontWeight:"bold", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              {sessionAccuracy}%
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* RIGHT — mixer */}
+      <div style={{ flex:"1 1 0", display:"flex", flexDirection:"row", justifyContent:"center", alignItems:"flex-start", gap:"10px" }}>
+        <LEDMeter level={roomMeter} peakHold={roomPeak} label="Room" icon="♪" compact />
+        <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color="#2E6DA4" compact />
+        <div style={{ width:"1px", alignSelf:"stretch", background:"#181818" }}/>
+        <LEDMeter level={voxMeter} peakHold={voxPeak} label="Vox" icon="🎤" compact />
+        <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color="#C9A84C" compact />
+      </div>
+    </div>
+  );
+}
+
 function MicDrop() {
   const [roomLevel,   setRoomLevel]   = useState(65);
   const [voxLevel,    setVoxLevel]    = useState(70);
@@ -2657,6 +2759,24 @@ function MicDrop() {
   const [trackInfo,   setTrackInfo]   = useState(null);
   const [lastTrackKey,setLastTrackKey]= useState(null);
   const [statusMsg,   setStatusMsg]   = useState("");
+
+  // ── LANDSCAPE MODE — field-confirmed need (Session 12/13): the Jaguar's vent
+  // mount can only hold the phone landscape, which also happens to be the
+  // orientation where the base-mounted mic points at the driver. Previously
+  // zero orientation handling existed at all. max-height:520 restricts this to
+  // phones-in-hand, not tablets or a desktop browser window resized wide.
+  const [isLandscape, setIsLandscape] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: landscape)");
+    const update = () => setIsLandscape(mq.matches && window.innerHeight < 520);
+    update();
+    mq.addEventListener("change", update);
+    window.addEventListener("resize", update);
+    return () => {
+      mq.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   // ── DEBUG OVERLAY — tester-facing diagnostic log ──
   // Toggle: tap the footer version text 5x quickly. Never enabled by default.
@@ -3577,6 +3697,18 @@ function MicDrop() {
       {/* SCREEN GLOW — only after track identified */}
       {armed && trackInfo && <ScreenGlow cents={smoothCents} />}
 
+      {isLandscape ? (
+        <LandscapeSession
+          armed={armed} trackInfo={trackInfo} isIdentifying={isIdentifying} idPhase={idPhase} countdown={countdown}
+          pitchCents={pitchCents} statusMsg={statusMsg} clipping={clipping}
+          roomMeter={roomMeter} roomPeak={roomPeak} roomLevel={roomLevel} setRoomLevel={setRoomLevel}
+          voxMeter={voxMeter} voxPeak={voxPeak} voxLevel={voxLevel} setVoxLevel={setVoxLevel}
+          toggleArmed={toggleArmed} recognizeTrack={recognizeTrack}
+          sessionLog={sessionLog} sessionAccuracy={sessionAccuracy}
+          spotifyStatus={spotifyStatus} spotifyPlaying={spotifyPlaying} toggleSpotifyPlayback={toggleSpotifyPlayback}
+        />
+      ) : (
+      <>
       {/* HEADER */}
       <div style={{ width:"100%", maxWidth:"420px", padding:"22px 20px 6px" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -4007,6 +4139,8 @@ function MicDrop() {
         </div>
 
       </div>
+      </>
+      )}
 
       {/* ── TESTER DEBUG OVERLAY ── */}
       {showDebug && (
