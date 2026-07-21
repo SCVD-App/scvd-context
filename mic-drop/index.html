@@ -2708,17 +2708,17 @@ function LandscapeSession({
         <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", gap:"6px", minHeight:0, overflow:"hidden" }}>
           {trackInfo ? (
             <div>
-              <div style={{ fontSize:"14px", color:"#fff", fontWeight:"bold", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{trackInfo.title}</div>
-              <div style={{ fontSize:"12px", color:"#aaa", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{trackInfo.artist}</div>
-              <div style={{ fontSize:"11px", color:"#aaa", marginTop:"2px", display:"flex", alignItems:"center", gap:"6px" }}>
+              <div style={{ fontSize:"32px", color:"#fff", fontWeight:"bold", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{trackInfo.title}</div>
+              <div style={{ fontSize:"22px", color:"#aaa", marginTop:"2px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{trackInfo.artist}</div>
+              <div style={{ fontSize:"18px", color:"#aaa", marginTop:"8px", display:"flex", alignItems:"center", gap:"10px" }}>
                 <span>Key of <span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.key}</span> · <span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.bpm}</span> BPM</span>
                 {spotifyStatus === "connected" && (
-                  <button onClick={toggleSpotifyPlayback} style={{ background:"none", border:"none", color:"#1DB954", fontSize:"13px", cursor:"pointer", padding:0 }}>
+                  <button onClick={toggleSpotifyPlayback} style={{ background:"none", border:"none", color:"#1DB954", fontSize:"20px", cursor:"pointer", padding:0 }}>
                     {spotifyPlaying ? "⏸" : "▶"}
                   </button>
                 )}
               </div>
-              <div style={{ marginTop:"6px" }}>
+              <div style={{ marginTop:"14px" }}>
                 <PitchIndicator cents={pitchCents} />
               </div>
             </div>
