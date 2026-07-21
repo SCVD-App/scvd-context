@@ -279,13 +279,14 @@ function scoreColor(pct) {
 function LEDMeter({ level, peakHold, label, icon, compact }) {
   const active = Math.round((level/100)*NUM_LEDS);
   const peak   = Math.round((peakHold/100)*NUM_LEDS) - 1;
-  const ledH   = compact ? 5 : 8;
-  const ledW   = compact ? "22px" : "30px";
-  const ledGap = compact ? "2px" : "3px";
-  const colH   = compact ? "138px" : "220px";
+  const lg     = compact === "lg";
+  const ledH   = lg ? 10 : compact ? 5 : 8;
+  const ledW   = lg ? "44px" : compact ? "22px" : "30px";
+  const ledGap = lg ? "4px" : compact ? "2px" : "3px";
+  const colH   = lg ? "276px" : compact ? "138px" : "220px";
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap: compact?"3px":"6px", width:"100%" }}>
-      <div style={{ fontSize: compact?"11px":"14px", letterSpacing:"0.18em", color:"#666", fontFamily:"'Courier New',monospace", textTransform:"uppercase" }}>{icon} {label}</div>
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap: lg?"5px":compact?"3px":"6px", width:"100%" }}>
+      <div style={{ fontSize: lg?"13px":compact?"11px":"14px", letterSpacing:"0.18em", color:"#666", fontFamily:"'Courier New',monospace", textTransform:"uppercase" }}>{icon} {label}</div>
       <div style={{ display:"flex", flexDirection:"column-reverse", gap:ledGap, height:colH }}>
         {Array.from({ length:NUM_LEDS }).map((_,i) => {
           const on   = i < active;
@@ -309,7 +310,8 @@ function LEDMeter({ level, peakHold, label, icon, compact }) {
 function Fader({ value, onChange, label, color, compact }) {
   const trackRef = useRef(null);
   const drag     = useRef(false);
-  const H = compact ? 140 : 220;
+  const lg = compact === "lg";
+  const H  = lg ? 280 : compact ? 140 : 220;
   const calc = (y) => {
     const r = trackRef.current.getBoundingClientRect();
     return Math.round((1 - Math.max(0, Math.min(1, (y-r.top)/r.height))) * 100);
@@ -333,14 +335,14 @@ function Fader({ value, onChange, label, color, compact }) {
   const thumbTop = (1 - value/100) * (H - 20);
   const dbLabel  = value === 0 ? "-∞" : value === 100 ? "0 dB" : `${Math.round(-24+(value/100)*24)} dB`;
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap: compact?"6px":"10px", userSelect:"none" }}>
-      <div style={{ fontSize: compact?"11px":"14px", letterSpacing:"0.18em", color:"#666", fontFamily:"'Courier New',monospace", textTransform:"uppercase" }}>{label}</div>
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap: lg?"12px":compact?"6px":"10px", userSelect:"none" }}>
+      <div style={{ fontSize: lg?"14px":compact?"11px":"14px", letterSpacing:"0.18em", color:"#666", fontFamily:"'Courier New',monospace", textTransform:"uppercase" }}>{label}</div>
       <div ref={trackRef}
         onMouseDown={(e) => { drag.current=true; onChange(calc(e.clientY)); }}
         onTouchStart={(e) => { drag.current=true; onChange(calc(e.touches[0].clientY)); }}
-        style={{ position:"relative", width: compact?"22px":"30px", height:`${H}px`, cursor:"pointer" }}
+        style={{ position:"relative", width: lg?"44px":compact?"22px":"30px", height:`${H}px`, cursor:"pointer" }}
       >
-        <div style={{ position:"absolute", left:"50%", transform:"translateX(-50%)", top:0, width: compact?"3px":"4px", height:"100%", background:"linear-gradient(to bottom,#2a2a2a,#111)", borderRadius:"2px", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.9)" }}/>
+        <div style={{ position:"absolute", left:"50%", transform:"translateX(-50%)", top:0, width: lg?"5px":compact?"3px":"4px", height:"100%", background:"linear-gradient(to bottom,#2a2a2a,#111)", borderRadius:"2px", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.9)" }}/>
         {!compact && [100,75,50,25,0].map(pct => (
           <div key={pct} style={{ position:"absolute", right:"-20px", top:`${(1-pct/100)*100}%`, transform:"translateY(-50%)", fontSize:"17px", color:"#333", fontFamily:"'Courier New',monospace" }}>
             {pct===100?"∞":pct===75?"-6":pct===50?"-12":pct===25?"-24":"-∞"}
@@ -356,7 +358,7 @@ function Fader({ value, onChange, label, color, compact }) {
           ))}
         </div>
       </div>
-      <div style={{ fontSize: compact?"12px":"15px", color, fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>{dbLabel}</div>
+      <div style={{ fontSize: lg?"17px":compact?"12px":"15px", color, fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>{dbLabel}</div>
     </div>
   );
 }
@@ -2671,7 +2673,7 @@ function LandscapeSession({
   spotifyStatus, spotifyPlaying, toggleSpotifyPlayback,
 }) {
   return (
-    <div style={{ width:"100%", display:"flex", flexDirection:"row", gap:"12px", padding:"10px 14px 14px 8px", alignItems:"stretch", boxSizing:"border-box" }}>
+    <div style={{ width:"100%", minHeight:"100vh", display:"flex", flexDirection:"row", gap:"12px", padding:"10px 14px 14px 8px", alignItems:"stretch", boxSizing:"border-box" }}>
 
       {/* FAR LEFT — full-height ARM/DISARM. Left edge = closer to a RHD driver's
           reaching hand for a roughly centre-mounted phone. Vertical text via
@@ -2750,12 +2752,12 @@ function LandscapeSession({
       </div>
 
       {/* RIGHT — mixer */}
-      <div style={{ flex:"1 1 0", display:"flex", flexDirection:"row", justifyContent:"center", alignItems:"flex-start", gap:"10px" }}>
-        <LEDMeter level={roomMeter} peakHold={roomPeak} label="Room" icon="♪" compact />
-        <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color="#2E6DA4" compact />
+      <div style={{ flex:"1 1 0", display:"flex", flexDirection:"row", justifyContent:"center", alignItems:"center", gap:"14px" }}>
+        <LEDMeter level={roomMeter} peakHold={roomPeak} label="Room" icon="♪" compact="lg" />
+        <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color="#2E6DA4" compact="lg" />
         <div style={{ width:"1px", alignSelf:"stretch", background:"#181818" }}/>
-        <LEDMeter level={voxMeter} peakHold={voxPeak} label="Vox" icon="🎤" compact />
-        <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color="#C9A84C" compact />
+        <LEDMeter level={voxMeter} peakHold={voxPeak} label="Vox" icon="🎤" compact="lg" />
+        <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color="#C9A84C" compact="lg" />
       </div>
     </div>
   );
