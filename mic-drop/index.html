@@ -119,6 +119,44 @@ const REPORT_INTERVAL_MS   = 500;
 const MIN_VOX_RMS          = 0.06;   // narrowband gate — rejects backing track bleed, requires close vocal signal
 const MAX_VOX_FREQ         = 3000;   // human singing voice tops out ~3kHz
 
+// ── SKINS ────────────────────────────────────────────────────────────────
+// Additive, not destructive. "default" reproduces the exact hardcoded values
+// that were already live — selecting a different skin only swaps which
+// token set gets read by the (still-plain) style objects below. Deliberately
+// scoped to the main portrait screen + landscape mode (they share
+// PitchIndicator/Fader, so theming those once covers both). Modals —
+// Onboarding, Profile, About, Dressing Room, Session Report, Voice ID, the
+// debug overlay — stay their original black/gold regardless of skin
+// selected. That's a scope cut, not an oversight: reskinning every modal in
+// one pass on a file taking live payments isn't worth the risk today.
+function withAlpha(hex, alpha) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0,2), 16);
+  const g = parseInt(h.substring(2,4), 16);
+  const b = parseInt(h.substring(4,6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+const SKINS = {
+  default: {
+    name:    "Default",
+    canvas:  "#0a0a0a",
+    panel:   "#111111",
+    accent:  "#C9A84C",   // gold — Vox channel, primary brand accent
+    accent2: "#2E6DA4",   // blue — Room channel
+    text:    "#ffffff",
+  },
+  alpinist: {
+    // First pass, not final — Scott's holding the actual watch, not me.
+    // Expect the exact hex values to move once he eyeballs it live.
+    name:    "Alpinist",
+    canvas:  "#0b1f16",   // deep forest green, watch-dial inspired
+    panel:   "#122a1e",
+    accent:  "#d4af6a",   // warmer gold, watch-hands inspired
+    accent2: "#5a8f6b",   // muted sage, stands in for the Room channel's blue
+    text:    "#f2ead9",   // warm off-white, not stark white
+  },
+};
+
 // ── SPOTIFY INTEGRATION (Beta) ────────────────────────────────────────────────
 // Placeholder Client ID — swap for the real one from developer.spotify.com/dashboard.
 // Safe to keep public in source (same as Spotify's own web player does).
@@ -364,11 +402,11 @@ function Fader({ value, onChange, label, color, compact, heightPx }) {
 }
 
 // ── PITCH INDICATOR ───────────────────────────────────────────────────────────
-function PitchIndicator({ cents }) {
+function PitchIndicator({ cents, pocketColor = "#C9A84C" }) {
   const info = (() => {
     if (cents === null) return { bg:"rgba(0,0,0,0)", label:"—", sub:"awaiting signal", accent:"#333" };
     const a = Math.abs(cents);
-    if (a <= POCKET_CENTS) return { bg:"rgba(201,168,76,0.12)", label:"IN THE POCKET", sub:`${cents>0?"+":""}${cents}¢`, accent:"#C9A84C" };
+    if (a <= POCKET_CENTS) return { bg:withAlpha(pocketColor,0.12), label:"IN THE POCKET", sub:`${cents>0?"+":""}${cents}¢`, accent:pocketColor };
     if (a <= CLOSE_CENTS)  return { bg:"rgba(255,170,0,0.10)",  label:"CLOSE",         sub:`${cents>0?"+":""}${cents}¢`, accent:"#ffaa00" };
     return                        { bg:"rgba(255,34,0,0.10)",   label:"OFF PITCH",     sub:`${cents>0?"+":""}${cents}¢`, accent:"#ff2200" };
   })();
@@ -2670,7 +2708,7 @@ function LandscapeSession({
   armed, trackInfo, isIdentifying, idPhase, countdown, pitchCents, statusMsg, clipping,
   roomMeter, roomPeak, roomLevel, setRoomLevel, voxMeter, voxPeak, voxLevel, setVoxLevel,
   toggleArmed, recognizeTrack, sessionLog, sessionAccuracy,
-  spotifyStatus, spotifyPlaying, toggleSpotifyPlayback, viewportH,
+  spotifyStatus, spotifyPlaying, toggleSpotifyPlayback, viewportH, theme,
 }) {
   // Meter/fader column height, measured against the real screen instead of a
   // fixed guess. ~150px reserved for the row's own label, dB readout, gaps
@@ -2684,10 +2722,10 @@ function LandscapeSession({
       {/* FAR LEFT — mixer. Not touched mid-drive, so it takes the far edge. */}
       <div style={{ flex:"1 1 0", display:"flex", flexDirection:"row", justifyContent:"center", alignItems:"center", gap:"14px" }}>
         <LEDMeter level={roomMeter} peakHold={roomPeak} label="Room" icon="♪" compact="lg" heightPx={mixH} />
-        <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color="#2E6DA4" compact="lg" heightPx={mixH} />
+        <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color={theme.accent2} compact="lg" heightPx={mixH} />
         <div style={{ width:"1px", alignSelf:"stretch", background:"#181818" }}/>
         <LEDMeter level={voxMeter} peakHold={voxPeak} label="Vox" icon="🎤" compact="lg" heightPx={mixH} />
-        <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color="#C9A84C" compact="lg" heightPx={mixH} />
+        <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color={theme.accent} compact="lg" heightPx={mixH} />
       </div>
 
       {/* MIDDLE — identity, pitch feedback, identify/accuracy */}
@@ -2695,7 +2733,7 @@ function LandscapeSession({
 
         {/* Mini header */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ fontSize:"15px", fontWeight:"900", letterSpacing:"0.1em", color:"#fff", fontFamily:"Georgia,serif", textTransform:"uppercase" }}>🎤 MIC DROP</div>
+          <div style={{ fontSize:"15px", fontWeight:"900", letterSpacing:"0.1em", color:theme.text, fontFamily:"Georgia,serif", textTransform:"uppercase" }}>🎤 MIC DROP</div>
           <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
             {clipping && <span className="clip-pulse" style={{ fontSize:"12px", color:"#ff2200", fontWeight:"bold" }}>⚠ CLIP</span>}
             {armed && <span className="live-pulse" style={{ fontSize:"12px", color:"#ff4422", letterSpacing:"0.15em" }}>● LIVE</span>}
@@ -2706,10 +2744,10 @@ function LandscapeSession({
         <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", gap:"6px", minHeight:0, overflow:"hidden" }}>
           {trackInfo ? (
             <div>
-              <div style={{ fontSize:"32px", color:"#fff", fontWeight:"bold", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{trackInfo.title}</div>
+              <div style={{ fontSize:"32px", color:theme.text, fontWeight:"bold", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{trackInfo.title}</div>
               <div style={{ fontSize:"22px", color:"#aaa", marginTop:"2px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{trackInfo.artist}</div>
               <div style={{ fontSize:"18px", color:"#aaa", marginTop:"8px", display:"flex", alignItems:"center", gap:"10px" }}>
-                <span>Key of <span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.key}</span> · <span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.bpm}</span> BPM</span>
+                <span>Key of <span style={{ color:theme.accent, fontWeight:"bold" }}>{trackInfo.key}</span> · <span style={{ color:theme.accent, fontWeight:"bold" }}>{trackInfo.bpm}</span> BPM</span>
                 {spotifyStatus === "connected" && (
                   <button onClick={toggleSpotifyPlayback} style={{ background:"none", border:"none", color:"#1DB954", fontSize:"20px", cursor:"pointer", padding:0 }}>
                     {spotifyPlaying ? "⏸" : "▶"}
@@ -2717,7 +2755,7 @@ function LandscapeSession({
                 )}
               </div>
               <div style={{ marginTop:"14px" }}>
-                <PitchIndicator cents={pitchCents} />
+                <PitchIndicator cents={pitchCents} pocketColor={theme.accent} />
               </div>
             </div>
           ) : armed && isIdentifying ? (
@@ -2736,12 +2774,12 @@ function LandscapeSession({
         {(armed || (sessionLog.length > 0 && sessionAccuracy !== null)) && (
           <div style={{ display:"flex", gap:"8px" }}>
             {armed && (
-              <button className="identify-btn" disabled={isIdentifying} onClick={recognizeTrack} style={{ flex:"1 1 0", minWidth:0, padding:"12px 4px", fontSize:"12px" }}>
+              <button className="identify-btn" disabled={isIdentifying} onClick={recognizeTrack} style={{ flex:"1 1 0", minWidth:0, padding:"12px 4px", fontSize:"12px", border:`2px solid ${withAlpha(theme.accent,0.4)}`, background:withAlpha(theme.accent,0.08), color:theme.accent }}>
                 {isIdentifying ? "◈ Identifying..." : "◈ Identify Track Now"}
               </button>
             )}
             {sessionLog.length > 0 && sessionAccuracy !== null && (
-              <div title="Rotate to portrait for the full session report" style={{ flex:"0 0 auto", minWidth:0, padding:"12px 10px", fontSize:"11px", borderRadius:"14px", border:"2px solid rgba(46,109,164,0.5)", background:"rgba(46,109,164,0.1)", color:"#2E6DA4", fontFamily:"'Courier New',monospace", fontWeight:"bold", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <div title="Rotate to portrait for the full session report" style={{ flex:"0 0 auto", minWidth:0, padding:"12px 10px", fontSize:"11px", borderRadius:"14px", border:`2px solid ${withAlpha(theme.accent2,0.5)}`, background:withAlpha(theme.accent2,0.1), color:theme.accent2, fontFamily:"'Courier New',monospace", fontWeight:"bold", display:"flex", alignItems:"center", justifyContent:"center" }}>
                 {sessionAccuracy}%
               </div>
             )}
@@ -3684,6 +3722,15 @@ function MicDrop() {
   const sessionAccuracy = sessionLog.length > 0
     ? Math.round(sessionLog.reduce((s,g)=>s+g.accuracy,0)/sessionLog.length) : null;
 
+  // ── SKINS — free with Pro, gated the same way Voice ID is ──────────────────
+  const [skinId, setSkinId] = useState(() => {
+    try { return localStorage.getItem("micDrop_skin") || "default"; } catch { return "default"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("micDrop_skin", skinId); } catch {}
+  }, [skinId]);
+  const theme = isPro ? (SKINS[skinId] || SKINS.default) : SKINS.default;
+
   // ── PAYMENT RETURN DETECTION ──────────────────────────────────────────────
   const [paymentReturn, setPaymentReturn] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -3697,7 +3744,7 @@ function MicDrop() {
     }
   }, [paymentReturn]);
   return (
-    <div style={{ minHeight:"100vh", background:"#0a0a0a", display:"flex", flexDirection:"column", alignItems:"center", fontFamily:"'Courier New',monospace", paddingBottom:"24px", position:"relative" }}>
+    <div style={{ minHeight:"100vh", background:theme.canvas, display:"flex", flexDirection:"column", alignItems:"center", fontFamily:"'Courier New',monospace", paddingBottom:"24px", position:"relative" }}>
 
       {/* ONBOARDING */}
       {showOnboarding && <OnboardingModal onClose={() => setShowOnboarding(false)} />}
@@ -3736,7 +3783,7 @@ function MicDrop() {
           toggleArmed={toggleArmed} recognizeTrack={recognizeTrack}
           sessionLog={sessionLog} sessionAccuracy={sessionAccuracy}
           spotifyStatus={spotifyStatus} spotifyPlaying={spotifyPlaying} toggleSpotifyPlayback={toggleSpotifyPlayback}
-          viewportH={viewportH}
+          viewportH={viewportH} theme={theme}
         />
       ) : (
       <>
@@ -3750,7 +3797,7 @@ function MicDrop() {
             style={{ cursor:"pointer", flexShrink:0 }}
           >
             {profile.photo
-              ? <div style={{ width:"44px", height:"44px", borderRadius:"50%", overflow:"hidden", border:"2px solid #C9A84C", boxShadow:"0 0 12px rgba(201,168,76,0.3)" }}>
+              ? <div style={{ width:"44px", height:"44px", borderRadius:"50%", overflow:"hidden", border:`2px solid ${theme.accent}`, boxShadow:`0 0 12px ${withAlpha(theme.accent,0.3)}` }}>
                   <img src={profile.photo} alt="profile" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
                 </div>
               : <div style={{ width:"44px", height:"44px", borderRadius:"50%", border:"2px dashed #2a2a2a", background:"rgba(255,255,255,0.02)", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -3765,7 +3812,7 @@ function MicDrop() {
 
           {/* Title — centred */}
           <div style={{ textAlign:"center", flex:1 }}>
-            <div style={{ fontSize:"26px", fontWeight:"900", letterSpacing:"0.18em", color:"#fff", fontFamily:"Georgia,serif", textTransform:"uppercase" }}>
+            <div style={{ fontSize:"26px", fontWeight:"900", letterSpacing:"0.18em", color:theme.text, fontFamily:"Georgia,serif", textTransform:"uppercase" }}>
               🎤 MIC DROP
             </div>
             <div style={{ fontSize:"12px", letterSpacing:"0.35em", color:"#3a3a3a", marginTop:"2px", textTransform:"uppercase" }}>Vocal Blend Monitor</div>
@@ -3785,11 +3832,11 @@ function MicDrop() {
         <div style={{ width:"100%", maxWidth:"420px", padding:"4px 20px 0" }}>
           <div style={{
             borderRadius:"8px", padding:"6px 14px",
-            background:"rgba(201,168,76,0.10)",
-            border:"1px solid rgba(201,168,76,0.35)",
+            background:withAlpha(theme.accent,0.10),
+            border:`1px solid ${withAlpha(theme.accent,0.35)}`,
             textAlign:"center",
           }}>
-            <span style={{ fontSize:"13px", letterSpacing:"0.15em", color:"#C9A84C", fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>
+            <span style={{ fontSize:"13px", letterSpacing:"0.15em", color:theme.accent, fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>
               👑 BACKSTAGE PASS
             </span>
             <span style={{ fontSize:"12px", color:"#777", fontFamily:"'Courier New',monospace", marginLeft:"8px" }}>
@@ -3806,12 +3853,12 @@ function MicDrop() {
             onClick={() => setShowSplash(true)}
             style={{
               borderRadius:"8px", padding:"6px 14px",
-              background:"rgba(201,168,76,0.07)",
-              border:"1px solid rgba(201,168,76,0.18)",
+              background:withAlpha(theme.accent,0.07),
+              border:`1px solid ${withAlpha(theme.accent,0.18)}`,
               textAlign:"center", cursor:"pointer",
             }}
           >
-            <span style={{ fontSize:"13px", letterSpacing:"0.15em", color:"#C9A84C", fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>
+            <span style={{ fontSize:"13px", letterSpacing:"0.15em", color:theme.accent, fontFamily:"'Courier New',monospace", fontWeight:"bold" }}>
               ✦ PRO TRIAL — {trial.daysLeft} DAY{trial.daysLeft!==1?"S":""} LEFT
             </span>
             <span style={{ fontSize:"12px", color:"#3a3a3a", fontFamily:"'Courier New',monospace", marginLeft:"8px" }}>
@@ -3834,7 +3881,7 @@ function MicDrop() {
               ✦ YOUR PRO TRIAL HAS ENDED ✦
             </div>
             <div style={{ fontSize:"15px", color:"#888", fontFamily:"'Courier New',monospace", textAlign:"center", lineHeight:1.7 }}>
-              The core app is <span style={{ color:"#C9A84C" }}>always free</span> — arm, sing, score and share forever.
+              The core app is <span style={{ color:theme.accent }}>always free</span> — arm, sing, score and share forever.
             </div>
             <div style={{ fontSize:"15px", color:"#555", fontFamily:"'Courier New',monospace", textAlign:"center", lineHeight:1.7 }}>
               Pro features are pay as you go, when and if you want them.
@@ -3843,8 +3890,8 @@ function MicDrop() {
               onClick={() => setShowSplash(true)}
               style={{
                 marginTop:"4px", padding:"8px 20px", borderRadius:"8px",
-                background:"linear-gradient(135deg, #C9A84C 0%, #a07830 100%)",
-                color:"#0a0a0a", fontFamily:"'Courier New',monospace",
+                background:`linear-gradient(135deg, ${theme.accent} 0%, #a07830 100%)`,
+                color:theme.canvas, fontFamily:"'Courier New',monospace",
                 fontSize:"15px", fontWeight:"900", letterSpacing:"0.15em",
                 cursor:"pointer", textTransform:"uppercase",
               }}
@@ -3907,7 +3954,7 @@ function MicDrop() {
       {/* PITCH / COUNTDOWN AREA */}
       <div style={{ width:"100%", maxWidth:"420px", padding:"12px 20px 8px" }}>
         {trackInfo
-          ? <PitchIndicator cents={pitchCents} />
+          ? <PitchIndicator cents={pitchCents} pocketColor={theme.accent} />
           : armed && isIdentifying
             ? <CountdownDisplay phase={idPhase} countdown={countdown} />
             : armed
@@ -3916,13 +3963,13 @@ function MicDrop() {
                   <div style={{ fontSize:"14px", letterSpacing:"0.2em", color:"#2a2a2a", fontFamily:"'Courier New',monospace" }}>TAP IDENTIFY TO BEGIN</div>
                 </div>
               )
-              : <PitchIndicator cents={null} />
+              : <PitchIndicator cents={null} pocketColor={theme.accent} />
         }
       </div>
 
       {/* STATUS — non-phase messages */}
       {statusMsg && !isIdentifying && (
-        <div style={{ fontSize:"14px", color:"#C9A84C", letterSpacing:"0.12em", marginBottom:"4px", padding:"0 20px", textAlign:"center" }}>
+        <div style={{ fontSize:"14px", color:theme.accent, letterSpacing:"0.12em", marginBottom:"4px", padding:"0 20px", textAlign:"center" }}>
           {statusMsg}
         </div>
       )}
@@ -3933,21 +3980,21 @@ function MicDrop() {
           <div
             onClick={spotifyStatus === "connected" ? toggleSpotifyPlayback : undefined}
             style={{
-              background: spotifyStatus === "connected" ? "rgba(29,185,84,0.06)" : "rgba(201,168,76,0.07)",
-              border: spotifyStatus === "connected" ? "1px solid rgba(29,185,84,0.30)" : "1px solid rgba(201,168,76,0.22)",
+              background: spotifyStatus === "connected" ? "rgba(29,185,84,0.06)" : withAlpha(theme.accent,0.07),
+              border: spotifyStatus === "connected" ? "1px solid rgba(29,185,84,0.30)" : `1px solid ${withAlpha(theme.accent,0.22)}`,
               borderRadius:"12px", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center",
               cursor: spotifyStatus === "connected" ? "pointer" : "default",
               position:"relative",
             }}
           >
             <div>
-              <div style={{ fontSize:"17px", color:"#ffffff", fontWeight:"bold", letterSpacing:"0.03em" }}>{trackInfo.title}</div>
+              <div style={{ fontSize:"17px", color:theme.text, fontWeight:"bold", letterSpacing:"0.03em" }}>{trackInfo.title}</div>
               <div style={{ fontSize:"20px", color:"#aaa", marginTop:"4px" }}>{trackInfo.artist}</div>
             </div>
             <div style={{ textAlign:"right", display:"flex", alignItems:"center", gap:"10px" }}>
               <div>
-                <div style={{ fontSize:"20px", color:"#aaa" }}>Key of <span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.key}</span></div>
-                <div style={{ fontSize:"20px", color:"#aaa", marginTop:"3px" }}><span style={{ color:"#C9A84C", fontWeight:"bold" }}>{trackInfo.bpm}</span> BPM</div>
+                <div style={{ fontSize:"20px", color:"#aaa" }}>Key of <span style={{ color:theme.accent, fontWeight:"bold" }}>{trackInfo.key}</span></div>
+                <div style={{ fontSize:"20px", color:"#aaa", marginTop:"3px" }}><span style={{ color:theme.accent, fontWeight:"bold" }}>{trackInfo.bpm}</span> BPM</div>
               </div>
               {/* Play/pause affordance — the whole card is tappable, this icon just signals that */}
               {spotifyStatus === "connected" && (
@@ -3991,12 +4038,12 @@ function MicDrop() {
       <div style={{ width:"100%", maxWidth:"420px", padding:"0 20px", display:"flex", flexDirection:"row", justifyContent:"space-between", alignItems:"flex-start" }}>
         <div style={{ flex:1, display:"flex", flexDirection:"row", gap:"10px", alignItems:"flex-start", justifyContent:"center", padding:"14px 10px", borderRadius:"14px", background:"rgba(255,255,255,0.02)", border:"1px solid #181818" }}>
           <LEDMeter level={roomMeter} peakHold={roomPeak} label="Room" icon="♪" />
-          <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color="#2E6DA4" />
+          <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color={theme.accent2} />
         </div>
         <div style={{ width:"1px", height:"270px", background:"#181818", margin:"14px 6px 0", alignSelf:"flex-start" }}/>
         <div style={{ flex:1, display:"flex", flexDirection:"row", gap:"10px", alignItems:"flex-start", justifyContent:"center", padding:"14px 10px", borderRadius:"14px", background:"rgba(255,255,255,0.02)", border:"1px solid #181818" }}>
           <LEDMeter level={voxMeter} peakHold={voxPeak} label="Vox" icon="🎤" />
-          <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color="#C9A84C" />
+          <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color={theme.accent} />
         </div>
       </div>
 
@@ -4011,12 +4058,12 @@ function MicDrop() {
           {armed ? "⏹  DISARM" : "⏺  ARM MIC"}
         </button>
         {armed && (
-          <button className="identify-btn" disabled={isIdentifying} onClick={recognizeTrack}>
+          <button className="identify-btn" disabled={isIdentifying} onClick={recognizeTrack} style={{ border:`2px solid ${withAlpha(theme.accent,0.4)}`, background:withAlpha(theme.accent,0.08), color:theme.accent }}>
             {isIdentifying ? "◈  Identifying..." : "◈  Identify Track Now"}
           </button>
         )}
         {sessionLog.length > 0 && (
-          <button className="report-btn" onClick={() => setShowReport(s=>!s)}>
+          <button className="report-btn" onClick={() => setShowReport(s=>!s)} style={{ border:`2px solid ${withAlpha(theme.accent2,0.5)}`, background:withAlpha(theme.accent2,0.1), color:theme.accent2 }}>
             {showReport ? "◁  Hide Session Report" : `▷  Session Report${sessionAccuracy!==null?" · "+sessionAccuracy+"%":""}`}
           </button>
         )}
@@ -4125,7 +4172,7 @@ function MicDrop() {
           <span style={{ color:"#333", fontSize:"20px" }}>·</span>
           <button
             onClick={() => setShowSplash(true)}
-            style={{ fontSize:"20px", color:"#C9A84C", fontFamily:"'Courier New',monospace", letterSpacing:"0.1em", background:"none", border:"none", borderBottom:"1px solid #554020", cursor:"pointer", padding:0, opacity:0.7 }}
+            style={{ fontSize:"20px", color:theme.accent, fontFamily:"'Courier New',monospace", letterSpacing:"0.1em", background:"none", border:"none", borderBottom:"1px solid #554020", cursor:"pointer", padding:0, opacity:0.7 }}
           >
             ⭐ Pro
           </button>
@@ -4145,19 +4192,27 @@ function MicDrop() {
               const from = encodeURIComponent((profile.name || "").trim() || "a friend");
               window.open(`invite.html?from=${from}`, "_blank");
             }}
-            style={{ fontSize:"20px", color:"#C9A84C", fontFamily:"'Courier New',monospace", letterSpacing:"0.1em", background:"none", border:"none", borderBottom:"1px solid #554020", cursor:"pointer", padding:0, opacity:0.85 }}
+            style={{ fontSize:"20px", color:theme.accent, fontFamily:"'Courier New',monospace", letterSpacing:"0.1em", background:"none", border:"none", borderBottom:"1px solid #554020", cursor:"pointer", padding:0, opacity:0.85 }}
           >
             🎤 Invite
           </button>
         </div>
 
-        {/* Third nav row — Voice ID */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", marginTop:"8px" }}>
+        {/* Third nav row — Voice ID + Skin */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:"16px", marginTop:"8px" }}>
           <button
             onClick={() => isPro ? setShowVoiceId(true) : setShowSplash(true)}
-            style={{ fontSize:"20px", color: isPro ? "#C9A84C" : "#666", fontFamily:"'Courier New',monospace", letterSpacing:"0.1em", background:"none", border:"none", borderBottom: isPro ? "1px solid #554020" : "1px solid #333", cursor:"pointer", padding:0, opacity: isPro ? 0.85 : 1 }}
+            style={{ fontSize:"20px", color: isPro ? theme.accent : "#666", fontFamily:"'Courier New',monospace", letterSpacing:"0.1em", background:"none", border:"none", borderBottom: isPro ? "1px solid #554020" : "1px solid #333", cursor:"pointer", padding:0, opacity: isPro ? 0.85 : 1 }}
           >
             🎙️ Voice ID{!isPro ? " (Pro)" : ""}
+          </button>
+          <span style={{ color:"#333", fontSize:"20px" }}>·</span>
+          <button
+            onClick={() => isPro ? setSkinId(id => id === "default" ? "alpinist" : "default") : setShowSplash(true)}
+            title="Tap to switch skins"
+            style={{ fontSize:"20px", color: isPro ? theme.accent : "#666", fontFamily:"'Courier New',monospace", letterSpacing:"0.1em", background:"none", border:"none", borderBottom: isPro ? "1px solid #554020" : "1px solid #333", cursor:"pointer", padding:0, opacity: isPro ? 0.85 : 1 }}
+          >
+            🎨 {isPro ? theme.name : "Skin (Pro)"}
           </button>
         </div>
 
