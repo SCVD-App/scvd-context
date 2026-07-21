@@ -2679,24 +2679,16 @@ function LandscapeSession({
   // gets silly on a genuinely tiny screen.
   const mixH = Math.max(90, Math.min(276, Math.round((viewportH || 400) - 150)));
   return (
-    <div style={{ width:"100%", minHeight:"100vh", display:"flex", flexDirection:"row", gap:"12px", padding:"6px 14px 8px 8px", alignItems:"stretch", boxSizing:"border-box" }}>
+    <div style={{ width:"100%", minHeight:"100vh", display:"flex", flexDirection:"row", gap:"12px", padding:"6px 8px 8px 14px", alignItems:"stretch", boxSizing:"border-box" }}>
 
-      {/* FAR LEFT — full-height ARM/DISARM. Left edge = closer to a RHD driver's
-          reaching hand for a roughly centre-mounted phone. Vertical text via
-          writing-mode, not a rotate transform, so the button's own box sizing
-          stays sane. */}
-      <button
-        className={`arm-btn${armed?" armed":""}`}
-        onClick={toggleArmed}
-        style={{
-          flex:"0 0 auto", width:"58px", alignSelf:"stretch", minHeight:0,
-          display:"flex", alignItems:"center", justifyContent:"center",
-          padding:"14px 0", writingMode:"vertical-rl", textOrientation:"mixed",
-          fontSize:"14px", letterSpacing:"0.2em", whiteSpace:"nowrap",
-        }}
-      >
-        {armed ? "⏹ DISARM" : "⏺ ARM MIC"}
-      </button>
+      {/* FAR LEFT — mixer. Not touched mid-drive, so it takes the far edge. */}
+      <div style={{ flex:"1 1 0", display:"flex", flexDirection:"row", justifyContent:"center", alignItems:"center", gap:"14px" }}>
+        <LEDMeter level={roomMeter} peakHold={roomPeak} label="Room" icon="♪" compact="lg" heightPx={mixH} />
+        <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color="#2E6DA4" compact="lg" heightPx={mixH} />
+        <div style={{ width:"1px", alignSelf:"stretch", background:"#181818" }}/>
+        <LEDMeter level={voxMeter} peakHold={voxPeak} label="Vox" icon="🎤" compact="lg" heightPx={mixH} />
+        <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color="#C9A84C" compact="lg" heightPx={mixH} />
+      </div>
 
       {/* MIDDLE — identity, pitch feedback, identify/accuracy */}
       <div style={{ flex:"1.35 1 0", display:"flex", flexDirection:"column", justifyContent:"space-between", minWidth:0 }}>
@@ -2740,7 +2732,7 @@ function LandscapeSession({
           )}
         </div>
 
-        {/* IDENTIFY + accuracy badge — ARM now lives in the left rail above */}
+        {/* IDENTIFY + accuracy badge — ARM now lives in the right rail below */}
         {(armed || (sessionLog.length > 0 && sessionAccuracy !== null)) && (
           <div style={{ display:"flex", gap:"8px" }}>
             {armed && (
@@ -2757,14 +2749,24 @@ function LandscapeSession({
         )}
       </div>
 
-      {/* RIGHT — mixer */}
-      <div style={{ flex:"1 1 0", display:"flex", flexDirection:"row", justifyContent:"center", alignItems:"center", gap:"14px" }}>
-        <LEDMeter level={roomMeter} peakHold={roomPeak} label="Room" icon="♪" compact="lg" heightPx={mixH} />
-        <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color="#2E6DA4" compact="lg" heightPx={mixH} />
-        <div style={{ width:"1px", alignSelf:"stretch", background:"#181818" }}/>
-        <LEDMeter level={voxMeter} peakHold={voxPeak} label="Vox" icon="🎤" compact="lg" heightPx={mixH} />
-        <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color="#C9A84C" compact="lg" heightPx={mixH} />
-      </div>
+      {/* FAR RIGHT — full-height ARM/DISARM. Confirmed from the Jaguar photo:
+          the phone sits right against the instrument cluster, so the edge
+          closest to the driver's reaching hand is the right edge, not the
+          left — flipped from the original assumption. Vertical text via
+          writing-mode, not a rotate transform, so the button's own box sizing
+          stays sane. */}
+      <button
+        className={`arm-btn${armed?" armed":""}`}
+        onClick={toggleArmed}
+        style={{
+          flex:"0 0 auto", width:"58px", alignSelf:"stretch", minHeight:0,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          padding:"14px 0", writingMode:"vertical-rl", textOrientation:"mixed",
+          fontSize:"14px", letterSpacing:"0.2em", whiteSpace:"nowrap",
+        }}
+      >
+        {armed ? "⏹ DISARM" : "⏺ ARM MIC"}
+      </button>
     </div>
   );
 }
