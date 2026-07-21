@@ -276,18 +276,18 @@ function scoreColor(pct) {
 }
 
 // ── LED METER ─────────────────────────────────────────────────────────────────
-function LEDMeter({ level, peakHold, label, icon, compact }) {
+function LEDMeter({ level, peakHold, label, icon, compact, heightPx }) {
   const active = Math.round((level/100)*NUM_LEDS);
   const peak   = Math.round((peakHold/100)*NUM_LEDS) - 1;
   const lg     = compact === "lg";
-  const ledH   = lg ? 10 : compact ? 5 : 8;
   const ledW   = lg ? "44px" : compact ? "22px" : "30px";
-  const ledGap = lg ? "4px" : compact ? "2px" : "3px";
-  const colH   = lg ? "276px" : compact ? "138px" : "220px";
+  const ledGap = lg ? 4 : compact ? 2 : 3;
+  const colH   = heightPx || (lg ? 276 : compact ? 138 : 220);
+  const ledH   = heightPx ? Math.max(3, (colH - (NUM_LEDS-1)*ledGap) / NUM_LEDS) : (lg ? 10 : compact ? 5 : 8);
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap: lg?"5px":compact?"3px":"6px", width:"100%" }}>
       <div style={{ fontSize: lg?"13px":compact?"11px":"14px", letterSpacing:"0.18em", color:"#666", fontFamily:"'Courier New',monospace", textTransform:"uppercase" }}>{icon} {label}</div>
-      <div style={{ display:"flex", flexDirection:"column-reverse", gap:ledGap, height:colH }}>
+      <div style={{ display:"flex", flexDirection:"column-reverse", gap:`${ledGap}px`, height:`${colH}px` }}>
         {Array.from({ length:NUM_LEDS }).map((_,i) => {
           const on   = i < active;
           const isPk = i === peak && peakHold > 0;
@@ -307,11 +307,11 @@ function LEDMeter({ level, peakHold, label, icon, compact }) {
 }
 
 // ── FADER ─────────────────────────────────────────────────────────────────────
-function Fader({ value, onChange, label, color, compact }) {
+function Fader({ value, onChange, label, color, compact, heightPx }) {
   const trackRef = useRef(null);
   const drag     = useRef(false);
   const lg = compact === "lg";
-  const H  = lg ? 280 : compact ? 140 : 220;
+  const H  = heightPx || (lg ? 280 : compact ? 140 : 220);
   const calc = (y) => {
     const r = trackRef.current.getBoundingClientRect();
     return Math.round((1 - Math.max(0, Math.min(1, (y-r.top)/r.height))) * 100);
@@ -2670,10 +2670,16 @@ function LandscapeSession({
   armed, trackInfo, isIdentifying, idPhase, countdown, pitchCents, statusMsg, clipping,
   roomMeter, roomPeak, roomLevel, setRoomLevel, voxMeter, voxPeak, voxLevel, setVoxLevel,
   toggleArmed, recognizeTrack, sessionLog, sessionAccuracy,
-  spotifyStatus, spotifyPlaying, toggleSpotifyPlayback,
+  spotifyStatus, spotifyPlaying, toggleSpotifyPlayback, viewportH,
 }) {
+  // Meter/fader column height, measured against the real screen instead of a
+  // fixed guess. ~150px reserved for the row's own label, dB readout, gaps
+  // and outer padding — whatever's left goes to the bars. Capped at 276 (the
+  // size that looked right on Scott's main phone), floored at 90 so it never
+  // gets silly on a genuinely tiny screen.
+  const mixH = Math.max(90, Math.min(276, Math.round((viewportH || 400) - 150)));
   return (
-    <div style={{ width:"100%", minHeight:"100vh", display:"flex", flexDirection:"row", gap:"12px", padding:"10px 14px 14px 8px", alignItems:"stretch", boxSizing:"border-box" }}>
+    <div style={{ width:"100%", minHeight:"100vh", display:"flex", flexDirection:"row", gap:"12px", padding:"6px 14px 8px 8px", alignItems:"stretch", boxSizing:"border-box" }}>
 
       {/* FAR LEFT — full-height ARM/DISARM. Left edge = closer to a RHD driver's
           reaching hand for a roughly centre-mounted phone. Vertical text via
@@ -2753,11 +2759,11 @@ function LandscapeSession({
 
       {/* RIGHT — mixer */}
       <div style={{ flex:"1 1 0", display:"flex", flexDirection:"row", justifyContent:"center", alignItems:"center", gap:"14px" }}>
-        <LEDMeter level={roomMeter} peakHold={roomPeak} label="Room" icon="♪" compact="lg" />
-        <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color="#2E6DA4" compact="lg" />
+        <LEDMeter level={roomMeter} peakHold={roomPeak} label="Room" icon="♪" compact="lg" heightPx={mixH} />
+        <Fader value={roomLevel} onChange={setRoomLevel} label="Room" color="#2E6DA4" compact="lg" heightPx={mixH} />
         <div style={{ width:"1px", alignSelf:"stretch", background:"#181818" }}/>
-        <LEDMeter level={voxMeter} peakHold={voxPeak} label="Vox" icon="🎤" compact="lg" />
-        <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color="#C9A84C" compact="lg" />
+        <LEDMeter level={voxMeter} peakHold={voxPeak} label="Vox" icon="🎤" compact="lg" heightPx={mixH} />
+        <Fader value={voxLevel} onChange={setVoxLevel} label="Vox" color="#C9A84C" compact="lg" heightPx={mixH} />
       </div>
     </div>
   );
@@ -2784,9 +2790,13 @@ function MicDrop() {
   // zero orientation handling existed at all. max-height:520 restricts this to
   // phones-in-hand, not tablets or a desktop browser window resized wide.
   const [isLandscape, setIsLandscape] = useState(false);
+  const [viewportH,   setViewportH]   = useState(0);
   useEffect(() => {
     const mq = window.matchMedia("(orientation: landscape)");
-    const update = () => setIsLandscape(mq.matches && window.innerHeight < 520);
+    const update = () => {
+      setIsLandscape(mq.matches && window.innerHeight < 520);
+      setViewportH(window.innerHeight);
+    };
     update();
     mq.addEventListener("change", update);
     window.addEventListener("resize", update);
@@ -3724,6 +3734,7 @@ function MicDrop() {
           toggleArmed={toggleArmed} recognizeTrack={recognizeTrack}
           sessionLog={sessionLog} sessionAccuracy={sessionAccuracy}
           spotifyStatus={spotifyStatus} spotifyPlaying={spotifyPlaying} toggleSpotifyPlayback={toggleSpotifyPlayback}
+          viewportH={viewportH}
         />
       ) : (
       <>
