@@ -2671,9 +2671,26 @@ function LandscapeSession({
   spotifyStatus, spotifyPlaying, toggleSpotifyPlayback,
 }) {
   return (
-    <div style={{ width:"100%", display:"flex", flexDirection:"row", gap:"16px", padding:"10px 16px 14px", alignItems:"stretch", boxSizing:"border-box" }}>
+    <div style={{ width:"100%", display:"flex", flexDirection:"row", gap:"12px", padding:"10px 14px 14px 8px", alignItems:"stretch", boxSizing:"border-box" }}>
 
-      {/* LEFT — identity, pitch feedback, transport */}
+      {/* FAR LEFT — full-height ARM/DISARM. Left edge = closer to a RHD driver's
+          reaching hand for a roughly centre-mounted phone. Vertical text via
+          writing-mode, not a rotate transform, so the button's own box sizing
+          stays sane. */}
+      <button
+        className={`arm-btn${armed?" armed":""}`}
+        onClick={toggleArmed}
+        style={{
+          flex:"0 0 auto", width:"58px", alignSelf:"stretch", minHeight:0,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          padding:"14px 0", writingMode:"vertical-rl", textOrientation:"mixed",
+          fontSize:"14px", letterSpacing:"0.2em", whiteSpace:"nowrap",
+        }}
+      >
+        {armed ? "⏹ DISARM" : "⏺ ARM MIC"}
+      </button>
+
+      {/* MIDDLE — identity, pitch feedback, identify/accuracy */}
       <div style={{ flex:"1.35 1 0", display:"flex", flexDirection:"column", justifyContent:"space-between", minWidth:0 }}>
 
         {/* Mini header */}
@@ -2715,22 +2732,21 @@ function LandscapeSession({
           )}
         </div>
 
-        {/* Transport — row instead of stacked, to save vertical space */}
-        <div style={{ display:"flex", gap:"8px" }}>
-          <button className={`arm-btn${armed?" armed":""}`} onClick={toggleArmed} style={{ flex:"1 1 0", minWidth:0, padding:"12px 4px", fontSize:"12px", letterSpacing:"0.15em" }}>
-            {armed ? "⏹ DISARM" : "⏺ ARM"}
-          </button>
-          {armed && (
-            <button className="identify-btn" disabled={isIdentifying} onClick={recognizeTrack} style={{ flex:"1 1 0", minWidth:0, padding:"12px 4px", fontSize:"11px" }}>
-              {isIdentifying ? "◈ ID..." : "◈ IDENTIFY"}
-            </button>
-          )}
-          {sessionLog.length > 0 && sessionAccuracy !== null && (
-            <div title="Rotate to portrait for the full session report" style={{ flex:"0 0 auto", minWidth:0, padding:"12px 10px", fontSize:"11px", borderRadius:"14px", border:"2px solid rgba(46,109,164,0.5)", background:"rgba(46,109,164,0.1)", color:"#2E6DA4", fontFamily:"'Courier New',monospace", fontWeight:"bold", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              {sessionAccuracy}%
-            </div>
-          )}
-        </div>
+        {/* IDENTIFY + accuracy badge — ARM now lives in the left rail above */}
+        {(armed || (sessionLog.length > 0 && sessionAccuracy !== null)) && (
+          <div style={{ display:"flex", gap:"8px" }}>
+            {armed && (
+              <button className="identify-btn" disabled={isIdentifying} onClick={recognizeTrack} style={{ flex:"1 1 0", minWidth:0, padding:"12px 4px", fontSize:"12px" }}>
+                {isIdentifying ? "◈ Identifying..." : "◈ Identify Track Now"}
+              </button>
+            )}
+            {sessionLog.length > 0 && sessionAccuracy !== null && (
+              <div title="Rotate to portrait for the full session report" style={{ flex:"0 0 auto", minWidth:0, padding:"12px 10px", fontSize:"11px", borderRadius:"14px", border:"2px solid rgba(46,109,164,0.5)", background:"rgba(46,109,164,0.1)", color:"#2E6DA4", fontFamily:"'Courier New',monospace", fontWeight:"bold", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                {sessionAccuracy}%
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* RIGHT — mixer */}
