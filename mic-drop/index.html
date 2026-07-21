@@ -155,7 +155,19 @@ const SKINS = {
     accent2: "#5a8f6b",   // muted sage, stands in for the Room channel's blue
     text:    "#f2ead9",   // warm off-white, not stark white
   },
+  royal: {
+    // Lorna's idea. accent2 is deliberately NOT the default muted #2E6DA4 —
+    // that blue would blend straight into a navy canvas. Brightened it so
+    // Room stays visually distinct from Vox and from the background itself.
+    name:    "Royal",
+    canvas:  "#0a1130",   // deep royal navy
+    panel:   "#121c48",
+    accent:  "#d4af37",   // classic metallic gold — Vox channel
+    accent2: "#5b7fe8",   // brightened royal blue — Room channel, kept apart from canvas
+    text:    "#ffffff",
+  },
 };
+const SKIN_ORDER = Object.keys(SKINS);
 
 // ── SPOTIFY INTEGRATION (Beta) ────────────────────────────────────────────────
 // Placeholder Client ID — swap for the real one from developer.spotify.com/dashboard.
@@ -4208,7 +4220,7 @@ function MicDrop() {
           </button>
           <span style={{ color:"#333", fontSize:"20px" }}>·</span>
           <button
-            onClick={() => isPro ? setSkinId(id => id === "default" ? "alpinist" : "default") : setShowSplash(true)}
+            onClick={() => isPro ? setSkinId(id => SKIN_ORDER[(SKIN_ORDER.indexOf(id) + 1) % SKIN_ORDER.length]) : setShowSplash(true)}
             title="Tap to switch skins"
             style={{ fontSize:"20px", color: isPro ? theme.accent : "#666", fontFamily:"'Courier New',monospace", letterSpacing:"0.1em", background:"none", border:"none", borderBottom: isPro ? "1px solid #554020" : "1px solid #333", cursor:"pointer", padding:0, opacity: isPro ? 0.85 : 1 }}
           >
