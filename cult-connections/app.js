@@ -218,7 +218,13 @@ function renderAccessStatus(){
 }
 
 // Redeem a token returned from Stripe checkout (via ?cc_token=... redirect, or pasted manually)
-async function redeemToken(tokenStr){
+// Retries a few times: the browser can land back here slightly before the
+// Stripe webhook has finished flipping the token from "pending" to "paid"
+// in KV, so a single immediate check can lose that race.
+async function redeemToken(tokenStr, attempt = 1){
+  const MAX_ATTEMPTS = 5;
+  const RETRY_DELAY_MS = 1500;
+
   try{
     const res = await fetch(`${CC_WORKER}/verify-token`, {
       method:'POST',
@@ -226,17 +232,34 @@ async function redeemToken(tokenStr){
       body: JSON.stringify({ token: tokenStr })
     });
     const data = await res.json();
-    if(!data.valid){
-      showMsg(`Unlock failed: ${data.reason || 'invalid token'}`, 'var(--orange)', 3000);
-      return false;
+
+    if(data.valid){
+      localStorage.setItem('cc_unlock_tier', data.tier);
+      localStorage.setItem('cc_unlock_expiry', data.expiry);
+      renderAccessStatus();
+      showGruberToast(`🔓 Unlocked — ${(CC_TIERS[data.tier]||{}).label || data.tier}!`, 3000);
+      return true;
     }
-    localStorage.setItem('cc_unlock_tier', data.tier);
-    localStorage.setItem('cc_unlock_expiry', data.expiry);
-    renderAccessStatus();
-    showMsg(`🔓 Unlocked — ${(CC_TIERS[data.tier]||{}).label || data.tier}!`, 'var(--green)', 3000);
-    return true;
+
+    // Payment confirmed but webhook hasn't landed yet — worth retrying quietly.
+    // Re-show the toast on every attempt (not just the first) so it stays
+    // visible the whole time instead of disappearing mid-retry.
+    const stillPending = (data.reason || '').toLowerCase().includes('not yet confirmed');
+    if(stillPending && attempt < MAX_ATTEMPTS){
+      showGruberToast('Confirming your payment…', RETRY_DELAY_MS + 200);
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      return redeemToken(tokenStr, attempt + 1);
+    }
+
+    // Genuinely invalid, or we've retried enough times — give up and say so
+    showGruberToast(`Unlock failed: ${data.reason || 'invalid token'}`, 4000);
+    return false;
   }catch(e){
-    showMsg('Could not verify unlock — check connection and try again', 'var(--orange)', 3000);
+    if(attempt < MAX_ATTEMPTS){
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      return redeemToken(tokenStr, attempt + 1);
+    }
+    showGruberToast('Could not verify unlock — check connection and try again', 3000);
     return false;
   }
 }
@@ -251,9 +274,9 @@ async function purchaseTier(tierKey){
     });
     const data = await res.json();
     if(data.url){ window.location.href = data.url; }
-    else { showMsg('Checkout unavailable right now — try again shortly', 'var(--orange)', 3000); }
+    else { showGruberToast('Checkout unavailable right now — try again shortly', 3000); }
   }catch(e){
-    showMsg('Checkout unavailable right now — try again shortly', 'var(--orange)', 3000);
+    showGruberToast('Checkout unavailable right now — try again shortly', 3000);
   }
 }
 
@@ -364,10 +387,16 @@ const FALLBACK_BANKS = {
       {label:"FAMOUS ONE-NAME ROCK MUSICIANS",items:["SLASH","BONO","PRINCE","STING"]},
     ]},
     {themeLabel:"CROSSROADS & CREDITS",categories:[
-      {label:"CROSSROADS FILM CHARACTERS",items:["EUGENE MARTONE","WILLIE BROWN","SCRATCH","LIGHTNING BOY"]},
+      {label:"CROSSROADS FILM CHARACTERS",items:["EUGENE MARTONE","WILLIE BROWN","SCRATCH","JACK BUTLER"]},
       {label:"CLASSIC ROCK BANDS WITH COLOURS",items:["THE BLACK KEYS","DEEP PURPLE","GOLDEN EARRING","WHITE STRIPES"]},
       {label:"LED ZEPPELIN ALBUMS",items:["PHYSICAL GRAFFITI","HOUSES OF THE HOLY","PRESENCE","IN THROUGH THE OUT DOOR"]},
       {label:"SEINFELD — GEORGE'S FAKE JOBS",items:["ARCHITECT","MARINE BIOLOGIST","IMPORTER/EXPORTER","LATEX SALESMAN"]},
+    ]},
+    {themeLabel:"GUITAR HEROES & THE BLUES",categories:[
+      {label:"FAMOUS ELECTRIC GUITAR MODELS",items:["GIBSON SG","IBANEZ JEM 777","FENDER STARCASTER","FENDER JAGUAR"]},
+      {label:"GIBSON LES PAUL LEGENDARY PLAYERS",items:["JIMMY PAGE","DUANE ALLMAN","PETER GREEN","SLASH"]},
+      {label:"ROBERT JOHNSON SONGS",items:["CROSS ROAD BLUES","SWEET HOME CHICAGO","LOVE IN VAIN","HELLHOUND ON MY TRAIL"]},
+      {label:"CLASSIC FILM ONE-WORD TITLES",items:["JAWS","ROCKY","ALIEN","GREASE"]},
     ]},
     {themeLabel:"SEINFELD DEEP CUTS",categories:[
       {label:"GEORGE COSTANZA ALIASES",items:["ART VANDELAY","H.E. PENNYPACKER","LLOYD BRAUN","PETER VAN NOSTRAND"]},
@@ -380,6 +409,24 @@ const FALLBACK_BANKS = {
       {label:"SOUP NAZI RULES",items:["NO SOUP FOR YOU","MOVE IT ALONG","NEXT","YOU ARE BANNED"]},
       {label:"GEORGE COSTANZA REAL JOBS",items:["REAL ESTATE BROKER","NEW YORK YANKEES","PLAY NOW SPORTING GOODS","KRUGER INDUSTRIAL SMOOTHING"]},
       {label:"SEINFELD RECURRING CHARACTERS",items:["NEWMAN","UNCLE LEO","J. PETERMAN","PUDDY"]},
+    ]},
+    {themeLabel:"LOOK AT MOIYE",categories:[
+      {label:"KATH & KIM'ISMS",items:["FOXY MORON","CONNUBIALS","PACIFICALLY ENTAILS","HUNK OF SPUNK"]},
+      {label:"FOUNTAIN LAKES ENSEMBLE",items:["PRUE AND TRUDE","GARY POOLE","THE BOLTON SISTERS","MANDY PATINKIN"]},
+      {label:"RUNNING CATCHPHRASES",items:["LOOK AT MOIYE","NOICE DIFFERENT UNUSUAL","STUNNED MULLET","EFFLUENT"]},
+      {label:"WHAT THEY CALL THEMSELVES",items:["STUPID GIRL","HORN BAG","HIGH MAINTENANCE","SECOND BEST FRIEND"]},
+    ]},
+    {themeLabel:"ICONIC WHEELS",categories:[
+      {label:"ICONIC MOVIE & TV CARS",pool:["DELOREAN","GENERAL LEE","KITT","HERBIE","BULLITT","ECTO-1"]},
+      {label:"F1 TEAM NAMES",pool:["MCLAREN","WILLIAMS","FERRARI","AUDI","RED BULL","MERCEDES","ASTON MARTIN","ALPINE"]},
+      {label:"MOTORCYCLE BRANDS",pool:["HARLEY-DAVIDSON","TRIUMPH","HONDA","KAWASAKI","YAMAHA","DUCATI"]},
+      {label:"FAMOUS BOND CARS",pool:["ASTON MARTIN DB5","LOTUS ESPRIT","ASTON MARTIN DBS","BMW Z3","ASTON MARTIN VANQUISH","CITROËN 2CV"]},
+    ]},
+    {themeLabel:"GLOBAL CHAMPIONS",categories:[
+      {label:"THE BIG FOUR",items:["FEDERER","NADAL","DJOKOVIC","MURRAY"]},
+      {label:"TENNIS LEGENDS",pool:["SERENA WILLIAMS","VENUS WILLIAMS","STEFFI GRAF","MARTINA NAVRATILOVA","MONICA SELES","MARTINA HINGIS"]},
+      {label:"GOLF LEGENDS",pool:["TIGER WOODS","JACK NICKLAUS","ARNOLD PALMER","RORY MCILROY","GARY PLAYER","SEVE BALLESTEROS"]},
+      {label:"GRAND SLAM TOURNAMENTS",items:["WIMBLEDON","US OPEN","FRENCH OPEN","AUSTRALIAN OPEN"]},
     ]},
   ],
   kids:[
@@ -492,23 +539,76 @@ const FALLBACK_BANKS = {
   ],
 };
 
-// Track fallback index per player to avoid repeats
-const FALLBACK_IDX = {scott:0,kids:0,mixed:0,seinfeld:0};
+// ══════════════════════════════════════
+// PUZZLE ROTATION — shuffled "no repeat until bag is empty" queue,
+// persisted to localStorage so it survives phone locks / tab reloads
+// (the old version was a plain in-memory counter that reset to 0
+// on every reload, causing heavy repetition of early puzzles)
+// ══════════════════════════════════════
+function shuffleArray(arr){
+  const a = [...arr];
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getShuffleBag(player, bankLength){
+  try{
+    const raw = localStorage.getItem(`cc_bag_${player}`);
+    if(raw){
+      const bag = JSON.parse(raw);
+      // bag becomes invalid if the bank size changed (new content added) — reshuffle fresh
+      if(Array.isArray(bag) && bag.length > 0 && Math.max(...bag) < bankLength){
+        return bag;
+      }
+    }
+  }catch(e){}
+  return shuffleArray([...Array(bankLength).keys()]);
+}
+
+function saveShuffleBag(player, bag){
+  try{ localStorage.setItem(`cc_bag_${player}`, JSON.stringify(bag)); }
+  catch(e){}
+}
 
 function getFallback(){
   const player = S.player in FALLBACK_BANKS ? S.player : 'mixed';
   const bank = FALLBACK_BANKS[player];
-  const idx = FALLBACK_IDX[player] % bank.length;
-  FALLBACK_IDX[player]++;
+  let bag = getShuffleBag(player, bank.length);
+  const idx = bag.pop();
+  if(bag.length === 0){
+    bag = shuffleArray([...Array(bank.length).keys()]);
+  }
+  saveShuffleBag(player, bag);
   return bank[idx];
 }
+
 
 function closeHintDrawer(){
   document.getElementById('hintDrawer').classList.remove('open');
   document.getElementById('hintOverlay').classList.remove('open');
 }
 
+// If a category defines a `pool` larger than 4 items, pick a random 4 of
+// them each time the puzzle is launched — the shuffle-bag logic upstream
+// still only ever sees one puzzle per themeLabel, so puzzle rotation and
+// no-repeat behaviour is completely unaffected by this.
+function resolvePuzzleCategories(puzzle){
+  return {
+    ...puzzle,
+    categories: puzzle.categories.map(cat=>{
+      if(Array.isArray(cat.pool) && cat.pool.length > 4){
+        return { label: cat.label, items: shuffleArray(cat.pool).slice(0,4) };
+      }
+      return cat;
+    })
+  };
+}
+
 function launchGame(puzzle){
+  puzzle = resolvePuzzleCategories(puzzle);
   S.lives=4;S.selected=[];S.tiles=[];S.solvedCats=[];
   S.gameActive=false;S._puzzle=puzzle;
   S.hintedCats=new Set();
@@ -708,13 +808,13 @@ function awardStar(catName){
   setTimeout(()=>el.remove(),1100);
 }
 
-function showGruberToast(msg){
+function showGruberToast(msg, dur = 2600){
   document.querySelector('.gruber-toast')?.remove();
   const t=document.createElement('div');
   t.className='gruber-toast';
   t.textContent=msg;
   document.body.appendChild(t);
-  setTimeout(()=>t.remove(),2600);
+  setTimeout(()=>t.remove(),dur);
 }
 
 // ── TILE HINT ──

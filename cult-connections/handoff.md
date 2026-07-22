@@ -1,96 +1,131 @@
 # Cult Connections — Project Handoff
 
-**Session:** 2 (content expansion, tier naming, live bug hunt)
-**Date:** 4 July 2026 (late session)
-**Status:** ✅ LIVE, playable, monetization tiers named — but see 🚨 CRITICAL BUG below, found in this session's final minutes, NOT YET FIXED
-**Version:** v9 (app.js has had several small live pushes since — see Session 1 handoff for full v9 build history)
+**Session:** 3 (live payment backend build, two production bug fixes, new content)
+**Date:** 21 July 2026
+**Status:** ✅ LIVE, playable, **full purchase flow tested end-to-end with real money and confirmed working**
+**Version:** v10 — `app.js` now 1,000 lines (was 970 at start of session)
 
 ---
 
-## 🚨 CRITICAL — Puzzle repetition bug confirmed live, fix identified but not yet shipped
+## 🎉 Headline: monetization is live
 
-**Symptom (confirmed via 20 screenshots from a single ~9-minute, 32-puzzle play session):** puzzles from the `mixed` bank repeat in a perfectly deterministic, identical 5-cycle — `EVERYONE SUFFERS EQUALLY → CROSS-GENERATIONAL → FAMILY CHALLENGE → POP CULTURE MASHUP → KATH & KIM MEETS THE WORLD → repeat`, exact same order, every single lap, 4 times in a row observed. This means the shuffle-bag rotation fix built earlier in Session 1 is **not actually preventing repetition in practice**, whatever the underlying cause turns out to be.
-
-**Confirmed code defect (verified by direct simulation, not just review):** `app.js` contains **two separate `function shuffle(arr){...}` declarations** — the new one written for the rotation fix (returns a shuffled copy), and an older pre-existing one used by the in-game "shuffle tiles" button (mutates in place, **no return statement**). In JavaScript, when a function name is declared twice in the same scope, the **later declaration in the file wins for every call in the entire script**, regardless of where each declaration or call site sits. I verified this both by extracting the exact live code and running it in Node with a mocked `localStorage`, and by an isolated test of the hoisting behavior itself. Result: every call to the new rotation logic silently invokes the *old* shuffle instead, which returns `undefined`, which causes `getFallback()` to throw immediately.
-
-**The contradiction worth understanding before "fixing" this:** a throw inside `getFallback()` should make the game get stuck on the loading screen, not cycle cleanly through 5 puzzles the way the screenshots show. Two possible explanations, not mutually exclusive:
-
-1. **Most likely: browser/CDN caching.** We spent a large chunk of Session 1 fighting exactly this class of problem (GitHub Pages serving a stale file despite a successful-looking deploy). It's very plausible the phone was still running an **older cached `app.js`** — specifically the version *before* the shuffle-bag fix, which still has the original bug (an in-memory counter that never resets mid-session, producing exactly this kind of clean deterministic repeat). This fits the observed symptom perfectly and doesn't require anything to have silently swallowed a crash.
-2. **Less likely but not ruled out:** something in the live browser environment (not reproduced in this Node simulation) is catching the throw and falling back to a sequential order without surfacing an error. Worth checking Chrome's DevTools console on-device for actual thrown errors before assuming #1 is the full story.
-
-**The fix is unambiguous either way** — rename the new function (e.g. `shuffle` → `shuffleArray`) so it can never collide with the older tile-shuffle function again. This should be done regardless of which explanation above turns out to be correct.
-
-**Recommended steps for next session, in order:**
-1. Rename the rotation-logic `shuffle` function to `shuffleArray` (and update its two call sites inside `getShuffleBag` and `getFallback`) to eliminate the naming collision permanently
-2. Before considering this closed, **actually test live in a real browser** — open Chrome DevTools on the phone or desktop, hard-refresh to guarantee the latest `app.js`, and play through more than one full bag-cycle (6+ puzzles) watching the console for errors, not just eyeballing whether puzzles repeat
-3. Confirm `localStorage` under key `cc_bag_mixed` (and the other player pools) actually contains a sensible array of remaining indices between puzzles, using DevTools' Application/Storage tab
-4. Once confirmed fixed, this is a good moment to also verify the `scott` bank rotation is behaving correctly given it's now grown from 7 to 8 puzzles this session — worth confirming the "bag becomes invalid if bank size changed, reshuffle fresh" logic in `getShuffleBag` actually triggers correctly when new content is added mid-flight
+The Cloudflare Worker + Stripe backend that's been "scaffolded but not built" since Session 1 is now fully deployed, tested with a real live-mode purchase, and working. This was the single biggest outstanding item on the project and it's done.
 
 ---
 
-## What else happened this session
+## What happened this session, in order
 
-### Content bug fixes (verified via web search before shipping, learning from an earlier mistake this same evening where an unverified "fix" introduced two new factual errors)
-- **Crossroads Film Characters**: swapped "Lightning Boy" (Eugene's own alias, not a real fourth character) for **Jack Butler** (the actual antagonist), per Scott's direct knowledge of the film
-- **Newman's Seinfeld category** — a second-pass correction was needed after an earlier fix (in Session 1) turned out to itself contain two factual errors (Bosco belongs to George, not Newman; "Race Walking Cheat" doesn't exist — that episode is about Jerry, not Newman, and it's a sprint not race-walking). Replaced with four properly source-verified items: Hoards Mail In Storage, Bottle Return Scheme, Flea Infestation, Reads Elaine's Mail
-- **Les Paul Legendary Players**: swapped Joe Perry for **Slash**, per Scott's correction (Slash is well-documented, including by Gibson itself, as reviving Les Paul's popularity in the late 80s via Guns N' Roses) — worth noting Slash now appears in three different puzzles across the bank (not a bug, just a recurrence pattern worth having in mind for future content)
+### 1. Diagnosed and fixed a critical live bug: puzzles wouldn't load at all
+Symptom: app loaded fine, but got stuck forever on "LOADING YOUR PUZZLE…" — confirmed via Chrome DevTools console showing:
+```
+Uncaught TypeError: Cannot read properties of undefined (reading 'pop')
+    at getFallback (app.js:539:19)
+```
 
-### New content shipped
-- **"Guitar Heroes & The Blues"** — new fully-verified puzzle added to the `scott` bank (now 8 puzzles, up from 7): Famous Electric Guitar Models (Gibson SG, Ibanez JEM 777, Fender Starcaster, Fender Jaguar), Gibson Les Paul Legendary Players (Jimmy Page, Duane Allman, Peter Green, Slash), Robert Johnson Songs (Cross Road Blues, Sweet Home Chicago, Love in Vain, Hellhound on My Trail — the exact four credited by the Rock and Roll Hall of Fame), Classic Film One-Word Titles (Jaws, Rocky, Alien, Grease)
-- Confirmed via editing mistake (caught immediately, corrected): while inserting the above, two existing categories (Led Zeppelin Albums, George's Fake Jobs) were briefly accidentally deleted from the Crossroads puzzle. Restored and verified before shipping — a good reminder to re-verify puzzle category counts (must be exactly 4 per puzzle) after any edit near an existing puzzle block
+**Root cause (verified by pulling the actual live `app.js` from GitHub and running it in a Node sandbox, not just reading the code):** two separate `function shuffle(arr){...}` declarations existed in the same file — the newer one written for shuffle-bag rotation (returns a shuffled copy) and an older one used by the in-game "shuffle tiles" button (mutates in place, no return value). The later declaration in the file wins for every call site due to JS hoisting rules, so the rotation logic was silently calling the wrong function, getting `undefined` back, and crashing on `.pop()`.
 
-### Content backlog — ideas only, NOT yet built as real puzzles
-Carried over from Session 1, now added to:
-1. Viral Challenges & Crazes (Ice Bucket Challenge, Mannequin Challenge, Harlem Shake, Gangnam Style — sourced)
-2. Famous Internet Catchphrases (All Your Base Are Belong To Us, Damn Daniel, Sure Jan, Oh Hi Mark — sourced)
-3. Viral Animal Stars (Grumpy Cat, Doge, Nyan Cat confirmed; a 4th — likely Harambe — needs fresh verification before use)
-4. Disney (classic animation studio era only — keep strictly separate from Pixar, since Disney distributes Pixar and mixing them risks real ambiguity about which studio a puzzle means)
-5. Pixar (standalone productions only)
-6. Action Movie Stars (Scott's own wheelhouse — Stallone/Schwarzenegger/Willis/Statham-type territory)
-7. Disney Princesses (`kids` pool)
-8. US Presidents — **historical facts only** (non-consecutive terms, assassinations, Mount Rushmore, related presidents). Deliberately avoid anything from roughly the last 2-3 administrations to sidestep contemporary political sensitivity across the AU/UK/Ireland audience
-9. **Men Who Walked on the Moon** — fully sourced via NASA/Wikipedia, exactly 12 people ever, divides perfectly into 3 non-overlapping sets of 4 with zero repeats:
-   - Armstrong, Aldrin, Shepard, Cernan
-   - Conrad, Bean, Scott, Young
-   - Irwin, Duke, Mitchell, Schmitt
-10. Movies by decade (kindling, from Session 1) — 80s and 90s lists strong and ready; 2000s needs a genre outlier added (too much Ferrell/McKay-lane currently); 2010s should stay deliberately thin rather than padded; 2020s: Everything Everywhere All at Once confirmed good, avoid "anything Marvel" as too vague — franchise-specific mining (in-universe objects, actor crossovers, structural features like MCU Phase 1 vs Phase 3) is the better strategy than flat franchise trivia
+**Fix:** renamed the copy-returning function to `shuffleArray`, updated its two call sites inside `getShuffleBag` and `getFallback`. Left the original `shuffle` (mutate-in-place) untouched, since the tile-shuffle button still needs it. Verified with an actual 20-puzzle simulation post-fix: no crash, correct no-repeat-until-exhausted rotation across two full bag cycles.
 
-### Monetization — names finalized
-Tier structure confirmed with Scott, mirrors ECEG's one-time-purchase pattern:
+### 2. Recovered a broken local dev environment
+GitHub Desktop had lost track of the local `Cult-Connections` folder — turned out OneDrive (which Scott was syncing `Documents\GitHub\` through) had silently corrupted/lost the folder. GitHub.com repo itself was never affected; only the local clone.
 
-| Tier | Duration | Price |
+Resolved by removing the broken reference in GitHub Desktop and re-cloning to a clean, non-OneDrive path: **`C:\Dev\Cult-Connections`**. Confirmed working with all 5 files present and correctly synced as of this session's final deploy.
+
+**Note:** this same risk still exists for `scvd-context` and any other repos still living under `Documents\GitHub\`. Worth cloning those to `C:\Dev\` too when there's a spare moment — not urgent, but the exact failure mode that nearly cost the ECEG `worker.js` file twice.
+
+### 3. Built and deployed the full Cloudflare Worker payment backend from scratch
+Full `worker.js` written and deployed to `cult-connections.emblen-scott.workers.dev`, handling:
+- `POST /create-checkout` — creates a Stripe Checkout Session for one of the three tiers
+- `POST /verify-token` — checks whether a purchase token is confirmed and unexpired
+- `POST /webhook` — Stripe webhook handler, verifies signature, flips tokens from pending → paid
+
+**Security design note:** each checkout generates a unique, single-purpose token *before* payment, stored as `pending` in Cloudflare KV. Only the Stripe webhook (source of truth) flips it to `paid`, with a real expiry based on tier. This was designed specifically to avoid ECEG's known bug where every buyer of a tier got an identical, shareable token — structurally impossible here since tokens are per-checkout-session, not per-tier.
+
+**Infrastructure now live:**
+- KV namespace `CC_TOKENS`, bound to the Worker
+- Secrets: `STRIPE_SECRET_KEY` (live mode, `sk_live_...`), `STRIPE_WEBHOOK_SECRET`
+- Plain var: `APP_URL`
+- Stripe webhook endpoint registered, listening for `checkout.session.completed` only
+- Three live Stripe Price IDs created and wired in:
+
+| Tier | Price | Price ID |
 |---|---|---|
-| Square Eyes | 1 month | $1.50 USD |
-| Couch Potato | 6 months | $7.50 USD |
-| Pop Culture Vulture | 12 months | $10.00 USD |
+| Square Eyes | $1.50 | `price_1TvbPKKyyW3v9aYU8rIFbzx3` |
+| Couch Potato | $7.50 | `price_1TvbRDKyyW3v9aYUFHckF0pw` |
+| Pop Culture Vulture | $10.00 | `price_1TvbS0KyyW3v9aYUkoev77zQ` |
 
-No forever tier — deliberately parked pending a possible future cross-app bundle (see Session 1 handoff). Cloudflare Worker and Stripe Price IDs for these three tiers are still the primary outstanding infrastructure task, unchanged from Session 1.
+Decision made to go straight to Stripe **live mode** rather than test mode first (deliberate choice, small dollar amounts, acceptable risk).
 
-### Portfolio-wide context gathered this session (worth knowing even though it's not Cult Connections-specific)
-- Full review conducted of Mic Drop, Easy Come Easy Go, and Chasin' Curves handoffs/code via the `scvd-context` repo
-- **Chasin' Curves gap found and fixed**: `app.js` was missing entirely from the `chasin-curves` folder in `scvd-context` (only `index.html`, `worker.js`, `handoff.md` were present) — Scott pushed the missing file, verified byte-for-byte match with what was uploaded
-- Mic Drop: live, real payments, chasing 3 P1 audio bugs (iOS mimeType, PWA home-screen silence, mic-loss distortion)
-- ECEG: Stripe sandbox confirmed end-to-end, a real token-collision security bug was fixed this cycle (every buyer of a tier previously got an identical, shareable token), two items marked urgent — delete the stray `eceg` worker, get `worker.js` out of a personal Downloads folder (nearly lost twice now)
+### 4. Ran a real end-to-end purchase test — found and fixed a genuine race condition
+First live test: real $1.50 charge on Square Eyes succeeded, Stripe webhook delivered and returned 200 OK, but the app did **not** unlock. Diagnosed (not guessed) via:
+- Stripe dashboard → Payments: confirmed charge succeeded
+- Stripe dashboard → Webhooks → Event deliveries: confirmed 200 OK, delivered
+- Cloudflare KV dashboard: found the token, confirmed `status: "paid"` with correct expiry
+
+**Root cause:** the client only attempted `/verify-token` once, immediately on redirect. If Stripe's redirect back to the app landed even a second before the webhook finished flipping the token to `paid` in KV, that one attempt failed permanently — and the code stripped the token out of the URL regardless of success or failure, so there was no way to retry even by refreshing.
+
+**Immediate recovery for the stuck purchase:** found the token manually in the Cloudflare KV dashboard, re-triggered redemption by revisiting `?cc_token=<token>` directly. Confirmed unlocked correctly (Square Eyes, expires 20/08/2026).
+
+**Permanent fix:** `redeemToken()` now retries up to 5 times, 1.5 seconds apart (7.5s total window), and only strips the URL token once it has a final answer (success or genuine failure) rather than after the first attempt regardless of outcome.
+
+### 5. Found and fixed a second bug the first fix had been silently working around
+Retest via Incognito (new trial state) succeeded, but took two manual refreshes and no "confirming" message was ever visible — even though the retry logic was demonstrably working (5–8 second delay matched the retry window exactly).
+
+**Root cause:** the toast system (`showMsg()` → `#msgArea`) only exists inside `#gameScreen`, which is hidden via CSS unless you're actively mid-puzzle. Every purchase-flow message — the "Confirming your payment…" toast, the eventual unlock toast, even the original "Unlock failed" message from bug #4 — was firing into an invisible DOM element the whole time. The end state (access banner) did correctly update once redemption succeeded; only the *transient* feedback was invisible.
+
+**Fix:** switched all purchase-flow messaging to `showGruberToast()`, which appends directly to `document.body` and is visible regardless of active screen. Also changed it to re-display on every retry attempt (not just the first) so it stays visible continuously through the whole confirmation window instead of disappearing after 1.5 seconds.
+
+### 6. New content: Kath & Kim puzzle added, fully source-verified
+New puzzle **"LOOK AT MOIYE"** added to the `scott` bank (now 9 puzzles, up from 8). Every item checked against real sources (Wikiquote, Wikipedia, TV Tonight's Aussie catchphrase poll, IMDb) before shipping — one item ("Mandy Patinkin" as a sarcastic nickname Kath uses for a neighbour) couldn't be independently verified online and was accepted on Scott's direct show knowledge, same precedent as the Session 2 Jack Butler / Slash corrections.
+
+| Category | Items |
+|---|---|
+| Kath & Kim'isms | FOXY MORON · CONNUBIALS · PACIFICALLY ENTAILS · HUNK OF SPUNK |
+| Fountain Lakes Ensemble | PRUE AND TRUDE · GARY POOLE · THE BOLTON SISTERS · MANDY PATINKIN |
+| Running Catchphrases | LOOK AT MOIYE · NOICE DIFFERENT UNUSUAL · STUNNED MULLET · EFFLUENT |
+| What They Call Themselves | STUPID GIRL · HORN BAG · HIGH MAINTENANCE · SECOND BEST FRIEND |
 
 ---
 
-## 🏗️ Infrastructure note (carried forward, still true)
+## Content backlog — updated
 
-The original `Cult-Connections` GitHub repo was deleted and rebuilt from scratch during Session 1 due to an unrecoverable stuck GitHub Pages deployment lock (see Session 1 handoff for full details). The current repo has clean history starting from that rebuild. `scvd-context/cult-connections/` remains the durable source of truth for all files.
+Carried over from Session 2, still not built as real puzzles: Viral Challenges & Crazes, Famous Internet Catchphrases, Viral Animal Stars, Disney, Pixar, Action Movie Stars, Disney Princesses, US Presidents (historical only), Men Who Walked on the Moon, Movies by decade.
 
-**GitHub Mobile app** was successfully trialled this session for the first time — multiple small `app.js` pushes went cleanly with no repeat of Session 1's deployment drama. Good tool for quick fixes when away from a laptop.
+**New this session:**
+- **Second Kath & Kim puzzle** — Cujo and Epponee-Rae confirmed as legitimate content (both were added to the show's actual title sequence from Series 3 onward, credited alongside the five main cast). Needs 2 more items to complete that category, plus 3 more categories for a full puzzle.
 
 ---
 
-## Known Limitations (carried forward + new)
+## 🧹 Known content issue (not urgent, flagged for next cleanup pass)
+
+The **"ROBERT JOHNSON SONGS"** category (CROSS ROAD BLUES / SWEET HOME CHICAGO / LOVE IN VAIN / HELLHOUND ON MY TRAIL) exists as an exact duplicate across two different puzzles — "BLUES, FILM & STRINGS" and "GUITAR HEROES & THE BLUES" — same label, same four items. Looks like a copy-paste leftover from whenever Guitar Heroes was built. Doesn't break anything functionally, but two different puzzles can show the player an identical category. Worth deduplicating in a future content pass.
+
+(The `NEO` appearing in both "Keanu Reeves Film Roles" and "Matrix Characters," and `SLASH` appearing in three separate puzzles, are both legitimate — different puzzles referencing the same real fact, not accidental duplication.)
+
+---
+
+## 🏗️ Infrastructure state (all current as of this session)
+
+| Item | Status |
+|---|---|
+| Local dev clone | `C:\Dev\Cult-Connections` — clean, outside OneDrive |
+| `scvd-context` local clone | ⚠️ Still under `Documents\GitHub\` — same OneDrive risk, not yet moved |
+| Cloudflare Worker | Deployed, live, all bindings/secrets set |
+| Stripe | Live mode, 3 Price IDs active, webhook registered and confirmed working |
+| Shuffle-bag rotation | Fixed and verified working across multiple bag cycles |
+| Purchase → unlock flow | Fixed and verified working end-to-end with real payment |
+
+---
+
+## Known Limitations (carried forward + updated)
 
 | Issue | Notes |
 |-------|-------|
-| **Puzzle rotation may still be broken in practice** | See critical bug section above — top priority for next session |
 | Trial clock is client-side only | Resettable by clearing site data/reinstalling — acceptable at current stage |
-| No backend yet at all | Purchase flow is UI-only until the Worker is built |
+| Robert Johnson Songs category duplicated | See cleanup note above — not urgent |
+| `scvd-context` still under OneDrive-synced path | Same corruption risk as Cult-Connections had — should be moved to `C:\Dev\` |
 | Sport/Fashion/movie/viral/Disney/Pixar/Presidents/Moonwalkers content | All still backlog ideas, not built as playable puzzles |
-| `scott` bank content is Slash-heavy | Now appears in 3 separate puzzles — not a bug, but worth diversifying next content pass |
+| Second Kath & Kim puzzle | Cujo/Epponee-Rae confirmed as content, needs more items + categories to complete |
 
 ---
 
@@ -98,7 +133,15 @@ The original `Cult-Connections` GitHub repo was deleted and rebuilt from scratch
 
 | # | Task |
 |---|------|
-| 1 | **Fix the shuffle function naming collision** (rename to `shuffleArray`), then verify live in an actual browser with DevTools open — don't just assume it's fixed from code review alone |
-| 2 | Build the Cloudflare Worker + Stripe Price IDs for the three named tiers |
-| 3 | Start converting backlog content (Moonwalkers is the most ready — fully sourced, perfectly bounded at 12 people / 3 puzzle variations) into real hand-authored puzzles |
-| 4 | Get Steve (Ireland) testing for UK/Ireland cultural fit now that the app is stable and installable |
+| 1 | Move `scvd-context` local clone to `C:\Dev\scvd-context`, same reasoning as Cult-Connections |
+| 2 | Deduplicate the Robert Johnson Songs category across the two puzzles that share it |
+| 3 | Build out the second Kath & Kim puzzle around Cujo/Epponee-Rae — needs 2 more ensemble items + 3 more categories |
+| 4 | Continue converting backlog content — Moonwalkers still the most ready (fully sourced, perfectly bounded at 12 people / 3 puzzle variations) |
+| 5 | Get Steve (Ireland) testing for UK/Ireland cultural fit — app has now been stable through a full live-payment cycle |
+| 6 | Consider a small monitoring habit — periodically check Cloudflare Worker logs / Stripe webhook delivery history, since this is now real infrastructure handling real money |
+
+---
+
+## 🏗️ Infrastructure note (carried forward, still true)
+
+The original `Cult-Connections` GitHub repo was deleted and rebuilt from scratch during Session 1 due to an unrecoverable stuck GitHub Pages deployment lock. The current repo has clean history starting from that rebuild. `scvd-context/cult-connections/` remains the durable source of truth for all files — this handoff should be pushed there to close out the session.
