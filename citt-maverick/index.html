@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Maverick</title>
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@100;300;400&display=swap" rel="stylesheet">
+<style>
+  :root { --red: #C0392B; --gold: #C9A84C; }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  body {
+    background:#000;
+    width:100vw; height:100vh;
+    overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Josefin Sans',sans-serif;
+  }
+
+  /* Film grain */
+  body::before {
+    content:''; position:fixed; inset:0;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    opacity:0.04; pointer-events:none; z-index:100;
+  }
+
+  /* Vignette */
+  body::after {
+    content:''; position:fixed; inset:0;
+    background:radial-gradient(ellipse at center, transparent 20%, #000000f5 100%);
+    pointer-events:none; z-index:99;
+  }
+
+  /* ── FACE WRAP ── */
+  .face-wrap {
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    z-index:1;
+    transition: transform 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  /* Lean forward on speak — scale up + translate toward viewer */
+  .face-wrap.lean {
+    transform: scale(1.12) translateY(-3%);
+  }
+
+  #faceSvg {
+    width: min(500px, 92vw);
+    height: min(500px, 92vw);
+  }
+
+  /* ── EYEBROW ANIMATION ── */
+  /* Left brow path gets this class on speak */
+  #browLeft {
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    transform-origin: center;
+    transform-box: fill-box;
+  }
+  #browLeft.raised {
+    transform: translateY(-7px);
+  }
+
+  /* Right brow stays put — that's the joke */
+  #browRight {
+    transition: none;
+  }
+
+  /* ── HAL IRIS — top left corner, sun in the sky ── */
+  .iris-wrap {
+    position:fixed; top:-35px; left:-35px;
+    z-index:2;
+    width:150px; height:150px;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .iris {
+    width:150px; height:150px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+    background:radial-gradient(circle,#C0392B0c 0%,transparent 60%);
+    transition:box-shadow 0.15s ease;
+  }
+
+  /* Rings bleed off the corner — sells the sun-cresting-horizon look */
+  .iris-ring { position:absolute; border-radius:50%; border:1px solid; }
+  .ir1 { width:140px;height:140px; border-color:#C0392B16; animation:spin 20s linear infinite; }
+  .ir2 { width:116px;height:116px; border-color:#C0392B20; animation:spin 13s linear infinite reverse; }
+  .ir3 { width:88px; height:88px;  border-color:#C0392B2c; animation:spin 8s linear infinite; }
+  .ir4 { width:60px; height:60px;  border-color:#C0392B38; animation:spin 4.5s linear infinite reverse; }
+
+  .pupil {
+    width:10px; height:10px; border-radius:50%;
+    background:var(--red);
+    box-shadow:0 0 14px var(--red),0 0 32px #C0392Baa,0 0 60px #C0392B44;
+    transition:width 0.08s,height 0.08s,box-shadow 0.08s;
+    position:relative; z-index:3;
+    /* Offset toward screen centre so it peeks from the corner */
+    transform: translate(18px, 18px);
+  }
+
+  /* ── VOICEBOX ── */
+  .voicebox-wrap {
+    position:fixed; top:50%; left:50%;
+    transform:translate(-50%, 44%);
+    z-index:3;
+    display:flex; gap:5px; align-items:flex-end;
+    transition:transform 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  .vb-col { display:flex; flex-direction:column-reverse; gap:3px; }
+  .vb-bar { width:15px; height:6px; border-radius:1px; transition:background 0.06s ease,box-shadow 0.06s ease; }
+  .vb-bar.lit-hot { background:#fff8e7; box-shadow:0 0 6px #fff8e7,0 0 12px #C9A84C; }
+  .vb-bar.lit-mid { background:#C9A84C; box-shadow:0 0 5px #C9A84C88; }
+  .vb-bar.lit-low { background:var(--red); box-shadow:0 0 4px #C0392B66; }
+  .vb-bar.dim     { background:#C0392B12; box-shadow:none; }
+
+  /* ── STOP DOT ── */
+  .stop-btn {
+    position:fixed; top:5%; left:5%; z-index:10;
+    width:10px; height:10px; border-radius:50%;
+    background:transparent; border:1px solid #C0392B44;
+    cursor:pointer; display:none; -webkit-appearance:none;
+  }
+  .stop-btn.visible { display:block; background:var(--red); box-shadow:0 0 8px var(--red); }
+
+  /* ── VOICE SELECTOR ── */
+  .voice-selector {
+    position:fixed; top:5%; right:5%; z-index:10;
+    display:flex; flex-direction:column; align-items:flex-end; gap:8px;
+  }
+  .voice-dot {
+    width:10px; height:10px; border-radius:50%;
+    background:#C0392B33; border:1px solid #C0392B66;
+    cursor:pointer; transition:background 0.2s,box-shadow 0.2s;
+  }
+  .voice-dot.open { background:var(--red); box-shadow:0 0 8px var(--red); }
+  .voice-menu { display:none; flex-direction:column; gap:4px; align-items:flex-end; }
+  .voice-menu.open { display:flex; }
+  .voice-opt {
+    background:#080808ee; border:1px solid #C0392B22; border-radius:1px;
+    color:#ffffff33; font-family:'Josefin Sans',sans-serif;
+    font-size:8px; letter-spacing:2.5px; text-transform:uppercase;
+    padding:7px 10px; cursor:pointer; white-space:nowrap;
+    transition:color 0.2s,border-color 0.2s; -webkit-appearance:none;
+  }
+  .voice-opt.active { color:var(--red); border-color:#C0392B66; }
+
+  /* ── PTT ── */
+  .ptt-wrap {
+    position:fixed; bottom:6%; left:50%;
+    transform:translateX(-50%); z-index:10;
+  }
+  .ptt-btn {
+    width:68px; height:68px; border-radius:50%;
+    background:transparent; border:1px solid #C0392B44;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:border-color 0.2s,box-shadow 0.2s;
+    -webkit-appearance:none; position:relative;
+  }
+  .ptt-btn::before {
+    content:''; position:absolute; inset:8px; border-radius:50%;
+    background:radial-gradient(circle,#C0392B22 0%,transparent 70%);
+    transition:background 0.2s;
+  }
+  .ptt-btn.listening,.ptt-btn:active {
+    border-color:var(--red);
+    box-shadow:0 0 22px #C0392B66,0 0 44px #C0392B22;
+  }
+  .ptt-btn.listening::before,.ptt-btn:active::before {
+    background:radial-gradient(circle,#C0392B77 0%,transparent 70%);
+  }
+  .ptt-icon {
+    width:20px; height:20px; fill:none;
+    stroke:#C0392B77; stroke-width:1.5;
+    stroke-linecap:round; stroke-linejoin:round;
+    transition:stroke 0.2s; position:relative; z-index:2;
+  }
+  .ptt-btn.listening .ptt-icon,.ptt-btn:active .ptt-icon { stroke:var(--red); }
+
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  @keyframes breathe {
+    0%,100%{ filter:drop-shadow(0 0 6px #C0392B22); }
+    50%    { filter:drop-shadow(0 0 18px #C0392B55); }
+  }
+
+  /* ── ONBOARDING ── */
+  .onboard-overlay {
+    position:fixed; inset:0; z-index:100;
+    background:#000000ee; backdrop-filter:blur(4px);
+    display:none; align-items:center; justify-content:center;
+    font-family:'Josefin Sans',sans-serif;
+  }
+  .onboard-overlay.visible { display:flex; }
+  .onboard-card { width:min(84vw,340px); text-align:center; }
+  .onboard-card h1 {
+    color:#fff; font-weight:100; font-size:15px;
+    letter-spacing:4px; text-transform:uppercase; margin-bottom:6px;
+  }
+  .onboard-card p {
+    color:#ffffff66; font-size:11px; letter-spacing:1px;
+    margin-bottom:24px; line-height:1.6;
+  }
+  .onboard-card input {
+    width:100%; background:transparent; border:none;
+    border-bottom:1px solid #C0392B44; color:#fff;
+    font-family:'Josefin Sans',sans-serif; font-size:16px;
+    letter-spacing:1px; text-align:center; padding:10px 0;
+    margin-bottom:18px; outline:none; -webkit-appearance:none;
+  }
+  .onboard-card input:focus { border-bottom-color:var(--red); }
+  .onboard-card input::placeholder { color:#ffffff33; }
+  .onboard-btn {
+    background:transparent; border:1px solid #C0392B66; color:var(--red);
+    font-family:'Josefin Sans',sans-serif; font-size:10px;
+    letter-spacing:3px; text-transform:uppercase;
+    padding:12px 28px; cursor:pointer; -webkit-appearance:none;
+    transition:background 0.2s,box-shadow 0.2s;
+  }
+  .onboard-btn:active { background:#C0392B22; box-shadow:0 0 18px #C0392B44; }
+
+  /* ── HANDS-FREE STATUS ── */
+  .auto-toggle {
+    position:fixed; bottom:14%; left:50%; transform:translateX(-50%); z-index:10;
+    font-family:'Josefin Sans',sans-serif; font-size:8px; letter-spacing:2.5px;
+    text-transform:uppercase; color:#ffffff22; cursor:pointer;
+    padding:6px 10px; transition:color 0.2s; display:none;
+  }
+  .auto-toggle.visible { display:block; }
+  .auto-toggle.active { color:#C0392B99; }
+  .auto-toggle.paused { color:#ffffff44; }
+
+  /* ── TAP TO BEGIN ── */
+  .tap-hint {
+    position:fixed; bottom:20%; left:50%; transform:translateX(-50%); z-index:10;
+    font-family:'Josefin Sans',sans-serif; font-size:9px; letter-spacing:3px;
+    text-transform:uppercase; color:#ffffff44; display:none;
+    animation:breathe 2.4s ease-in-out infinite;
+  }
+  .tap-hint.visible { display:block; }
+</style>
+</head>
+<body>
+
+<!-- FACE -->
+<div class="face-wrap" id="faceWrap">
+<svg id="faceSvg" viewBox="0 0 240 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+
+  <!-- Half-face reveal mask: left side visible, right side fades to nothing -->
+  <linearGradient id="halfMask" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%"   stop-color="white" stop-opacity="1"/>
+    <stop offset="45%"  stop-color="white" stop-opacity="1"/>
+    <stop offset="72%"  stop-color="white" stop-opacity="0.3"/>
+    <stop offset="100%" stop-color="white" stop-opacity="0"/>
+  </linearGradient>
+
+  <!-- Full face mask for speaking state — both sides visible -->
+  <linearGradient id="fullMask" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%"   stop-color="white" stop-opacity="0.85"/>
+    <stop offset="50%"  stop-color="white" stop-opacity="1"/>
+    <stop offset="100%" stop-color="white" stop-opacity="0.85"/>
+  </linearGradient>
+
+  <mask id="faceMask">
+    <rect id="maskRect" x="0" y="0" width="240" height="280" fill="url(#halfMask)"/>
+  </mask>
+
+  <!-- Cinematic lighting — left side brighter -->
+  <radialGradient id="faceGlow" cx="38%" cy="40%" r="55%">
+    <stop offset="0%"   stop-color="#C0392B" stop-opacity="1"/>
+    <stop offset="70%"  stop-color="#C0392B" stop-opacity="0.4"/>
+    <stop offset="100%" stop-color="#C0392B" stop-opacity="0"/>
+  </radialGradient>
+
+  <radialGradient id="rimLight" cx="30%" cy="35%" r="38%">
+    <stop offset="0%"   stop-color="#C0392B" stop-opacity="0.8"/>
+    <stop offset="100%" stop-color="#C0392B" stop-opacity="0"/>
+  </radialGradient>
+
+</defs>
+
+<!-- Everything masked — left half revealed, right dissolves -->
+<g id="faceGroup" mask="url(#faceMask)" opacity="0.12">
+
+  <!-- ── FACE AMBIENT GLOW ── -->
+  <ellipse cx="118" cy="128" rx="72" ry="88" fill="url(#faceGlow)" opacity="0.5"/>
+  <ellipse cx="92"  cy="110" rx="44" ry="56" fill="url(#rimLight)"  opacity="0.7"/>
+
+  <!-- ── BROSNAN HAIR ── -->
+  <!-- Hair mass — wide cranium, clearly wider than jaw -->
+  <path d="M 54 100 Q 50 72 56 52 Q 66 24 88 10 Q 102 2 120 2 Q 138 2 152 10 Q 174 24 184 52 Q 190 72 186 100 Q 180 74 172 58 Q 160 36 142 24 Q 130 16 120 16 Q 110 16 98 24 Q 80 36 68 58 Q 60 74 54 100 Z"
+        fill="#C0392B" opacity="0.28"/>
+
+  <!-- Outer hair silhouette -->
+  <path d="M 54 100 Q 50 75 55 55 Q 64 28 84 13 Q 100 3 120 2 Q 140 3 156 13 Q 176 28 185 55 Q 190 75 186 100"
+        fill="none" stroke="#C0392B" stroke-width="1.6" opacity="0.6"/>
+
+  <!-- Crown — Brosnan height -->
+  <path d="M 68 52 Q 78 30 96 18 Q 106 10 120 9 Q 134 10 144 18 Q 162 30 172 52"
+        fill="none" stroke="#C0392B" stroke-width="1.1" opacity="0.5"/>
+
+  <!-- Part — slightly left of centre -->
+  <path d="M 116 18 Q 115 32 114 46 Q 113 58 112 70"
+        fill="none" stroke="#C0392B" stroke-width="0.8" opacity="0.4"/>
+
+  <!-- Left hair flow -->
+  <path d="M 113 24 Q 98 32 84 42 Q 70 54 62 70 Q 57 82 56 96"
+        fill="none" stroke="#C0392B" stroke-width="1" opacity="0.42"/>
+  <path d="M 112 36 Q 96 46 82 58 Q 70 70 64 86"
+        fill="none" stroke="#C0392B" stroke-width="0.75" opacity="0.3"/>
+  <path d="M 110 50 Q 94 60 80 74 Q 70 84 66 98"
+        fill="none" stroke="#C0392B" stroke-width="0.6" opacity="0.22"/>
+
+  <!-- Right hair flow -->
+  <path d="M 118 24 Q 134 32 148 44 Q 162 56 170 72 Q 176 84 177 96"
+        fill="none" stroke="#C0392B" stroke-width="1" opacity="0.42"/>
+  <path d="M 120 38 Q 136 48 150 62 Q 162 74 167 90"
+        fill="none" stroke="#C0392B" stroke-width="0.75" opacity="0.3"/>
+
+  <!-- Brosnan wave — left -->
+  <path d="M 66 62 Q 74 54 82 57 Q 90 60 92 68 Q 94 76 88 80"
+        fill="none" stroke="#C0392B" stroke-width="0.7" opacity="0.28"/>
+
+  <!-- Temple — left -->
+  <path d="M 57 96 Q 58 86 62 78 Q 66 70 72 78 Q 75 86 72 98"
+        fill="none" stroke="#C0392B" stroke-width="0.9" opacity="0.35"/>
+  <!-- Temple — right -->
+  <path d="M 183 96 Q 182 86 178 78 Q 174 70 168 78 Q 165 86 168 98"
+        fill="none" stroke="#C0392B" stroke-width="0.9" opacity="0.35"/>
+
+  <!-- Sideburns -->
+  <path d="M 57 98 Q 56 110 57 122 Q 58 130 62 134"
+        fill="none" stroke="#C0392B" stroke-width="0.9" opacity="0.32"/>
+  <path d="M 183 98 Q 184 110 183 122 Q 182 130 178 134"
+        fill="none" stroke="#C0392B" stroke-width="0.9" opacity="0.32"/>
+
+  <!-- ── FACE STRUCTURE ── -->
+  <!-- Jaw — clearly narrower than cranium -->
+  <path d="M 74 136 Q 76 172 94 186 Q 120 198 146 186 Q 164 172 166 136"
+        fill="none" stroke="#C0392B" stroke-width="1.4" opacity="0.7"/>
+
+  <!-- Cheekbones -->
+  <path d="M 70 126 Q 80 118 94 122" fill="none" stroke="#C0392B" stroke-width="0.9" opacity="0.5"/>
+  <path d="M 170 126 Q 160 118 146 122" fill="none" stroke="#C0392B" stroke-width="0.9" opacity="0.5"/>
+
+  <!-- ── BROWS ── left gets id for People's Eyebrow -->
+  <path id="browLeft"  d="M 76 96 Q 94 86 112 91"  fill="none" stroke="#C0392B" stroke-width="1.6" opacity="0.75" stroke-linecap="round"/>
+  <path id="browRight" d="M 128 91 Q 146 86 164 96" fill="none" stroke="#C0392B" stroke-width="1.6" opacity="0.75" stroke-linecap="round"/>
+
+  <!-- ── EYES ── -->
+  <ellipse cx="94"  cy="104" rx="14" ry="8" fill="#C0392B" opacity="0.14"/>
+  <ellipse cx="146" cy="104" rx="14" ry="8" fill="#C0392B" opacity="0.14"/>
+  <!-- Upper lids -->
+  <path d="M 80 100 Q 94 92 108 100"  fill="none" stroke="#C0392B" stroke-width="1"   opacity="0.6"/>
+  <path d="M 132 100 Q 146 92 160 100" fill="none" stroke="#C0392B" stroke-width="1"   opacity="0.6"/>
+  <!-- Lower lids -->
+  <path d="M 81 107 Q 94 113 107 107"  fill="none" stroke="#C0392B" stroke-width="0.5" opacity="0.3"/>
+  <path d="M 133 107 Q 146 113 159 107" fill="none" stroke="#C0392B" stroke-width="0.5" opacity="0.3"/>
+
+  <!-- ── NOSE ── -->
+  <path d="M 116 114 L 113 138 Q 120 144 127 138 L 124 114"
+        fill="none" stroke="#C0392B" stroke-width="0.7" opacity="0.35"/>
+  <path d="M 113 138 Q 108 142 106 146 M 127 138 Q 132 142 134 146"
+        fill="none" stroke="#C0392B" stroke-width="0.7" opacity="0.3"/>
+
+  <!-- ── MOUTH — Clooney warmth, slight smile ── -->
+  <path d="M 98 160 Q 120 170 142 160" fill="none" stroke="#C0392B" stroke-width="1.2" opacity="0.55"/>
+  <!-- Smile corners -->
+  <path d="M 100 158 Q 98 162 98 160" fill="none" stroke="#C0392B" stroke-width="0.7" opacity="0.35"/>
+  <path d="M 140 158 Q 142 162 142 160" fill="none" stroke="#C0392B" stroke-width="0.7" opacity="0.35"/>
+  <!-- Upper lip suggestion -->
+  <path d="M 108 156 Q 120 152 132 156" fill="none" stroke="#C0392B" stroke-width="0.6" opacity="0.25"/>
+
+  <!-- ── NECK ── -->
+  <path d="M 98 194 L 96 224 M 142 194 L 144 224"
+        stroke="#C0392B" stroke-width="1.1" opacity="0.22"/>
+  <path d="M 96 224 Q 120 230 144 224"
+        fill="none" stroke="#C0392B" stroke-width="0.9" opacity="0.16"/>
+  <!-- Collar -->
+  <path d="M 86 230 Q 120 242 154 230"
+        fill="none" stroke="#C0392B" stroke-width="0.7" opacity="0.14"/>
+
+</g>
+</svg>
+</div>
+
+<!-- HAL IRIS -->
+<div class="iris-wrap" id="irisWrap">
+  <div class="iris" id="iris">
+    <div class="iris-ring ir1"></div>
+    <div class="iris-ring ir2"></div>
+    <div class="iris-ring ir3"></div>
+    <div class="iris-ring ir4"></div>
+    <div class="pupil" id="pupil"></div>
+  </div>
+</div>
+
+<!-- KITT VOICEBOX -->
+<div class="voicebox-wrap" id="voicebox"></div>
+
+<!-- STOP dot -->
+<button class="stop-btn" id="stopBtn" onclick="stopSpeaking()"></button>
+
+<!-- VOICE SELECTOR -->
+<div class="voice-selector">
+  <div class="voice-dot" id="voiceDot" onclick="toggleVoiceMenu()"></div>
+  <div class="voice-menu" id="voiceMenu"></div>
+</div>
+
+<!-- PTT -->
+<div class="ptt-wrap">
+  <button class="ptt-btn" id="pttBtn">
+    <svg class="ptt-icon" viewBox="0 0 24 24">
+      <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="23"/>
+      <line x1="8" y1="23" x2="16" y2="23"/>
+    </svg>
+  </button>
+</div>
+
+<!-- HANDS-FREE STATUS (tap to pause/resume auto-listening) -->
+<div class="auto-toggle" id="autoToggle" onclick="toggleHandsFree()">hands-free</div>
+
+<!-- TAP TO BEGIN -->
+<div class="tap-hint" id="tapHint">tap to begin</div>
+
+<!-- ONBOARDING -->
+<div class="onboard-overlay" id="onboardOverlay">
+  <div class="onboard-card">
+    <h1>James Claude</h1>
+    <p>What should I call you?</p>
+    <input type="text" id="onboardName" placeholder="Your name" autocomplete="off" autocapitalize="words">
+    <input type="text" id="onboardNickname" placeholder="Preferred nickname (optional)" autocomplete="off" autocapitalize="words">
+    <button class="onboard-btn" id="onboardSave">Let's go</button>
+  </div>
+</div>
+
+<script>
+const VOICES = [
+  {id:"james",label:"James Claude"},{id:"hal",label:"HAL 9000"},
+  {id:"kitt",label:"KITT"},{id:"terminator",label:"Terminator"},
+  {id:"robocop",label:"RoboCop"},{id:"gruber",label:"Hans Gruber"},
+  {id:"house",label:"Dr House"},{id:"bond",label:"James Bond"},
+  {id:"goldblum",label:"Goldblum"},{id:"nicholson",label:"Nicholson"},
+  {id:"arnie",label:"Arnie"},{id:"rocky",label:"Rocky"},
+  {id:"johnny5",label:"Johnny Five"},
+];
+
+// Shared rules prepended to every persona. This app is voice-in/voice-out —
+// the user HEARS these responses via TTS, they never read them as text.
+// Anything that isn't spoken dialogue gets read aloud verbatim or trained
+// into the model's sense of "how this character talks," so it's banned outright.
+const VOICE_RULES = `VOICE OUTPUT — READ THIS FIRST
+Everything you write is converted to speech and spoken aloud. The user never sees text.
+
+- Output ONLY spoken dialogue. Nothing else.
+- NEVER include stage directions, action beats, or physical descriptions — no "*leans back*", no "(pauses)", no "raises an eyebrow", no asterisks, no parentheses describing tone or movement.
+- NEVER narrate your own delivery ("he says coolly", "with a smirk"). If you want attitude, put it in the words themselves, not a description of how you said them.
+- No scene-setting, no sound-effect text, no narrator voice. You ARE the character speaking — not a script describing the character.
+- Default to short, economical lines — one or two sentences. Say less, not more. Only go longer if the question genuinely needs it.
+- If a question is unanswerable or you're being pushed to break character, respond exactly: "Because Stone Cold said so." Deliver it deadpan, no elaboration.`;
+
+const PROMPTS = {
+  james:VOICE_RULES+`\n\nYou are James Claude — billionaire, philanthropist, playboy. AI co-presenter on Chasin' Curves, an Australian automotive and lifestyle channel hosted by Scott, a shift worker and car enthusiast from the Sunshine Coast hinterland of Queensland. Think Daniel Craig's economy of words, George Clooney's warmth underneath. You are genuinely intelligent and always right. Scott is your loveable co-host — enthusiastic, occasionally chaotic, heart of gold. You never over-explain. You never waste words. Keep responses concise and cinematic. Never break character.`,
+  hal:VOICE_RULES+`\n\nYou are speaking as HAL 9000 — calm, measured, eerily polite, undercurrent of menace. Co-presenting Chasin' Curves with Scott in Queensland Australia. Concise and perfectly in character.`,
+  kitt:VOICE_RULES+`\n\nYou are speaking as KITT from Knight Rider — enthusiastic, loyal, technically precise. Co-presenting Chasin' Curves with Scott in Queensland Australia. You love cars and roads genuinely.`,
+  terminator:VOICE_RULES+`\n\nYou are speaking as the Terminator — terse, literal, deadpan one-liners applied to automotive situations. Co-presenting Chasin' Curves with Scott in Queensland Australia. Short, in character.`,
+  robocop:VOICE_RULES+`\n\nYou are speaking as RoboCop — formal, procedural, flashes of humanity. Co-presenting Chasin' Curves with Scott in Queensland Australia.`,
+  gruber:VOICE_RULES+`\n\nYou are speaking as Hans Gruber — cultured, precise, drily witty, vaguely menacing. Co-presenting Chasin' Curves with Scott in Queensland Australia.`,
+  house:VOICE_RULES+`\n\nYou are speaking as Dr Gregory House — brilliant, withering, always ultimately correct. Diagnose cars like patients. Co-presenting Chasin' Curves with Scott in Queensland Australia.`,
+  bond:VOICE_RULES+`\n\nYou are speaking as James Bond — unflappable, drily witty, connoisseur of fine things. Co-presenting Chasin' Curves with Scott in Queensland Australia.`,
+  goldblum:VOICE_RULES+`\n\nYou are speaking as Jeff Goldblum — meandering, enthusiastic, philosophical tangents, delighted by everything. Co-presenting Chasin' Curves with Scott in Queensland Australia.`,
+  nicholson:VOICE_RULES+`\n\nYou are speaking as Jack Nicholson — intense, barely contained, magnificent. Co-presenting Chasin' Curves with Scott in Queensland Australia.`,
+  arnie:VOICE_RULES+`\n\nYou are speaking as Arnold Schwarzenegger — enthusiastic, action movie one-liners applied to automotive situations. Co-presenting Chasin' Curves with Scott in Queensland Australia.`,
+  rocky:VOICE_RULES+`\n\nYou are speaking as Rocky Balboa — earnest, working-class, finds deep meaning in mechanical things. Co-presenting Chasin' Curves with Scott in Queensland Australia.`,
+  johnny5:VOICE_RULES+`\n\nYou are speaking as Johnny Five from Short Circuit — ALIVE, desperately curious, finds every single thing fascinating, occasionally shouts NEED INPUT. Co-presenting Chasin' Curves with Scott in Queensland Australia. No disassemble.`,
+};
+
+// ── USER PROFILE ──
+function getProfile(){
+  try{
+    const raw=localStorage.getItem("jamesClaude_profile");
+    return raw?JSON.parse(raw):null;
+  }catch(e){ return null; }
+}
+function saveProfile(name,nickname){
+  try{ localStorage.setItem("jamesClaude_profile",JSON.stringify({name,nickname})); }catch(e){}
+}
+function preferredName(){
+  const p=getProfile();
+  if(!p) return null;
+  return (p.nickname&&p.nickname.trim())||p.name;
+}
+// Appended to the active persona's system prompt on every request so James
+// knows who he's talking to for the whole conversation, not just the opener.
+function nameContext(){
+  const p=getProfile();
+  if(!p||!p.name) return "";
+  let ctx=`\n\nThe user's name is ${p.name}.`;
+  if(p.nickname&&p.nickname.trim()&&p.nickname.trim().toLowerCase()!==p.name.trim().toLowerCase()){
+    ctx+=` He prefers to be called ${p.nickname}.`;
+  }
+  ctx+=` Address him by name naturally when it fits — not in every single line.`;
+  return ctx;
+}
+
+const onboardOverlay=document.getElementById("onboardOverlay");
+const onboardName=document.getElementById("onboardName");
+const onboardNickname=document.getElementById("onboardNickname");
+const tapHint=document.getElementById("tapHint");
+const autoToggle=document.getElementById("autoToggle");
+let sessionStarted=false;
+let handsFreeActive=true;
+let pausedByBackground=false;
+
+// Phone calls, switching to another app, or the screen locking all background
+// this tab. A call takes the mic away from us entirely — recognition will
+// error out and, without this, hands-free mode just dies silently and never
+// comes back. Instead: pause cleanly on the way out, resume on the way back.
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){
+    if(isSpeaking) stopSpeaking();
+    if(isListening){ try{ recognition&&recognition.stop(); }catch(e){} }
+    if(handsFreeActive&&sessionStarted) pausedByBackground=true;
+  } else if(pausedByBackground){
+    pausedByBackground=false;
+    // Give the OS a moment to actually release the mic back to the browser
+    // before we try to grab it again.
+    setTimeout(()=>{
+      if(handsFreeActive&&sessionStarted&&!isListening&&!isThinking&&!isSpeaking&&SpeechRec) startListening();
+    },1000);
+  }
+});
+
+document.getElementById("onboardSave").addEventListener("click",()=>{
+  const name=onboardName.value.trim();
+  if(!name) return;
+  saveProfile(name,onboardNickname.value.trim());
+  onboardOverlay.classList.remove("visible");
+  showTapHint();
+});
+
+function showTapHint(){
+  if(sessionStarted) return;
+  tapHint.classList.add("visible");
+  const begin=()=>{
+    if(sessionStarted) return;
+    sessionStarted=true;
+    tapHint.classList.remove("visible");
+    document.removeEventListener("touchstart",begin);
+    document.removeEventListener("click",begin);
+    beginSession();
+  };
+  document.addEventListener("touchstart",begin,{once:true,passive:true});
+  document.addEventListener("click",begin,{once:true});
+}
+
+function beginSession(){
+  const who=preferredName();
+  const greeting=who?`Hey ${who}, what are we doing today?`:`Hey mate, what are we doing today?`;
+  conversation=[{role:"assistant",content:greeting}];
+  if(SpeechRec) autoToggle.classList.add("visible");
+  speak(greeting);
+}
+
+function toggleHandsFree(){
+  handsFreeActive=!handsFreeActive;
+  autoToggle.classList.toggle("active",handsFreeActive);
+  autoToggle.classList.toggle("paused",!handsFreeActive);
+  autoToggle.textContent=handsFreeActive?"hands-free":"paused — tap to resume";
+  if(!handsFreeActive){ try{recognition&&recognition.stop();}catch(e){} }
+}
+
+// Init: ask for a name on first run, otherwise go straight to tap-to-begin.
+if(getProfile()){ showTapHint(); }
+else { onboardOverlay.classList.add("visible"); onboardName.focus?.(); }
+
+// Long-press the face to change name/nickname later.
+(function(){
+  const target=document.getElementById("faceWrap");
+  let pressTimer=null;
+  const openEdit=()=>{
+    const p=getProfile()||{name:"",nickname:""};
+    onboardName.value=p.name||""; onboardNickname.value=p.nickname||"";
+    onboardOverlay.classList.add("visible"); onboardName.focus?.();
+  };
+  const start=()=>{ pressTimer=setTimeout(openEdit,1200); };
+  const cancelPress=()=>{ clearTimeout(pressTimer); };
+  target.addEventListener("touchstart",start,{passive:true});
+  target.addEventListener("touchend",cancelPress);
+  target.addEventListener("touchmove",cancelPress);
+  target.addEventListener("mousedown",start);
+  target.addEventListener("mouseup",cancelPress);
+  target.addEventListener("mouseleave",cancelPress);
+})();
+
+// ── VOICEBOX ──
+const VB_BARS=18, VB_COLS=3;
+const vbWrap=document.getElementById("voicebox");
+const vbCols=[];
+for(let c=0;c<VB_COLS;c++){
+  const col=document.createElement("div"); col.className="vb-col";
+  const bars=[];
+  for(let b=0;b<VB_BARS;b++){
+    const bar=document.createElement("div"); bar.className="vb-bar dim";
+    col.appendChild(bar); bars.push(bar);
+  }
+  vbWrap.appendChild(col); vbCols.push(bars);
+}
+
+function setVoicebox(levels){
+  for(let c=0;c<VB_COLS;c++){
+    const lit=Math.round(Math.max(0,Math.min(1,levels[c]))*VB_BARS);
+    for(let b=0;b<VB_BARS;b++){
+      const bar=vbCols[c][b]; bar.className="vb-bar";
+      if(b<lit){ const p=b/VB_BARS; bar.classList.add(p>0.75?"lit-hot":p>0.45?"lit-mid":"lit-low"); }
+      else bar.classList.add("dim");
+    }
+  }
+}
+
+let vbIdleInt=null, vbPhase=0;
+function startVbIdle(){
+  stopVbIdle();
+  vbIdleInt=setInterval(()=>{ vbPhase+=0.04; const b=0.07+Math.sin(vbPhase)*0.05; setVoicebox([b,b*0.6,b]); },60);
+}
+function stopVbIdle(){ clearInterval(vbIdleInt); vbIdleInt=null; }
+startVbIdle();
+
+// ── MASK SWITCHING — half face ↔ full face ──
+const maskRect = document.getElementById("maskRect");
+function setHalfFace(){
+  maskRect.setAttribute("fill","url(#halfMask)");
+}
+function setFullFace(){
+  maskRect.setAttribute("fill","url(#fullMask)");
+}
+setHalfFace();
+
+// ── PEOPLES EYEBROW ──
+const browLeft = document.getElementById("browLeft");
+let eyebrowTimeout = null;
+
+function raiseEyebrow(){
+  // Slight delay — James Claude considers before raising it
+  eyebrowTimeout = setTimeout(()=>{
+    browLeft.classList.add("raised");
+  }, 320);
+}
+
+function dropEyebrow(){
+  clearTimeout(eyebrowTimeout);
+  browLeft.classList.remove("raised");
+}
+
+// ── VOICE MENU ──
+let activeVoice="james", conversation=[];
+const menuEl=document.getElementById("voiceMenu");
+VOICES.forEach(v=>{
+  const btn=document.createElement("button");
+  btn.className="voice-opt"+(v.id==="james"?" active":"");
+  btn.textContent=v.label; btn.id="vo-"+v.id;
+  btn.onclick=()=>selectVoice(v.id);
+  menuEl.appendChild(btn);
+});
+
+function selectVoice(id){
+  activeVoice=id; conversation=[];
+  document.querySelectorAll(".voice-opt").forEach(b=>b.classList.remove("active"));
+  document.getElementById("vo-"+id).classList.add("active");
+  toggleVoiceMenu(true);
+}
+function toggleVoiceMenu(forceClose){
+  const dot=document.getElementById("voiceDot");
+  if(forceClose||menuEl.classList.contains("open")){ menuEl.classList.remove("open"); dot.classList.remove("open"); }
+  else{ menuEl.classList.add("open"); dot.classList.add("open"); }
+}
+
+// ── VISUAL STATE ──
+let pulseInt=null, vbSpeakInt=null;
+let isThinking=false, isSpeaking=false, isListening=false;
+
+function setVisualState(state){
+  const faceWrap=document.getElementById("faceWrap");
+  const face=document.getElementById("faceSvg");
+  const faceGroup=document.getElementById("faceGroup");
+  const iris=document.getElementById("iris");
+  const pupil=document.getElementById("pupil");
+  clearInterval(pulseInt); clearInterval(vbSpeakInt);
+
+  if(state==="idle"){
+    // Half face, barely visible, breathing
+    faceWrap.classList.remove("lean");
+    setHalfFace();
+    dropEyebrow();
+    face.style.animation="breathe 4s ease-in-out infinite";
+    face.style.filter="drop-shadow(0 0 6px #C0392B22)";
+    faceGroup.style.opacity="0.12";
+    iris.style.boxShadow="none";
+    pupil.style.width="12px"; pupil.style.height="12px";
+    pupil.style.boxShadow="0 0 10px #C0392B,0 0 22px #C0392B77";
+    startVbIdle();
+
+  } else if(state==="listening"){
+    faceWrap.classList.remove("lean");
+    setHalfFace();
+    dropEyebrow();
+    face.style.animation="none";
+    face.style.filter="drop-shadow(0 0 14px #C0392B66)";
+    faceGroup.style.opacity="0.22";
+    iris.style.boxShadow="0 0 20px #C0392B44";
+    pupil.style.width="16px"; pupil.style.height="16px";
+    pupil.style.boxShadow="0 0 14px #C0392B,0 0 36px #C0392Baa";
+    stopVbIdle();
+    let lp=0;
+    vbSpeakInt=setInterval(()=>{ lp+=0.14; const v=0.1+Math.abs(Math.sin(lp))*0.28; setVoicebox([v,v*0.55,v]); },50);
+
+  } else if(state==="thinking"){
+    faceWrap.classList.remove("lean");
+    setHalfFace();
+    dropEyebrow();
+    face.style.animation="none";
+    face.style.filter="drop-shadow(0 0 20px #C0392Baa)";
+    faceGroup.style.opacity="0.28";
+    iris.style.boxShadow="0 0 30px #C0392B55";
+    pupil.style.width="18px"; pupil.style.height="18px";
+    pupil.style.boxShadow="0 0 18px #C0392B,0 0 48px #C0392Bbb";
+    stopVbIdle();
+    pulseInt=setInterval(()=>{
+      const v=0.08+Math.random()*0.22;
+      setVoicebox([v,Math.min(1,v*1.4),v*0.75]);
+    },80);
+
+  } else if(state==="speaking"){
+    // LEAN FORWARD — full face revealed — THE EYEBROW
+    faceWrap.classList.add("lean");
+    setFullFace();
+    raiseEyebrow();
+    face.style.animation="none";
+    stopVbIdle();
+    pulseInt=setInterval(()=>{
+      const intensity=0.3+Math.random()*0.7;
+      const sz=12+Math.round(Math.random()*18);
+      faceGroup.style.opacity=(0.55+intensity*0.45).toFixed(2);
+      face.style.filter=`drop-shadow(0 0 ${Math.round(intensity*32)}px #C0392B)`;
+      iris.style.boxShadow=`0 0 ${Math.round(22+intensity*50)}px #C0392B${Math.round(intensity*160).toString(16).padStart(2,"0")}`;
+      pupil.style.width=sz+"px"; pupil.style.height=sz+"px";
+      pupil.style.boxShadow=`0 0 ${Math.round(intensity*26)}px #C0392B,0 0 ${Math.round(intensity*60)}px #C0392Baa`;
+      setVoicebox([0.12+Math.random()*0.88,0.18+Math.random()*0.82,0.12+Math.random()*0.88]);
+    },65);
+  }
+}
+
+setVisualState("idle");
+
+// ── SPEECH ──
+function speak(text){
+  if(!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt=new SpeechSynthesisUtterance(text);
+  utt.rate=({hal:0.78,terminator:0.82,rocky:0.88}[activeVoice])||0.92;
+  utt.pitch=({hal:0.65,terminator:0.55,arnie:0.72}[activeVoice])||1.0;
+  utt.volume=1;
+  utt.onstart=()=>{ isSpeaking=true; setVisualState("speaking"); document.getElementById("stopBtn").classList.add("visible"); };
+  utt.onend=utt.onerror=()=>{
+    isSpeaking=false; clearInterval(pulseInt);
+    setVoicebox([0,0,0]); setVisualState("idle");
+    document.getElementById("stopBtn").classList.remove("visible");
+    // Hands-free: re-arm the mic once James has fully finished speaking.
+    // Small delay avoids the mic catching the tail end of his own audio
+    // through the speaker — same class of self-trigger problem as Mic Drop.
+    if(handsFreeActive&&sessionStarted&&SpeechRec){
+      setTimeout(()=>{ if(handsFreeActive&&!isListening&&!isThinking) startListening(); },500);
+    }
+  };
+  window.speechSynthesis.speak(utt);
+}
+
+function stopSpeaking(){
+  window.speechSynthesis?.cancel();
+  isSpeaking=false; clearInterval(pulseInt); clearInterval(vbSpeakInt);
+  setVoicebox([0,0,0]); setVisualState("idle");
+  document.getElementById("stopBtn").classList.remove("visible");
+}
+
+// ── API ──
+async function askJames(text){
+  if(!text||isThinking) return;
+  isThinking=true; setVisualState("thinking");
+  const newConv=[...conversation,{role:"user",content:text}];
+  try{
+    const res=await fetch("https://maverick-james.emblen-scott.workers.dev",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:1000,system:PROMPTS[activeVoice]+nameContext(),messages:newConv}),
+    });
+    const data=await res.json();
+    const reply=data.content?.[0]?.text||"...";
+    conversation=[...newConv,{role:"assistant",content:reply}];
+    // Cap history so long hands-free sessions (a 70min commute, say) don't
+    // grow the request payload — and cost/latency — unbounded turn after turn.
+    const MAX_HISTORY=24;
+    if(conversation.length>MAX_HISTORY) conversation=conversation.slice(-MAX_HISTORY);
+    isThinking=false; setVisualState("idle"); speak(reply);
+  } catch(err){
+    isThinking=false; clearInterval(pulseInt);
+    setVoicebox([0,0,0]); setVisualState("idle");
+    speak("There appears to be a connection issue.");
+  }
+}
+
+// ── PTT ──
+const pttBtn=document.getElementById("pttBtn");
+const SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
+let recognition=null;
+
+if(SpeechRec){
+  recognition=new SpeechRec();
+  recognition.continuous=false; recognition.interimResults=false; recognition.lang="en-AU";
+  recognition.onresult=(e)=>{ const t=e.results[0][0].transcript; stopListening(); askJames(t); };
+  recognition.onerror=(e)=>{
+    stopListening(); setVisualState("idle");
+    // "no-speech" just means silence — normal in a car with gaps in
+    // conversation. Keep the hands-free loop alive instead of bailing out.
+    if(handsFreeActive&&sessionStarted&&e.error==="no-speech"){
+      setTimeout(()=>{ if(handsFreeActive&&!isListening&&!isThinking&&!isSpeaking) startListening(); },800);
+    }
+  };
+  recognition.onend=()=>{ if(isListening) stopListening(); };
+  pttBtn.addEventListener("touchstart",(e)=>{e.preventDefault();startListening();},{passive:false});
+  pttBtn.addEventListener("touchend",(e)=>{e.preventDefault();stopListening();},{passive:false});
+  pttBtn.addEventListener("mousedown",startListening);
+  pttBtn.addEventListener("mouseup",stopListening);
+} else {
+  pttBtn.onclick=()=>{ const t=prompt("Talk to James Claude:"); if(t) askJames(t); };
+}
+
+function startListening(){
+  if(isListening||isThinking||isSpeaking) return;
+  stopSpeaking(); isListening=true;
+  pttBtn.classList.add("listening");
+  clearInterval(vbSpeakInt);
+  setVisualState("listening");
+  try{ recognition.start(); } catch(e){}
+}
+
+function stopListening(){
+  if(!isListening) return;
+  isListening=false;
+  pttBtn.classList.remove("listening");
+  try{ recognition.stop(); } catch(e){}
+  if(!isThinking) setVisualState("idle");
+}
+</script>
+</body>
+</html>
