@@ -524,13 +524,14 @@ document.addEventListener("visibilitychange",()=>{
   if(document.hidden){
     if(isSpeaking) stopSpeaking();
     if(isListening){ try{ recognition&&recognition.stop(); }catch(e){} }
+    releasePinnedMic();
     if(handsFreeActive&&sessionStarted) pausedByBackground=true;
   } else if(pausedByBackground){
     pausedByBackground=false;
     // Give the OS a moment to actually release the mic back to the browser
     // before we try to grab it again.
     setTimeout(()=>{
-      if(handsFreeActive&&sessionStarted&&!isListening&&!isThinking&&!isSpeaking&&SpeechRec) startListening();
+      if(handsFreeActive&&sessionStarted&&!isListening&&!isThinking&&!isSpeaking&&SpeechRec){ ensurePinnedMic(); startListening(); }
     },1000);
   }
 });
@@ -562,7 +563,7 @@ function beginSession(){
   const who=preferredName();
   const greeting=who?`Hey ${who}, what are we doing today?`:`Hey mate, what are we doing today?`;
   conversation=[{role:"assistant",content:greeting}];
-  if(SpeechRec) autoToggle.classList.add("visible");
+  if(SpeechRec){ autoToggle.classList.add("visible"); ensurePinnedMic(); }
   speak(greeting);
 }
 
@@ -571,7 +572,8 @@ function toggleHandsFree(){
   autoToggle.classList.toggle("active",handsFreeActive);
   autoToggle.classList.toggle("paused",!handsFreeActive);
   autoToggle.textContent=handsFreeActive?"hands-free":"paused — tap to resume";
-  if(!handsFreeActive){ try{recognition&&recognition.stop();}catch(e){} }
+  if(!handsFreeActive){ try{recognition&&recognition.stop();}catch(e){} releasePinnedMic(); }
+  else if(sessionStarted){ ensurePinnedMic(); }
 }
 
 // Init: ask for a name on first run, otherwise go straight to tap-to-begin.
@@ -810,6 +812,54 @@ async function askJames(text){
     setVoicebox([0,0,0]); setVisualState("idle");
     speak("There appears to be a connection issue.");
   }
+}
+
+// ── BUILT-IN MIC PIN (ported from Mic Drop, Session 13) ──
+// A plain getUserMedia() request lets Android auto-route the mic to whatever's
+// connected. If that's a car or headset with hands-free calling support
+// (HFP/SCO), Android drops the WHOLE audio session into phone-call mode to
+// serve it — TTS playback gets dragged into that low-quality call channel
+// along with it, which is exactly the "input via car, output via phone
+// speaker" behaviour Griffo hit. Fix: never let the car's mic get requested
+// in the first place. Open a throwaway stream to unlock device labels, find
+// the phone's own physical mic, then pin explicitly to that device ID so
+// Android has no reason to switch modes at all.
+const VIRTUAL_ROUTE_PATTERN=/^default$|^communications$/i;
+const BLUETOOTH_MIC_PATTERN=/bluetooth|hands.?free|headset|airpods|buds|hfp|sco/i;
+let pinnedMicStream=null;
+
+async function getBuiltInMicStream(constraints){
+  let unlockStream;
+  try{ unlockStream=await navigator.mediaDevices.getUserMedia({audio:true}); }
+  catch(e){ throw e; }
+  let builtInId=null;
+  try{
+    const devices=await navigator.mediaDevices.enumerateDevices();
+    const audioInputs=devices.filter(d=>d.kind==="audioinput");
+    const physical=audioInputs.filter(d=>d.label&&!BLUETOOTH_MIC_PATTERN.test(d.label)&&!VIRTUAL_ROUTE_PATTERN.test(d.label));
+    const chosen=physical[0]||audioInputs.find(d=>d.label&&!BLUETOOTH_MIC_PATTERN.test(d.label))||null;
+    if(chosen) builtInId=chosen.deviceId;
+  }catch(e){ /* fall back to OS default below */ }
+  finally{ unlockStream.getTracks().forEach(t=>t.stop()); }
+
+  return navigator.mediaDevices.getUserMedia({
+    audio:{ ...constraints, ...(builtInId?{deviceId:{exact:builtInId}}:{}) },
+  });
+}
+
+// Opens (and holds open) a stream pinned to the phone's built-in mic for the
+// duration of the hands-free session — an active pinned stream is what biases
+// Android's device selection away from the Bluetooth-connected car. Safe to
+// call repeatedly; no-ops if already pinned.
+async function ensurePinnedMic(){
+  if(pinnedMicStream) return;
+  try{ pinnedMicStream=await getBuiltInMicStream({}); }
+  catch(e){ /* permission denied or no mic — SpeechRecognition falls back to OS default */ }
+}
+function releasePinnedMic(){
+  if(!pinnedMicStream) return;
+  pinnedMicStream.getTracks().forEach(t=>t.stop());
+  pinnedMicStream=null;
 }
 
 // ── PTT ──
