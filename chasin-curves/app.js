@@ -408,7 +408,7 @@ const PointsBadge = ({ pts, style: sx }) => {
 // worth a proper Mapbox Studio style later for a tighter match to the
 // Midnight/Champagne palette. Viewport-driven road list (replacing the
 // state filter buttons) is deliberately NOT in this pass — foundation only.
-const MAPBOX_TOKEN = "pk.eyJ1Ijoic2N2ZCIsImEiOiJjbXMzOW5qOTgxcTRzMzNxOGRnM2p2czFxIn0.RHRu0Gxz2-MseFCcXDjqZw";
+const MAPBOX_TOKEN = "pk.eyJ1Ijoic2N2ZCIsImEiOiJjbXMzOHB1eXUwMzRjMzVvYm0ya29wYTZ1In0.FlTd5i3zPj5W7E57UaH5gw";
 
 const MapView = ({ roads, selected, onSelect, trips, currentUser }) => {
   const mapContainer = useRef(null);
