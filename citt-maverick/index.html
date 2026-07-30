@@ -397,6 +397,11 @@
   </div>
 </div>
 
+<!-- DEBUG LOG — mirrors Mic Drop's tester overlay pattern. Shows the last
+     few mic/recognition events so field issues can be read straight off
+     the screen without needing chrome://inspect. -->
+<div id="dbgLog" style="position:fixed;top:0;left:0;right:0;z-index:999;font:10px/1.4 monospace;color:#C0392Bcc;background:#000000cc;padding:4px 8px;max-height:110px;overflow:hidden;pointer-events:none;white-space:pre-wrap;"></div>
+
 <!-- KITT VOICEBOX -->
 <div class="voicebox-wrap" id="voicebox"></div>
 
@@ -660,6 +665,18 @@ function dropEyebrow(){
 
 // ── VOICE MENU ──
 let activeVoice="james", conversation=[];
+
+// ── DEBUG LOG ── writes to the on-screen strip added above, capped to
+// the last 8 lines so it never grows unbounded during a long session.
+const dbgEl=document.getElementById("dbgLog");
+const dbgLines=[];
+function dbg(msg){
+  const t=new Date().toTimeString().slice(0,8);
+  dbgLines.push(`${t} ${msg}`);
+  if(dbgLines.length>8) dbgLines.shift();
+  if(dbgEl) dbgEl.textContent=dbgLines.join("\n");
+  console.log("[maverick]",msg);
+}
 const menuEl=document.getElementById("voiceMenu");
 VOICES.forEach(v=>{
   const btn=document.createElement("button");
@@ -804,15 +821,17 @@ function speak(text){
   const utt=new SpeechSynthesisUtterance(text);
   const voice=pickVoice();
   if(voice) utt.voice=voice;
+  dbg(`speak: voice="${voice?voice.name:"browser default"}"`);
   utt.rate=({hal:0.78,terminator:0.82,rocky:0.88}[activeVoice])||0.92;
   utt.pitch=({hal:0.65,terminator:0.55,arnie:0.72}[activeVoice])||1.0;
   utt.volume=1;
   utt.onstart=()=>{ isSpeaking=true; setVisualState("speaking"); document.getElementById("stopBtn").classList.add("visible"); };
 
   let finished=false;
-  const finish=()=>{
+  const finish=(via)=>{
     if(finished) return; // watchdog and onend/onerror both land here — only run once
     finished=true;
+    dbg(`speak: finished via ${via}`);
     clearTimeout(watchdog);
     isSpeaking=false; clearInterval(pulseInt);
     setVoicebox([0,0,0]); setVisualState("idle");
@@ -824,7 +843,8 @@ function speak(text){
       setTimeout(()=>{ if(handsFreeActive&&!isListening&&!isThinking) startListening(); },500);
     }
   };
-  utt.onend=utt.onerror=finish;
+  utt.onend=()=>finish("onend");
+  utt.onerror=(e)=>finish(`onerror(${e.error})`);
 
   // Watchdog: some Android Chrome builds silently hang an utterance
   // (never fire onend/onerror) rather than fail loudly — a plain
@@ -832,7 +852,7 @@ function speak(text){
   // utterance permanently kills hands-free mode with no way back short
   // of reloading the page. ~110ms/char is a generous ceiling for speech
   // at these rates; floor/cap keep it sane for very short/long replies.
-  const watchdog=setTimeout(finish, Math.min(20000, Math.max(4000, text.length*110)));
+  const watchdog=setTimeout(()=>finish("watchdog"), Math.min(20000, Math.max(4000, text.length*110)));
 
   window.speechSynthesis.speak(utt);
 }
@@ -887,7 +907,7 @@ let pinnedMicStream=null;
 async function getBuiltInMicStream(constraints){
   let unlockStream;
   try{ unlockStream=await navigator.mediaDevices.getUserMedia({audio:true}); }
-  catch(e){ throw e; }
+  catch(e){ dbg(`mic unlock failed: ${e.name||e}`); throw e; }
   let builtInId=null;
   try{
     const devices=await navigator.mediaDevices.enumerateDevices();
@@ -895,7 +915,8 @@ async function getBuiltInMicStream(constraints){
     const physical=audioInputs.filter(d=>d.label&&!BLUETOOTH_MIC_PATTERN.test(d.label)&&!VIRTUAL_ROUTE_PATTERN.test(d.label));
     const chosen=physical[0]||audioInputs.find(d=>d.label&&!BLUETOOTH_MIC_PATTERN.test(d.label))||null;
     if(chosen) builtInId=chosen.deviceId;
-  }catch(e){ /* fall back to OS default below */ }
+    dbg(`mic pin: ${chosen?chosen.label:"none found, using OS default"}`);
+  }catch(e){ dbg(`device enum failed: ${e.name||e}`); }
   finally{ unlockStream.getTracks().forEach(t=>t.stop()); }
 
   return navigator.mediaDevices.getUserMedia({
@@ -910,7 +931,7 @@ async function getBuiltInMicStream(constraints){
 async function ensurePinnedMic(){
   if(pinnedMicStream) return;
   try{ pinnedMicStream=await getBuiltInMicStream({}); }
-  catch(e){ /* permission denied or no mic — SpeechRecognition falls back to OS default */ }
+  catch(e){ dbg(`pin failed, falling back to OS default: ${e.name||e}`); }
 }
 function releasePinnedMic(){
   if(!pinnedMicStream) return;
@@ -926,8 +947,10 @@ let recognition=null;
 if(SpeechRec){
   recognition=new SpeechRec();
   recognition.continuous=false; recognition.interimResults=false; recognition.lang="en-AU";
-  recognition.onresult=(e)=>{ const t=e.results[0][0].transcript; stopListening(); askJames(t); };
+  recognition.onstart=()=>{ dbg("recognition: started"); };
+  recognition.onresult=(e)=>{ const t=e.results[0][0].transcript; dbg(`heard: "${t}"`); stopListening(); askJames(t); };
   recognition.onerror=(e)=>{
+    dbg(`recognition error: ${e.error}`);
     stopListening(); setVisualState("idle");
     // "no-speech" just means silence — normal in a car with gaps in
     // conversation. Keep the hands-free loop alive instead of bailing out.
@@ -935,7 +958,7 @@ if(SpeechRec){
       setTimeout(()=>{ if(handsFreeActive&&!isListening&&!isThinking&&!isSpeaking) startListening(); },800);
     }
   };
-  recognition.onend=()=>{ if(isListening) stopListening(); };
+  recognition.onend=()=>{ dbg("recognition: ended"); if(isListening) stopListening(); };
   pttBtn.addEventListener("touchstart",(e)=>{e.preventDefault();startListening();},{passive:false});
   pttBtn.addEventListener("touchend",(e)=>{e.preventDefault();stopListening();},{passive:false});
   pttBtn.addEventListener("mousedown",startListening);
@@ -950,7 +973,22 @@ function startListening(){
   pttBtn.classList.add("listening");
   clearInterval(vbSpeakInt);
   setVisualState("listening");
-  try{ recognition.start(); } catch(e){}
+  try{
+    recognition.start();
+  } catch(e){
+    // recognition.start() throws synchronously on some Android Chrome builds
+    // if called while a previous session hasn't fully wound down yet — no
+    // events fire in that case, so without this reset isListening stays
+    // stuck true forever and the whole app goes silently unresponsive
+    // (startListening's guard above then blocks every future attempt).
+    dbg(`start() threw: ${e.name||e} — resetting`);
+    isListening=false;
+    pttBtn.classList.remove("listening");
+    setVisualState("idle");
+    if(handsFreeActive&&sessionStarted){
+      setTimeout(()=>{ if(handsFreeActive&&!isListening&&!isThinking&&!isSpeaking) startListening(); },600);
+    }
+  }
 }
 
 function stopListening(){
