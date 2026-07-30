@@ -937,6 +937,7 @@ function releasePinnedMic(){
   if(!pinnedMicStream) return;
   pinnedMicStream.getTracks().forEach(t=>t.stop());
   pinnedMicStream=null;
+  dbg("mic pin released (freeing device for recognition)");
 }
 
 // ── PTT ──
@@ -977,6 +978,13 @@ function startListening(){
   pttBtn.classList.add("listening");
   clearInterval(vbSpeakInt);
   setVisualState("listening");
+  // Release our own held-open mic stream before recognition opens its own,
+  // independent capture of the same physical device. Two concurrent raw
+  // captures of one mic silently starve one of them on some Android
+  // builds — recognition reports "started" and "audio capture began" but
+  // never receives real samples, so it never hears anything at all despite
+  // no error being raised anywhere. Re-pinned again once listening stops.
+  releasePinnedMic();
   try{
     recognition.start();
   } catch(e){
@@ -989,6 +997,7 @@ function startListening(){
     isListening=false;
     pttBtn.classList.remove("listening");
     setVisualState("idle");
+    ensurePinnedMic();
     if(handsFreeActive&&sessionStarted){
       setTimeout(()=>{ if(handsFreeActive&&!isListening&&!isThinking&&!isSpeaking) startListening(); },600);
     }
@@ -1001,6 +1010,10 @@ function stopListening(){
   pttBtn.classList.remove("listening");
   try{ recognition.stop(); } catch(e){}
   if(!isThinking) setVisualState("idle");
+  // Recognition's own capture is done with the mic now — reclaim the pin
+  // so TTS output (and any gap before the next listen) stays biased away
+  // from a Bluetooth-connected car rather than drifting back to it.
+  if(sessionStarted) ensurePinnedMic();
 }
 </script>
 </body>
