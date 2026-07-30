@@ -948,6 +948,10 @@ if(SpeechRec){
   recognition=new SpeechRec();
   recognition.continuous=false; recognition.interimResults=false; recognition.lang="en-AU";
   recognition.onstart=()=>{ dbg("recognition: started"); };
+  recognition.onaudiostart=()=>{ dbg("  audio capture began"); };
+  recognition.onsoundstart=()=>{ dbg("  sound detected"); };
+  recognition.onspeechstart=()=>{ dbg("  classified as speech"); };
+  recognition.onspeechend=()=>{ dbg("  speech ended"); };
   recognition.onresult=(e)=>{ const t=e.results[0][0].transcript; dbg(`heard: "${t}"`); stopListening(); askJames(t); };
   recognition.onerror=(e)=>{
     dbg(`recognition error: ${e.error}`);
