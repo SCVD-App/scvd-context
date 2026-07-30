@@ -401,6 +401,7 @@
      few mic/recognition events so field issues can be read straight off
      the screen without needing chrome://inspect. -->
 <div id="dbgLog" style="position:fixed;top:0;left:0;right:0;z-index:999;font:10px/1.4 monospace;color:#C0392Bcc;background:#000000cc;padding:4px 8px;max-height:110px;overflow:hidden;pointer-events:none;white-space:pre-wrap;"></div>
+<button id="voiceTestBtn" style="position:fixed;bottom:14px;left:14px;z-index:999;font:11px monospace;color:#C0392B;background:#000000dd;border:1px solid #C0392B;border-radius:4px;padding:6px 10px;">TEST VOICES</button>
 
 <!-- KITT VOICEBOX -->
 <div class="voicebox-wrap" id="voicebox"></div>
@@ -820,12 +821,33 @@ function pickVoice(){
   return pool.find(v=>!/female/i.test(v.name)) || pool[0];
 }
 
+// One-off manual tester: reads each available English voice's own name
+// aloud in turn so the correct one can be identified by ear and hardcoded
+// — some Android/Chrome builds strip gender out of voice names entirely
+// (confirmed on this device: names are just region labels like "English
+// Australia", nothing the code can pattern-match against). Tap the
+// TEST VOICES button to run through all of them once.
+function testVoices(){
+  const voices=window.speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.startsWith("en"));
+  if(!voices.length){ dbg("no english voices to test"); return; }
+  let i=0;
+  const next=()=>{
+    if(i>=voices.length){ dbg("voice test: done"); return; }
+    const v=voices[i++];
+    dbg(`testing voice ${i}/${voices.length}: ${v.name}`);
+    speak(`This is the ${v.name} voice.`,v);
+    setTimeout(next,3500);
+  };
+  next();
+}
+document.getElementById("voiceTestBtn").addEventListener("click",testVoices);
+
 // ── SPEECH ──
-function speak(text){
+function speak(text,voiceOverride){
   if(!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const utt=new SpeechSynthesisUtterance(text);
-  const voice=pickVoice();
+  const voice=voiceOverride||pickVoice();
   if(voice) utt.voice=voice;
   dbg(`speak: voice="${voice?voice.name:"browser default"}"`);
   utt.rate=({hal:0.78,terminator:0.82,rocky:0.88}[activeVoice])||0.92;
