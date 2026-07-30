@@ -797,11 +797,17 @@ const MALE_VOICE_HINTS = [
   "Daniel", "Alex", "Fred", "Male",
 ];
 
+let voiceListLogged=false;
 function pickVoice(){
   const voices=window.speechSynthesis.getVoices();
   if(!voices.length) return null;
   const english = voices.filter(v=>v.lang && v.lang.startsWith("en"));
   const pool = english.length ? english : voices;
+
+  if(!voiceListLogged){
+    voiceListLogged=true;
+    dbg(`voices: ${pool.map(v=>v.name).join(" | ")}`);
+  }
 
   for(const hint of MALE_VOICE_HINTS){
     const match = pool.find(v=>v.name.includes(hint));
@@ -1010,10 +1016,20 @@ function stopListening(){
   pttBtn.classList.remove("listening");
   try{ recognition.stop(); } catch(e){}
   if(!isThinking) setVisualState("idle");
-  // Recognition's own capture is done with the mic now — reclaim the pin
-  // so TTS output (and any gap before the next listen) stays biased away
-  // from a Bluetooth-connected car rather than drifting back to it.
-  if(sessionStarted) ensurePinnedMic();
+  // Deliberately NOT re-pinning the mic here. Re-acquiring immediately
+  // after listening stops was tried and confirmed (via real device
+  // testing, no Bluetooth connected) to keep a live getUserMedia capture
+  // open through the following speak() call — Android/Chrome appears to
+  // categorise the whole tab's audio session as "communication" (voice
+  // call) rather than media whenever a mic capture is active, regardless
+  // of device, which forces TTS playback through a narrowband call-quality
+  // channel — confirmed by the phone/call icon on Android's own volume
+  // overlay during playback, and audibly as "breaking up". The one-time
+  // pin at hands-free session start is left in place to bias Android's
+  // device selection early on; this needs a real Bluetooth-connected car
+  // test (not yet done) to confirm that's still sufficient protection
+  // against the original Mic-Drop-style Bluetooth-mic routing problem
+  // without holding the stream open continuously.
 }
 </script>
 </body>
