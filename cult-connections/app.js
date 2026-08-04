@@ -428,6 +428,30 @@ const FALLBACK_BANKS = {
       {label:"GOLF LEGENDS",pool:["TIGER WOODS","JACK NICKLAUS","ARNOLD PALMER","RORY MCILROY","GARY PLAYER","SEVE BALLESTEROS"]},
       {label:"GRAND SLAM TOURNAMENTS",items:["WIMBLEDON","US OPEN","FRENCH OPEN","AUSTRALIAN OPEN"]},
     ]},
+    {themeLabel:"MACHINES OF THE FUTURE",categories:[
+      {label:"ICONIC ROBOTS & DROIDS",pool:["C-3PO","R2-D2","THE CYLONS","COMMANDER DATA","WALL-E","BENDER"]},
+      {label:"FAMOUS CYBORGS",pool:["ROBOCOP","DARTH VADER","THE BORG","COLONEL STEVE AUSTIN","THE TERMINATOR","GENERAL GRIEVOUS"]},
+      {label:"FAMOUS FICTIONAL AI SYSTEMS",pool:["HAL 9000","SKYNET","JARVIS","GLADOS","ULTRON","MOTHER"]},
+      {label:"ICONIC SPACESHIPS",pool:["MILLENNIUM FALCON","USS ENTERPRISE","SERENITY","NOSTROMO","TARDIS","BATTLESTAR GALACTICA"]},
+    ]},
+    {themeLabel:"PULP ADVENTURE",categories:[
+      {label:"INDIANA JONES — LEGENDARY ARTIFACTS",pool:["ARK OF THE COVENANT","SANKARA STONES","HOLY GRAIL","CRYSTAL SKULL","DIAL OF DESTINY"]},
+      {label:"PULP ADVENTURE HEROES",pool:["INDIANA JONES","LARA CROFT","NATHAN DRAKE","ALLAN QUATERMAIN","RICK O'CONNELL"]},
+      {label:"TREASURE HUNT FRANCHISES",pool:["NATIONAL TREASURE","THE MUMMY","TOMB RAIDER","UNCHARTED","ROMANCING THE STONE","THE GOONIES"]},
+      {label:"ICONIC PULP VILLAINS",pool:["RENÉ BELLOQ","MOLA RAM","IMHOTEP","IAN HOWE","WALTER DONOVAN","IRINA SPALKO"]},
+    ]},
+    {themeLabel:"SCI-FI ARSENAL & ARCHIVES",categories:[
+      {label:"ICONIC SCI-FI VILLAINS",pool:["AGENT SMITH","KHAN NOONIEN SINGH","MEGATRON","THANOS","DARTH MAUL","THE BORG QUEEN"]},
+      {label:"FAMOUS TIME MACHINES",pool:["THE TIME MACHINE","WABAC MACHINE","HOT TUB","PHONE BOOTH","THE TIME TUNNEL"]},
+      {label:"ALIEN SPECIES",pool:["KLINGONS","WOOKIEES","DALEKS","XENOMORPHS","VULCANS","PREDATORS","KRYPTONIANS","ASGARDIANS"]},
+      {label:"SCI-FI WEAPONS & GADGETS",pool:["LIGHTSABER","PHASER","SONIC SCREWDRIVER","PROTON PACK","PULSE RIFLE","ZAT GUN","MJOLNIR","STORMBREAKER","PHOTON TORPEDOES"]},
+    ]},
+    {themeLabel:"FABLED GODS",categories:[
+      {label:"GREEK GODS",pool:["ZEUS","POSEIDON","HADES","ATHENA","APOLLO","ARES","HERA","APHRODITE"]},
+      {label:"NORSE GODS",pool:["THOR","ODIN","LOKI","FREYA","BALDUR","HEIMDALL","TYR"]},
+      {label:"EGYPTIAN GODS",pool:["RA","ANUBIS","OSIRIS","ISIS","HORUS","SET"]},
+      {label:"LEGENDARY DEMIGODS & HEROES",pool:["HERCULES","ACHILLES","PERSEUS","BEOWULF","GILGAMESH","THESEUS"]},
+    ]},
   ],
   kids:[
     {themeLabel:"MAGIC & MUNDANE",categories:[
@@ -558,18 +582,22 @@ function getShuffleBag(player, bankLength){
   try{
     const raw = localStorage.getItem(`cc_bag_${player}`);
     if(raw){
-      const bag = JSON.parse(raw);
-      // bag becomes invalid if the bank size changed (new content added) — reshuffle fresh
-      if(Array.isArray(bag) && bag.length > 0 && Math.max(...bag) < bankLength){
-        return bag;
+      const stored = JSON.parse(raw);
+      // Bag is only valid if it was built for the CURRENT bank size —
+      // an exact match, not just "still in range". This matters when
+      // content is added mid-flight: old indices are still technically
+      // in-range for a bigger bank, but the bag wouldn't include the
+      // new puzzles until it happened to exhaust naturally.
+      if(stored && Array.isArray(stored.bag) && stored.bankLength === bankLength && stored.bag.length > 0){
+        return stored.bag;
       }
     }
   }catch(e){}
   return shuffleArray([...Array(bankLength).keys()]);
 }
 
-function saveShuffleBag(player, bag){
-  try{ localStorage.setItem(`cc_bag_${player}`, JSON.stringify(bag)); }
+function saveShuffleBag(player, bag, bankLength){
+  try{ localStorage.setItem(`cc_bag_${player}`, JSON.stringify({ bankLength, bag })); }
   catch(e){}
 }
 
@@ -581,7 +609,7 @@ function getFallback(){
   if(bag.length === 0){
     bag = shuffleArray([...Array(bank.length).keys()]);
   }
-  saveShuffleBag(player, bag);
+  saveShuffleBag(player, bag, bank.length);
   return bank[idx];
 }
 
