@@ -1711,7 +1711,7 @@ function NmmOnlineGameView({ t, isPro, freemium, onGameCompleted, onUnlock, unlo
   useEffect(() => {
     if (phase !== "invitePending" && phase !== "active") return;
     if (!myRecord?.gameId) return;
-    const timer = setInterval(async () => {
+    const poll = async () => {
       try {
         const state = await onlineApiGet(`/games/${myRecord.gameId}/state`);
         setGame(state);
@@ -1721,8 +1721,14 @@ function NmmOnlineGameView({ t, isPro, freemium, onGameCompleted, onUnlock, unlo
           onGameCompleted(GAME_KEY, "online");
         }
       } catch (e) { /* transient hiccup, try again next tick */ }
-    }, 5000);
-    return () => clearInterval(timer);
+    };
+    const timer = setInterval(poll, 5000);
+    // Same fix as Hnefatafl (17 Aug 2026): a backgrounded tab throttles or
+    // suspends setInterval, so re-poll immediately when the tab regains
+    // focus instead of leaving the player stuck until a manual refresh.
+    const onVisible = () => { if (!document.hidden) poll(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, [phase, myRecord]);
 
   async function createInvite() {
@@ -1796,11 +1802,11 @@ function NmmOnlineGameView({ t, isPro, freemium, onGameCompleted, onUnlock, unlo
   const myHand = game ? (mySide === "you" ? game.youHand : game.cpuHand) : 0;
   const canPlaceNow = variant.laskerHybrid ? myHand > 0 : (inPlacementPhase && myHand > 0);
   const canMoveNow = variant.laskerHybrid || !inPlacementPhase;
-  const myOnBoard = game ? game.points.filter((p) => p === mySide).length : 0;
+  const myOnBoard = game && Array.isArray(game.points) ? game.points.filter((p) => p === mySide).length : 0;
   const myFlying = variant.flyingEnabled && !inPlacementPhase && myOnBoard === 3;
 
   const legalDestSet = useMemo(() => {
-    if (!game || selected === null || !myTurn) return new Set();
+    if (!game || !Array.isArray(game.points) || selected === null || !myTurn) return new Set();
     return new Set(legalDestinations(game.points, selected, myFlying));
   }, [game, selected, myTurn, myFlying]);
 
@@ -1934,6 +1940,22 @@ function NmmOnlineGameView({ t, isPro, freemium, onGameCompleted, onUnlock, unlo
   }
 
   if (!game) return <div style={{ ...wrap, color: t.muted, fontSize: 13, padding: 30 }}>Loading…</div>;
+
+  // Real incident, fixed 17 Aug 2026: a `game` object missing `points`
+  // (e.g. loaded from a stale/incompatible saved record) reached this far
+  // and crashed the whole page on `game.points.filter(...)` below — no
+  // error message, just a blank render. This guard turns that into a
+  // recoverable message instead of a hard crash.
+  if (!Array.isArray(game.points)) {
+    return (
+      <div style={{ ...wrap, color: t.muted, fontSize: 13, padding: 30, textAlign: "center" }}>
+        Something went wrong loading this game — it may be from an old or stale link.
+        <div style={{ marginTop: 12 }}>
+          <button onClick={leaveGame} style={{ ...btnStyle(t, false), fontSize: 13 }}>Start Over</button>
+        </div>
+      </div>
+    );
+  }
 
   const CELL = 26, PAD = 24, BOARD_PX = 6 * CELL + PAD * 2;
 
