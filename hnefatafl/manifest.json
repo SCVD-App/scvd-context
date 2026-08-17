@@ -1,0 +1,13 @@
+{
+  "name": "Hnefatafl",
+  "short_name": "Hnefatafl",
+  "description": "Viking siege game \u2014 one board, two players, or challenge the AI",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#082a1f",
+  "theme_color": "#10181c"
+}

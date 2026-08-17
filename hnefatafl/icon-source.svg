@@ -1,0 +1,54 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#2a9d76"/>
+      <stop offset="55%" stop-color="#166b4e"/>
+      <stop offset="100%" stop-color="#082a1f"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe9b0"/>
+      <stop offset="100%" stop-color="#c9962f"/>
+    </linearGradient>
+    <linearGradient id="goldBlade" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fff6dd"/>
+      <stop offset="100%" stop-color="#e8c468"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Shield -->
+  <path d="M 350 250
+           Q 350 216 384 216
+           L 640 216
+           Q 674 216 674 250
+           L 674 500
+           Q 674 660 512 792
+           Q 350 660 350 500
+           Z"
+        fill="url(#gold)" stroke="#5c4310" stroke-width="10"/>
+  <!-- Shield inner highlight line -->
+  <path d="M 388 256
+           L 636 256
+           L 636 498
+           Q 636 630 512 738
+           Q 388 630 388 498
+           Z"
+        fill="none" stroke="#fff6dd" stroke-width="4" opacity="0.35"/>
+
+  <!-- Sword blade -->
+  <path d="M 512 118 L 540 300 L 540 580 L 484 580 L 484 300 Z"
+        fill="url(#goldBlade)" stroke="#5c4310" stroke-width="8"/>
+  <!-- Blade centre ridge -->
+  <line x1="512" y1="160" x2="512" y2="570" stroke="#c9962f" stroke-width="4" opacity="0.5"/>
+
+  <!-- Crossguard -->
+  <rect x="424" y="580" width="176" height="36" rx="16" fill="url(#gold)" stroke="#5c4310" stroke-width="8"/>
+
+  <!-- Grip -->
+  <rect x="492" y="616" width="40" height="118" rx="14" fill="#8a6d1a" stroke="#5c4310" stroke-width="6"/>
+
+  <!-- Pommel -->
+  <circle cx="512" cy="758" r="30" fill="url(#gold)" stroke="#5c4310" stroke-width="8"/>
+</svg>

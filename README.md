@@ -2,7 +2,7 @@
 
 **Owner:** SCVD-App (Scott Emblen)  
 **Purpose:** Persistent project context accessible by Claude across all chat sessions  
-**Last Updated:** 26 June 2026 — Session 9
+**Last Updated:** 16 August 2026 — Ancient Games series folders added (Jumpin' Pin, Two Ancient Classics, Hnefatafl)
 
 ---
 
@@ -25,6 +25,13 @@ Claude will fetch the raw file directly from GitHub — no pasting, no uploading
 | Chasin' Curves Handoff | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/chasin-curves/handoff.md` |
 | CITT/Maverick Handoff | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/citt-maverick/handoff.md` |
 | TGM Handoff | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/tgm/handoff.md` |
+| Ancient Games Series Roadmap | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/ancient-games/roadmap.md` |
+| Jumpin' Pin Handoff | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/jumpin-pin/handoff.md` |
+| Jumpin' Pin index.html | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/jumpin-pin/index.html` |
+| Two Ancient Classics Handoff | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/two-ancient-classics/handoff.md` |
+| Two Ancient Classics index.html | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/two-ancient-classics/index.html` |
+| Hnefatafl Handoff | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/hnefatafl/handoff.md` |
+| Hnefatafl index.html | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/hnefatafl/index.html` |
 
 ---
 
@@ -96,10 +103,32 @@ scvd-context/
 ├── volta-makashi/
 │   ├── handoff.md
 │   └── archive/
-└── nagging-reminder/
+├── nagging-reminder/
+│   ├── handoff.md
+│   └── archive/
+├── ancient-games/
+│   └── roadmap.md           ← series-wide numbering + Pachisi/Patolli/Go research, not tied to one game
+├── jumpin-pin/               ← Ancient Games 01
+│   ├── handoff.md
+│   ├── index.html
+│   ├── manifest.json
+│   ├── icon-192.png / icon-512.png
+│   └── archive/
+├── two-ancient-classics/     ← Ancient Games 02 (Royal Game of Ur) + 03 (Nine Men's Morris)
+│   ├── handoff.md
+│   ├── index.html
+│   ├── manifest.json
+│   ├── favicon.ico, icon-180/192/512.png, icon-source.svg
+│   └── archive/
+└── hnefatafl/                ← Ancient Games 04
     ├── handoff.md
+    ├── index.html
+    ├── manifest.json
+    ├── favicon.ico, icon-180/192/512.png, icon-source.svg
     └── archive/
 ```
+
+**Note on the three Ancient Games folders above:** `index.html`/`manifest.json`/icons were pulled directly from each app's live GitHub Pages repo. None of the three has a `worker.js` here yet — none of the Stripe workers (if built) live in the public Pages repos, so they couldn't be cloned automatically; paste them in manually from the Cloudflare dashboard if they exist. `jumpin-pin/handoff.md` and `two-ancient-classics/handoff.md` are placeholder "baseline capture" docs, not real session handoffs — no such document has ever been written for either app. Only `hnefatafl/handoff.md` is a genuine session handoff.
 
 ---
 

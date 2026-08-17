@@ -1,7 +1,9 @@
-# SCVD Apps — 12-Project Master Timeline
+# SCVD Apps — Master Timeline
 
-**Last Updated:** 26 June 2026 — Session 9  
+**Last Updated:** 16 August 2026  
 **Updated by:** Scott Emblen + Claude
+
+**This update:** Retired Safe Bet (no commercial angle, not Scott's world). Added the Ancient Games series as its own project line — three apps, four games, shipped in the time it used to take to get one concept to beta. Reprioritised: Chasin' Curves is next, then GottaGo.
 
 ---
 
@@ -9,18 +11,22 @@
 
 | # | App | Status | Priority | Target |
 |---|-----|--------|----------|--------|
-| 1 | 🎤 Mic Drop | SOFT LAUNCH | 🔴 P1 | Tonight 26 Jun 2026 |
-| 2 | 🚗 Chasin' Curves | BETA | 🔴 P1 | Public Q3 2026 |
-| 3 | 🔧 TGM (Tame Grease Monkey) | IN DEV | 🔴 P1 | Q3 2026 (with Chasin' Curves) |
-| 4 | 🚘 CITT / Maverick (James Claude) | IN DEV | 🟠 P2 | Q3 2026 |
-| 5 | 📺 Cult Connections | CONCEPT | 🟠 P2 | Q3-Q4 2026 |
-| 6 | 🎰 Lottery Winner | CONCEPT | 🟠 P2 | Q4 2026 |
-| 7 | 🧠 Great Minds | CONCEPT | 🟠 P2 | Q4 2026 |
-| 8 | 📊 Safe Bet | CONCEPT | 🟡 P3 | Q4 2026 |
-| 9 | 💬 Vent App | CONCEPT | 🟡 P3 | Q1 2027 |
-| 10 | 🗺️ GottaGo | CONCEPT | 🟡 P3 | Q1 2027 |
-| 11 | ⚔️ Volta Makashi | CONCEPT | 🟡 P3 | Q2 2027 |
+| 1 | 🚗 Chasin' Curves | BETA | 🔴 P1 — **NEXT UP** | TBD |
+| 2 | 🗺️ GottaGo | CONCEPT | 🔴 P1 — **queued after Chasin' Curves** | TBD |
+| 3 | 🔧 TGM (Tame Grease Monkey) | IN DEV | 🔴 P1 | Travels with Chasin' Curves |
+| 4 | 🎤 Mic Drop | LIVE | 🟠 P2 | Live — chasing P1 audio bugs |
+| 5 | 🚘 CITT / Maverick (James Claude) | IN DEV | 🟠 P2 | TBD |
+| 6 | 🏛️ Ancient Games Series | LIVE — 3 apps, 4 games shipped | 🟠 P2 | 05–07 planned, no date set |
+| 7 | 📺 Cult Connections | LIVE | 🟠 P2 | Live, active bug list |
+| 8 | 🎰 Lottery Winner (Easy Come Easy Go) | LIVE | 🟠 P2 | Live |
+| 9 | 🧠 Great Minds | CONCEPT | 🟡 P3 | TBD |
+| 10 | 💬 Vent App | CONCEPT | 🟡 P3 | TBD |
+| 11 | ⚔️ Volta Makashi | CONCEPT | 🟡 P3 | TBD |
 | 12 | 📅 Nagging Reminder | CONCEPT | 🟡 P3 | TBD |
+
+**Retired:** 📊 Safe Bet — see [Retired Projects](#retired-projects) below.
+
+> Statuses for #4, #6, #7, #8 above are pulled from what's actually live on scvd.app and each folder's own handoff — they were still marked CONCEPT/SOFT LAUNCH in the previous version of this file, which had drifted well behind reality. Great Minds / Vent App / Volta Makashi / Nagging Reminder statuses were checked against their handoff stubs on 16 Aug 2026 and are still genuinely CONCEPT — no drift there.
 
 ---
 
@@ -28,34 +34,30 @@
 
 | Period | Milestone |
 |--------|-----------|
-| Tonight — 26 Jun 2026 | 🎤 Mic Drop soft launch — Stripe live, scvd.app email |
-| Q3 2026 | 🚗 Chasin' Curves + TGM public \| 🚘 CITT/Maverick Phase 1 |
-| Q3–Q4 2026 | 📺 Cult Connections \| 🎰 Lottery Winner \| 🧠 Great Minds |
-| When 4+ apps live | 🌾 Field of Dreams app directory launch |
-| Q4 2026 | 📊 Safe Bet + additional portfolio apps |
-| Q1 2027 | 💬 Vent App \| 🗺️ GottaGo |
-| Q2 2027+ | ⚔️ Volta Makashi \| 📅 Nagging Reminder |
+| Next up | 🚗 Chasin' Curves — resume active development |
+| Then | 🗺️ GottaGo |
+| Ongoing | 🔧 TGM continues alongside Chasin' Curves |
+| Live already | 🎤 Mic Drop · 🏛️ Ancient Games Series (Jumpin' Pin, Two Ancient Classics, Hnefatafl) · 📺 Cult Connections · 🎰 Lottery Winner (ECEG) |
+| No committed date | 🚘 CITT/Maverick · Ancient Games 05–07 (Pachisi, Patolli, Go) · 🧠 Great Minds · 💬 Vent App · ⚔️ Volta Makashi · 📅 Nagging Reminder |
+| Trigger condition met | 🌾 Field of Dreams app directory — see note under Field of Dreams below |
 
 ---
 
 ## Project Details
 
-### 1. 🎤 Mic Drop
-- **Status:** SOFT LAUNCH — tonight
-- **URL:** https://scvd-app.github.io/Mic-Drop/
-- **Invite URL:** https://scvd-app.github.io/Mic-Drop/invite.html
-- **Version:** v1.8
-- **Stack:** Vanilla React (single-file), Cloudflare Workers, AudD, Anthropic API (Haiku), Stripe, GitHub Pages
-- **Open Actions:** Stripe live keys, scvd.app email, narrowband gate fix, George Samsung bug
-- **Context file:** `mic-drop/handoff.md`
-
-### 2. 🚗 Chasin' Curves
-- **Status:** BETA
+### 1. 🚗 Chasin' Curves
+- **Status:** BETA — **next project up**
 - **URL:** https://scvd-app.github.io/Chasin-Curves/ *(confirm URL)*
 - **Stack:** Vanilla React, Cloudflare Worker backend, GitHub Pages, Mapbox planned
 - **Open Actions:** Multi-user account isolation, community roads feature, zoomable map
 - **Beta tester:** Shane "Skeeny"
 - **Context file:** `chasin-curves/handoff.md`
+
+### 2. 🗺️ GottaGo
+- **Status:** CONCEPT — **queued right after Chasin' Curves**
+- **Pitch:** Accessible facilities map. Camps Australia partnership strategy. Sequenced after app store presence.
+- **Open Actions:** Pursue Camps Australia partnership conversation
+- **Context file:** `gottago/handoff.md`
 
 ### 3. 🔧 TGM (Tame Grease Monkey)
 - **Status:** IN DEV — embedded within Chasin' Curves
@@ -65,7 +67,14 @@
 - **Open Actions:** Build Guide #002, implement Workshop Mode (hands-free, voice-interactive, safety photo gate)
 - **Context file:** `tgm/handoff.md`
 
-### 4. 🚘 CITT / Maverick (James Claude)
+### 4. 🎤 Mic Drop
+- **Status:** LIVE — real Stripe payments confirmed
+- **URL:** https://scvd-app.github.io/Mic-Drop/
+- **Invite URL:** https://scvd-app.github.io/Mic-Drop/invite.html
+- **Open Actions:** iOS mimeType bug, PWA home-screen silence, mic-loss distortion (see handoff for full P1/P2/P3 list)
+- **Context file:** `mic-drop/handoff.md`
+
+### 5. 🚘 CITT / Maverick (James Claude)
 - **Status:** IN DEV
 - **Stack:** Standalone HTML, citt-proxy Cloudflare Worker
 - **Voices:** 11 characters — James Claude, HAL 9000, KITT, Terminator, RoboCop, Hans Gruber, Dr House, Bond, Goldblum, Nicholson, Arnie/Rocky
@@ -74,43 +83,37 @@
 - **Open Actions:** Resolve voice fallback issue (Chrome DevTools console check)
 - **Context file:** `citt-maverick/handoff.md`
 
-### 5. 📺 Cult Connections
-- **Status:** CONCEPT
+### 6. 🏛️ Ancient Games Series
+- **Status:** LIVE — three apps, four games shipped: Jumpin' Pin (01), Royal Game of Ur + Nine Men's Morris bundled as Two Ancient Classics (02 + 03), Hnefatafl (04). Three more numbered and researched, not yet built: Pachisi (05), Patolli (06), Go/Weiqi (07).
+- **Pace note, worth keeping on record:** the whole series started from a single idea — the initial spark for Ancient Games struck only **10 days** before the third app (Hnefatafl) went live with a full AI opponent, Challenge mode, and real Stripe monetisation, on top of the two apps that shipped before it in that same window. That's a genuine step up in team velocity, not a one-off lucky session.
+- **Why it's moving this fast — shared design system:** all four titles share the same Ancient Games visual language (the Sandbar Gold / Deep Channel / Chasin' Curves Pro tones, the `IntroCrawl` component, the freemium-quota pattern, the Stripe Worker pattern) built once and reused rather than rebuilt per game. Each new title in the series is now closer to "reskin + new ruleset" than "build from scratch," which is the real reason the pace has held — worth treating as the template for how future SCVD series should be built, not just an Ancient Games-specific trick.
+- **Quality trend:** each entry in the series has shipped with more polish than the last (Jumpin' Pin's Pro tones → ported into Hnefatafl's board and share-card visual identity, share-card fallback logic, runic border typography, king-freedom AI eval) — capability and craft have both been climbing together, not just output volume.
+- **Open items:** Ur's AI approach (dice-aware search vs. plain minimax) needs deciding; Ancient Games 05–07 (Pachisi, Patolli, Go) are researched and numbered but not yet built — Go in particular is flagged as its own standalone research spike given the AI difficulty (see roadmap).
+- **Context files:** `ancient-games/roadmap.md` (series-wide numbering + 05–07 research), `jumpin-pin/handoff.md`, `two-ancient-classics/handoff.md`, `hnefatafl/handoff.md`
+
+### 7. 📺 Cult Connections
+- **Status:** LIVE — playable, monetisation tiers named (Square Eyes / Couch Potato / Pop Culture Vulture)
 - **Pitch:** Pop culture trivia PWA. Kath & Kim anchor demographic. Est. ~100k verbatim-quoters in Australian market. Strong local angle.
-- **Open Actions:** Scope and begin build
+- **Open Actions:** Puzzle-repetition bug (see handoff — shuffle function naming collision, fix identified not yet confirmed live), build the Cloudflare Worker + Stripe Price IDs for the three tiers
 - **Context file:** `cult-connections/handoff.md`
 
-### 6. 🎰 Lottery Winner
-- **Status:** CONCEPT
-- **Pitch:** Windfall management game. Dopamine-inducing plot twist mechanic needed.
-- **Open Actions:** Develop plot twist mechanic, define core game loop
-- **Context file:** `lottery-winner/handoff.md`
+### 8. 🎰 Lottery Winner (Easy Come Easy Go / ECEG)
+- **Status:** LIVE
+- **Pitch:** Windfall life-simulator — land the big win, then invest it, blow it, or lose it.
+- **Context file:** `lottery-winner/eceg-handoff.md`
 
-### 7. 🧠 Great Minds
+### 9. 🧠 Great Minds
 - **Status:** CONCEPT
 - **Pitch:** Family Feud-style PWA. Pending survey data.
 - **Open Actions:** Gather survey data, first-to-market priority
 - **Context file:** `great-minds/handoff.md`
 
-### 8. 📊 Safe Bet
-- **Status:** CONCEPT (prototype built)
-- **Pitch:** Odds divergence scanner. Information-only. Black/gold aesthetic. Paste-in JSON workflow built.
-- **Stack:** React, The Odds API, CORS workaround via paste-in JSON
-- **Open Actions:** Formalise build from prototype
-- **Context file:** `safe-bet/handoff.md`
-
-### 9. 💬 Vent App
+### 10. 💬 Vent App
 - **Status:** CONCEPT
 - **Pitch:** AI emotional reframing. Validate-first model. Neurodivergent utility angle.
 - **Stack:** TBD — Anthropic API for reframing
 - **Open Actions:** Define validate-first UX, begin build
 - **Context file:** `vent-app/handoff.md`
-
-### 10. 🗺️ GottaGo
-- **Status:** CONCEPT
-- **Pitch:** Accessible facilities map. Camps Australia partnership strategy. Sequenced after app store presence.
-- **Open Actions:** Pursue Camps Australia partnership conversation
-- **Context file:** `gottago/handoff.md`
 
 ### 11. ⚔️ Volta Makashi
 - **Status:** CONCEPT — universe locked
@@ -129,10 +132,19 @@
 
 ---
 
+## Retired Projects
+
+### 📊 Safe Bet — retired 16 August 2026
+- **Was:** Odds divergence scanner / arbitrage betting tool. Information-only, black/gold aesthetic, React + The Odds API, paste-in JSON workaround for CORS. Prototype only — per its own handoff, no build was ever started beyond the prototype.
+- **Why retired:** Scott's call — no clear commercial application for it, and it's not an area he has personal interest in ("not a betting man"). Not a technical failure, just doesn't belong in the portfolio going forward.
+- **Disposition:** Not being actively deleted from GitHub — `safe-bet/handoff.md` stays as historical record — but it's off the roadmap and shouldn't be picked up again without a deliberate decision to revisit.
+
+---
+
 ## Field of Dreams — App Directory
 - **Concept:** SCVD-hosted alternative to app stores. Clean destination, no algorithm gatekeeping.
 - **Trigger condition:** Minimum 4 apps live, ideally 8 (two full rows of content)
-- **Status:** Backburnered — revisit when Mic Drop + Chasin' Curves + 2 more are live
+- **Status:** **Trigger condition already met.** Live count as of 16 Aug 2026: Mic Drop, Jumpin' Pin, Two Ancient Classics, Hnefatafl, Cult Connections, Lottery Winner (ECEG) — six apps, likely more once Chasin' Curves reaches full launch. Still not scheduled — Scott's stated priority right now is Chasin' Curves then GottaGo — but worth a deliberate decision on when to revisit rather than leaving it as "backburnered until 4 apps live" when that bar has already been cleared.
 
 ---
 

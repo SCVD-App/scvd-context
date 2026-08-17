@@ -47,7 +47,7 @@
 | AudD | Mic Drop | Song identification. Studio recordings only — live versions unreliable |
 | Anthropic API (Haiku) | Mic Drop /coaching route | AI vocal coaching feedback |
 | Resend | Mic Drop | Token email delivery via noreply@scvd.app |
-| The Odds API | Safe Bet | Paste-in JSON workaround for CORS |
+| The Odds API | ~~Safe Bet~~ | Safe Bet retired 16 Aug 2026 (see `timeline.md`) — this integration was never built past prototype, no longer needed |
 | Mapbox / Google Maps | Chasin' Curves | Planned — replacing state filter |
 
 ---
