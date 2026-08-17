@@ -1,0 +1,2744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Two Ancient Classics</title>
+<meta name="theme-color" content="#10181c"/>
+<link rel="icon" href="favicon.ico" sizes="any"/>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"/>
+<link rel="apple-touch-icon" href="icon-180.png"/>
+<link rel="manifest" href="manifest.json"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: #10181c; min-height: 100vh; overflow-x: hidden; }
+body { display: flex; justify-content: center; }
+#root { width: 100%; max-width: 600px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useCallback, useEffect, useRef } = React;
+
+// ---------- Theme (shared across both games in this bundle — union of both
+// prototypes' theme keys: holeShadow (Ur's board square inset) and
+// lineColor (Nine Men's Morris's connecting lines) both live in every
+// theme now, since either game may need either key depending on which is
+// mounted) ----------
+const THEMES = {
+  light: {
+    name: "Light",
+    bg: "#f2ecd9", panel: "#e9e0c8", panelBorder: "#cdbf9c",
+    holeEmpty: "#c8b78e", holeShadow: "inset 0 2px 4px rgba(60,45,15,0.45)", lineColor: "#a89572",
+    pegFrom: "#f4dd96", pegTo: "#8a6d1a",
+    accent: "#1f9a78", accentSoft: "#d8ead4",
+    text: "#2a2416", muted: "#7a6f57",
+  },
+  dark: {
+    name: "Dark",
+    bg: "#10181c", panel: "#1b262b", panelBorder: "#2c3a40",
+    holeEmpty: "#081012", holeShadow: "inset 0 2px 4px rgba(0,0,0,0.7)", lineColor: "#2c3a40",
+    pegFrom: "#e8c468", pegTo: "#8a6d1a",
+    accent: "#35d0a0", accentSoft: "#123028",
+    text: "#ece7da", muted: "#8b9a97",
+  },
+  // Pro tones — same names and exact colour values as Hnefatafl/Jumpin'
+  // Pin, for a consistent feel across the whole Ancient Games series.
+  // holeShadow/lineColor have no Hnefatafl equivalent (that board has no
+  // shared-line geometry, and its shadow field is named `restricted`) —
+  // derived here the same way Hnefatafl derived its own extra field:
+  // lineColor matches each tone's own panelBorder (exactly how the Dark
+  // theme above already relates the two), holeShadow stays a uniform dark
+  // inset since it's a depth cue, not a hero colour that needs to shift
+  // per tone.
+  sandbar: {
+    tier: "pro",
+    name: "Sandbar Gold",
+    bg: "#241a10", panel: "#3a2a17", panelBorder: "#5c4322",
+    holeEmpty: "#160f08", holeShadow: "inset 0 2px 4px rgba(0,0,0,0.6)", lineColor: "#5c4322",
+    pegFrom: "#ffd98a", pegTo: "#c17a1f",
+    accent: "#ff9d4d", accentSoft: "#4a2f14",
+    text: "#fbe9d0", muted: "#c2a37c",
+    swatch: "linear-gradient(135deg,#ffd98a,#c17a1f)",
+  },
+  channel: {
+    tier: "pro",
+    name: "Deep Channel",
+    bg: "#0a1020", panel: "#131c33", panelBorder: "#243256",
+    holeEmpty: "#05070f", holeShadow: "inset 0 2px 4px rgba(0,0,0,0.6)", lineColor: "#243256",
+    pegFrom: "#9fd8ff", pegTo: "#2f6fa8",
+    accent: "#5fd0ff", accentSoft: "#122844",
+    text: "#e4edff", muted: "#7f8db3",
+    swatch: "linear-gradient(135deg,#9fd8ff,#2f6fa8)",
+  },
+  curves: {
+    tier: "pro",
+    name: "Chasin' Curves",
+    bg: "#0f1216", panel: "#1a1e24", panelBorder: "#c9a24a55",
+    holeEmpty: "#0a0c0f", holeShadow: "inset 0 2px 4px rgba(0,0,0,0.6)", lineColor: "#c9a24a55",
+    pegFrom: "#e6cf9a", pegTo: "#8f1d1d",
+    accent: "#c9a24a", accentSoft: "#2a1414",
+    text: "#f2e9d8", muted: "#a89a7c",
+    swatch: "linear-gradient(135deg,#e6cf9a,#8f1d1d)",
+  },
+};
+const CPU_FROM = "#7fe8c9";
+const CPU_TO = "#1c7a5e";
+
+function pillStyle(t, active) {
+  return {
+    display: "flex", alignItems: "center", gap: 5, padding: "6px 12px",
+    borderRadius: 999, border: active ? `1px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+    background: active ? t.accentSoft : t.panel, color: active ? t.accent : t.muted,
+    fontSize: 12, fontWeight: 700, cursor: "pointer",
+  };
+}
+function btnStyle(t, disabled, active) {
+  return {
+    display: "flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 10,
+    border: active ? `1px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+    background: active ? t.accentSoft : t.panel,
+    color: disabled ? t.muted : active ? t.accent : t.text,
+    fontSize: 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.5 : 1,
+  };
+}
+
+// ---------- Bundle-wide freemium + Pro ----------
+// One Pro purchase ($2, "two games for the price of one") unlocks BOTH
+// games — matches the pricing call already made. Quota shape is a direct
+// copy of Hnefatafl's own pattern: 3 free games per (game × mode) per day,
+// device-local midnight reset, only a GENUINE completed game counts
+// (starting then abandoning/resetting never burns a slot). This lives at
+// the shell level, not inside either game component, since both the quota
+// and the Pro flag are bundle-wide, not per-game.
+const FREE_GAMES_PER_MODE_PER_DAY = 3;
+const FREEMIUM_KEY = "ancient_games_bundle_freemium_v1";
+const PRO_KEY = "ancient_games_bundle_pro_v1";
+
+function todayLocalKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+function freemiumSlotKey(gameKey, mode) { return `${gameKey}:${mode}`; }
+
+function loadFreemiumState() {
+  const today = todayLocalKey();
+  try {
+    const raw = localStorage.getItem(FREEMIUM_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || parsed.date !== today) return { date: today, counts: {} };
+    return { date: today, counts: parsed.counts || {} };
+  } catch (e) {
+    return { date: today, counts: {} };
+  }
+}
+function writeFreemiumState(state) {
+  try { localStorage.setItem(FREEMIUM_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+}
+function isQuotaExhausted(freemium, gameKey, mode) {
+  const count = freemium.counts[freemiumSlotKey(gameKey, mode)] || 0;
+  return count >= FREE_GAMES_PER_MODE_PER_DAY;
+}
+
+function loadProRecord() {
+  try {
+    const raw = localStorage.getItem(PRO_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function writeProRecord(record) {
+  try { localStorage.setItem(PRO_KEY, JSON.stringify(record)); } catch (e) { /* ignore */ }
+}
+
+// TODO before shipping: replace with the real deployed Worker URL, same
+// two-step process as the Hnefatafl online-play Worker — create it in the
+// Cloudflare dashboard, bind its KV namespaces, set ALLOWED_ORIGIN/
+// GAME_URL, then swap this placeholder for the real *.workers.dev address.
+const BUNDLE_API_BASE = "https://two-ancient-classics.emblen-scott.workers.dev";
+
+async function bundleApiPost(path, body) {
+  const res = await fetch(`${BUNDLE_API_BASE}${path}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+// ---------- Online play ----------
+// Talks to the SAME Worker built for Hnefatafl's own online mode
+// (ancient-games-online-worker.js) — it was deliberately built with a
+// gameType field from the start so this moment would be cheap. Free,
+// unmetered, no account required, same "fog of war" design as Hnefatafl's:
+// nothing here is discoverable, only reachable by whoever was actually
+// sent the link.
+//
+// TODO before shipping: replace with the real deployed Worker URL.
+const ONLINE_API_BASE = "https://ancient-games-online.emblen-scott.workers.dev";
+const ONLINE_GAME_STORAGE_KEY = "two_ancient_classics_online_game_v1";
+
+function loadOnlineGameRecord() {
+  try {
+    const raw = localStorage.getItem(ONLINE_GAME_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function saveOnlineGameRecord(rec) {
+  try { localStorage.setItem(ONLINE_GAME_STORAGE_KEY, JSON.stringify(rec)); } catch (e) { /* ignore */ }
+}
+function clearOnlineGameRecord() {
+  try { localStorage.removeItem(ONLINE_GAME_STORAGE_KEY); } catch (e) { /* ignore */ }
+}
+function getInviteTokenFromUrl() {
+  try { return new URLSearchParams(window.location.search).get("invite"); } catch (e) { return null; }
+}
+function stripInviteFromUrl() {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("invite");
+    window.history.replaceState({}, "", url.toString());
+  } catch (e) { /* ignore */ }
+}
+async function onlineApiGet(path) {
+  const res = await fetch(`${ONLINE_API_BASE}${path}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+async function onlineApiPost(path, body, secret) {
+  const headers = { "Content-Type": "application/json" };
+  if (secret) headers["X-Player-Secret"] = secret;
+  const res = await fetch(`${ONLINE_API_BASE}${path}`, { method: "POST", headers, body: JSON.stringify(body || {}) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+// Generic Pro-unlock gate — reused by both games. gameLabel/mode are just
+// for the copy ("You've played your 3 free Royal Game of Ur Challenge
+// games today"); the actual quota check and Pro purchase are bundle-wide.
+function FreemiumGate({ t, gameLabel, modeLabel, onBack, onUnlock, unlocking, checkoutError, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm }) {
+  return (
+    <div style={{ minHeight: "100vh", background: t.bg, color: t.text, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px", fontFamily: "system-ui, -apple-system, sans-serif", textAlign: "center", position: "relative" }}>
+      {onBack && (
+        <button onClick={onBack} style={{ ...pillStyle(t, false), position: "absolute", top: 20, left: 20 }}>← Games</button>
+      )}
+      <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+      <h2 style={{ fontSize: 19, fontWeight: 800, margin: "0 0 8px" }}>Free games used up for today</h2>
+      <p style={{ fontSize: 13, color: t.muted, maxWidth: 320, lineHeight: 1.6, marginBottom: 22 }}>
+        You've played your {FREE_GAMES_PER_MODE_PER_DAY} free {gameLabel} {modeLabel} games today. Come back tomorrow, or unlock unlimited play across <strong>both</strong> games in this bundle — Royal Game of Ur and Nine Men's Morris — with a single Pro purchase.
+      </p>
+      <button onClick={onUnlock} disabled={unlocking} style={{ ...btnStyle(t, unlocking, true), padding: "12px 22px", fontSize: 14, marginBottom: 14 }}>
+        {unlocking ? "Opening checkout…" : "✓ Unlock Both Games — $2"}
+      </button>
+      {checkoutError && (
+        <div style={{ fontSize: 12, color: "#ff6b5b", maxWidth: 300, marginBottom: 14, lineHeight: 1.5 }}>{checkoutError}</div>
+      )}
+      {!showRestoreForm ? (
+        <button onClick={() => setShowRestoreForm(true)} style={{ fontSize: 12, color: t.muted, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+          Already purchased? Restore it
+        </button>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", maxWidth: 280 }}>
+          <input
+            type="email" value={restoreEmail} onChange={(e) => setRestoreEmail(e.target.value)} placeholder="Email used at purchase"
+            style={{ padding: "9px 12px", borderRadius: 8, border: `1px solid ${t.panelBorder}`, background: t.panel, color: t.text, fontSize: 13 }}
+          />
+          <button onClick={onSubmitRestore} style={{ ...btnStyle(t, false, true), fontSize: 13 }}>Send restore link</button>
+          {restoreStatus && <div style={{ fontSize: 11, color: t.muted }}>{restoreStatus}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Board geometry ----------
+// 3 rows x 8 cols, with the top-right and bottom-right 2x2 blocks cut away —
+// the classic 20-square Ur board shape.
+const ROWS = 3, COLS = 8;
+function squareExists(r, c) {
+  if (r === 1) return true; // shared middle row is full width
+  return c <= 3 || c >= 6; // private rows have a gap at columns 4-5
+}
+const ALL_SQUARES = [];
+for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (squareExists(r, c)) ALL_SQUARES.push({ r, c });
+
+// Path each side's pieces travel: 4 private squares, 8 shared, 2 private-end.
+// Index 0-13 = on board, index 14 = borne off (finished).
+const PATH_YOU = [
+  { r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }, { r: 0, c: 3 },
+  { r: 1, c: 0 }, { r: 1, c: 1 }, { r: 1, c: 2 }, { r: 1, c: 3 }, { r: 1, c: 4 }, { r: 1, c: 5 }, { r: 1, c: 6 }, { r: 1, c: 7 },
+  { r: 0, c: 6 }, { r: 0, c: 7 },
+];
+const PATH_CPU = [
+  { r: 2, c: 0 }, { r: 2, c: 1 }, { r: 2, c: 2 }, { r: 2, c: 3 },
+  { r: 1, c: 0 }, { r: 1, c: 1 }, { r: 1, c: 2 }, { r: 1, c: 3 }, { r: 1, c: 4 }, { r: 1, c: 5 }, { r: 1, c: 6 }, { r: 1, c: 7 },
+  { r: 2, c: 6 }, { r: 2, c: 7 },
+];
+const PATH_LEN = 14;
+
+// The five rosette squares — safe from capture, and grant an extra roll.
+// Exact ancient rosette placement is one of the disputed details (even the
+// historians don't fully agree — see the note in-app) so this is the
+// commonly used modern reconstruction, not a certified original layout.
+const ROSETTES = new Set(["0,3", "2,3", "1,3", "0,7", "2,7"]);
+function key(r, c) { return `${r},${c}`; }
+function isRosette(r, c) { return ROSETTES.has(key(r, c)); }
+function isShared(r) { return r === 1; }
+
+// Start/finish squares per path — used to give each player's lane a clear
+// visual "run" instead of an arrow. Finish squares happen to also be
+// rosette squares in this layout (safe + extra roll AND the exit square),
+// so the finish marker takes visual priority over the plain rosette star.
+const YOU_START = key(PATH_YOU[0].r, PATH_YOU[0].c);
+const YOU_FINISH = key(PATH_YOU[13].r, PATH_YOU[13].c);
+const CPU_START = key(PATH_CPU[0].r, PATH_CPU[0].c);
+const CPU_FINISH = key(PATH_CPU[13].r, PATH_CPU[13].c);
+function squareRole(r, c) {
+  const k = key(r, c);
+  if (k === YOU_START) return "you-start";
+  if (k === YOU_FINISH) return "you-finish";
+  if (k === CPU_START) return "cpu-start";
+  if (k === CPU_FINISH) return "cpu-finish";
+  return null;
+}
+
+// Step numbers (1-14) per square, for the route-numbering overlay. The
+// shared middle row has the same number for both paths since both players
+// cross the exact same squares there in the same order.
+const YOU_INDEX = new Map(PATH_YOU.map((s, i) => [key(s.r, s.c), i + 1]));
+const CPU_INDEX = new Map(PATH_CPU.map((s, i) => [key(s.r, s.c), i + 1]));
+function stepNumber(r, c) {
+  if (r === 0) return YOU_INDEX.get(key(r, c));
+  if (r === 2) return CPU_INDEX.get(key(r, c));
+  return YOU_INDEX.get(key(r, c)); // shared row — same number either way
+}
+
+// ---------- Ur rule variants ----------
+// Two genuinely documented historical forks, not invented for symmetry
+// with Hnefatafl's variant picker:
+//   Finkel — the commonly-played reconstruction from the 177 BC Babylonian
+//     tablet Irving Finkel translated. 4 binary dice (roll 0-4), rosettes
+//     are safe from capture and grant an extra roll, rolling 0 is a miss.
+//   Masters — James Masters' alternative reading of the same evidence. 3
+//     binary dice, and rolling all-blank (which would be "0") is
+//     specifically re-read as a move of 4 rather than a miss turn.
+//     Rosettes are NOT safe under these rules — removing rosette safety
+//     is the deliberate strategic change Masters argued for.
+// NOT implemented here: Masters' proposed longer path with rosettes every
+// 4th square. That's a genuine physical board-geometry change, not a data
+// flag, and I'm not confident enough in the exact reconstructed layout
+// from secondary sources alone to ship it under a game that markets
+// itself on rules accuracy. Worth a dedicated pass with a primary source
+// if this matters later — flagged, not silently skipped.
+const UR_VARIANTS = {
+  finkel: {
+    key: "finkel", name: "Finkel", subtitle: "4 dice · rosettes safe",
+    diceCount: 4, zeroIsMiss: true, rosettesSafe: true,
+  },
+  masters: {
+    key: "masters", name: "Masters", subtitle: "3 dice · rosettes exposed",
+    diceCount: 3, zeroIsMiss: false, rosettesSafe: false,
+  },
+};
+const UR_DEFAULT_VARIANT_KEY = "finkel";
+
+// sum of marked dice (0..diceCount) -> the actual move distance this turn.
+function resolveRollValue(sum, variant) {
+  if (sum === 0) return variant.zeroIsMiss ? 0 : 4;
+  return sum;
+}
+
+// Exact probability distribution over resolved roll values, for the AI's
+// chance nodes — binomial(diceCount, 0.5) collapsed through
+// resolveRollValue. Small enough (≤5 entries) to just recompute each call
+// rather than cache.
+function urRollDistribution(variant) {
+  const n = variant.diceCount;
+  const binom = (k) => { let c = 1; for (let i = 0; i < k; i++) c = (c * (n - i)) / (i + 1); return c; };
+  const total = 2 ** n;
+  const dist = new Map();
+  for (let sum = 0; sum <= n; sum++) {
+    const p = binom(sum) / total;
+    const rollValue = resolveRollValue(sum, variant);
+    dist.set(rollValue, (dist.get(rollValue) || 0) + p);
+  }
+  return dist;
+}
+
+// ---------- Pure move engine (shared by the UI and the AI search — same
+// principle as Hnefatafl's rule functions: the AI can never see a
+// different game than a human actually plays) ----------
+function urOccupancy(youPos, cpuPos) {
+  const map = new Map();
+  youPos.forEach((p, i) => { if (p >= 0 && p < 14) { const sq = PATH_YOU[p]; map.set(key(sq.r, sq.c), { side: "you", idx: i }); } });
+  cpuPos.forEach((p, i) => { if (p >= 0 && p < 14) { const sq = PATH_CPU[p]; map.set(key(sq.r, sq.c), { side: "cpu", idx: i }); } });
+  return map;
+}
+
+function urLegalMoves(youPos, cpuPos, side, roll, variant) {
+  if (!roll) return [];
+  const pos = side === "you" ? youPos : cpuPos;
+  const path = side === "you" ? PATH_YOU : PATH_CPU;
+  const occ = urOccupancy(youPos, cpuPos);
+  const moves = [];
+  pos.forEach((cur, idx) => {
+    if (cur === 14) return;
+    const dest = cur + roll;
+    if (dest > 14) return;
+    if (dest === 14) { moves.push({ pieceIdx: idx, from: cur, to: 14, captures: false }); return; }
+    const sq = path[dest];
+    const o = occ.get(key(sq.r, sq.c));
+    if (o && o.side === side) return;
+    if (o && o.side !== side) {
+      if (variant.rosettesSafe && isRosette(sq.r, sq.c)) return;
+      moves.push({ pieceIdx: idx, from: cur, to: dest, captures: true });
+      return;
+    }
+    moves.push({ pieceIdx: idx, from: cur, to: dest, captures: false });
+  });
+  return moves;
+}
+
+// Applies a move immutably, resolving capture from the PRE-move occupancy
+// (not post-move) — computing occupancy after already writing the mover's
+// new position would have the mover and the piece it's capturing briefly
+// claim the same square, and depending on array-iteration order one could
+// silently overwrite the other in the lookup. Resolving from pre-move
+// state sidesteps that entirely.
+function urApplyMove(youPos, cpuPos, side, move) {
+  const path = side === "you" ? PATH_YOU : PATH_CPU;
+  const preOcc = urOccupancy(youPos, cpuPos);
+  const nextYou = youPos.slice(), nextCpu = cpuPos.slice();
+  if (move.captures && move.to < 14) {
+    const sq = path[move.to];
+    const occ = preOcc.get(key(sq.r, sq.c));
+    if (occ) {
+      const arr = occ.side === "you" ? nextYou : nextCpu;
+      arr[occ.idx] = -1;
+    }
+  }
+  const mover = side === "you" ? nextYou : nextCpu;
+  mover[move.pieceIdx] = move.to;
+  const landedRosette = move.to < 14 && isRosette(path[move.to].r, path[move.to].c);
+  return { youPos: nextYou, cpuPos: nextCpu, landedRosette, wentHome: move.to === 14 };
+}
+
+// ---------- AI: expectiminimax ----------
+// Ur has real randomness (the dice), so a plain minimax like Hnefatafl's
+// isn't honest here — it would implicitly assume the opponent's future
+// rolls are whatever's worst-case for them, which isn't how the game
+// works. Expectiminimax alternates: a decision node (pick the best move
+// for a KNOWN roll) with a chance node (average over the probability-
+// weighted outcomes of the NEXT roll) before the next decision. Depth is
+// spent once per decision→chance transition, which also correctly covers
+// "no legal move" turns (auto-pass) — every recursive path is guaranteed
+// to hit the depth<=0 base case, since depth only ever holds steady
+// within a single decision node's move loop and always decrements when
+// crossing into the next chance node.
+const UR_SEARCH_DEPTH = 3; // tuning knob, same spirit as Hnefatafl's AI_DEPTH — drop to 2 first if it ever feels sluggish on a real device
+
+function evaluateUrPosition(youPos, cpuPos, aiSide) {
+  const aiPos = aiSide === "you" ? youPos : cpuPos;
+  const oppPos = aiSide === "you" ? cpuPos : youPos;
+  const aiHome = aiPos.filter((p) => p === 14).length;
+  const oppHome = oppPos.filter((p) => p === 14).length;
+  if (aiHome >= 7) return 100000;
+  if (oppHome >= 7) return -100000;
+  let score = (aiHome - oppHome) * 60;
+  aiPos.forEach((p) => { if (p >= 0 && p < 14) score += p + 1; });
+  oppPos.forEach((p) => { if (p >= 0 && p < 14) score -= p + 1; });
+  return score;
+}
+
+function urChanceNode(youPos, cpuPos, side, depth, aiSide, variant) {
+  const dist = urRollDistribution(variant);
+  let expected = 0;
+  for (const [rollValue, prob] of dist) {
+    if (rollValue === 0) {
+      // A miss — no decision to make, turn passes outright. Still spends
+      // depth (see comment above): without this, an unlucky run of zero
+      // rolls in the exact-probability sum (not a simulation — every
+      // branch really is walked) would recurse forever chasing an
+      // ever-smaller-probability tail.
+      expected += prob * (depth <= 0
+        ? evaluateUrPosition(youPos, cpuPos, aiSide)
+        : urChanceNode(youPos, cpuPos, side === "you" ? "cpu" : "you", depth - 1, aiSide, variant));
+    } else {
+      expected += prob * urDecisionNode(youPos, cpuPos, side, rollValue, depth, aiSide, variant);
+    }
+  }
+  return expected;
+}
+
+function urDecisionNode(youPos, cpuPos, side, rollValue, depth, aiSide, variant) {
+  const moves = urLegalMoves(youPos, cpuPos, side, rollValue, variant);
+  if (moves.length === 0) {
+    return depth <= 0
+      ? evaluateUrPosition(youPos, cpuPos, aiSide)
+      : urChanceNode(youPos, cpuPos, side === "you" ? "cpu" : "you", depth - 1, aiSide, variant);
+  }
+  const maximizing = side === aiSide;
+  let best = maximizing ? -Infinity : Infinity;
+  for (const move of moves) {
+    const result = urApplyMove(youPos, cpuPos, side, move);
+    const homeCount = (side === "you" ? result.youPos : result.cpuPos).filter((p) => p === 14).length;
+    let val;
+    if (homeCount >= 7) {
+      val = side === aiSide ? 100000 + depth : -100000 - depth;
+    } else if (result.landedRosette) {
+      val = depth <= 0
+        ? evaluateUrPosition(result.youPos, result.cpuPos, aiSide)
+        : urChanceNode(result.youPos, result.cpuPos, side, depth - 1, aiSide, variant); // same side rolls again
+    } else {
+      val = depth <= 0
+        ? evaluateUrPosition(result.youPos, result.cpuPos, aiSide)
+        : urChanceNode(result.youPos, result.cpuPos, side === "you" ? "cpu" : "you", depth - 1, aiSide, variant);
+    }
+    if (maximizing ? val > best : val < best) best = val;
+  }
+  return best;
+}
+
+function chooseUrAiMove(youPos, cpuPos, aiSide, rollValue, variant, depth = UR_SEARCH_DEPTH) {
+  const moves = urLegalMoves(youPos, cpuPos, aiSide, rollValue, variant);
+  if (moves.length === 0) return null;
+  let bestMove = moves[0], bestVal = -Infinity;
+  for (const move of moves) {
+    const result = urApplyMove(youPos, cpuPos, aiSide, move);
+    const homeCount = (aiSide === "you" ? result.youPos : result.cpuPos).filter((p) => p === 14).length;
+    let val;
+    if (homeCount >= 7) {
+      val = 100000 + depth;
+    } else if (result.landedRosette) {
+      val = depth <= 0
+        ? evaluateUrPosition(result.youPos, result.cpuPos, aiSide)
+        : urChanceNode(result.youPos, result.cpuPos, aiSide, depth - 1, aiSide, variant);
+    } else {
+      val = depth <= 0
+        ? evaluateUrPosition(result.youPos, result.cpuPos, aiSide)
+        : urChanceNode(result.youPos, result.cpuPos, aiSide === "you" ? "cpu" : "you", depth - 1, aiSide, variant);
+    }
+    if (val > bestVal) { bestVal = val; bestMove = move; }
+  }
+  return bestMove;
+}
+
+// ---------- Intro crawl ----------
+// Ported verbatim from Hnefatafl — same component, same timing, same
+// runic motto and SCVD.app brand mark (deliberately fixed series
+// branding, not per-game content, per the original comment in that file).
+// Only the per-game props (seriesLabel/gameTitle/gameTagline/crawlText)
+// and the INTRO_SEEN_KEY differ below, once per game — plus
+// crawlDurationMs, which controls READING SPEED (how fast the text
+// scrolls by). The DISTANCE the crawl needs to travel to actually clear
+// the screen is measured from the real rendered text below, not guessed —
+// see the crawlDistancePx logic in the component itself. crawlDurationMs
+// is still worth setting per-game so a longer crawl doesn't fly past too
+// fast to read; 26000ms was the value tuned for Hnefatafl's 724-character
+// crawl, and Ur's/NMM's/Jumpin' Pin's longer ones each get their own
+// slower value, scaled to roughly the same characters-per-second rate.
+const TITLE_CARD_MS = 3500;
+const CRAWL_DURATION_MS = 26000; // default, used if a game doesn't pass its own crawlDurationMs
+const CRAWL_FADE_OVERLAP_MS = 3000;
+const MOTTO_MS = 7000;
+const BRAND_MS = 4000;
+
+function IntroCrawl({ seriesLabel, gameTitle, gameTagline, crawlText, motto, mottoFont, mottoFontSize, crawlDurationMs, onDone }) {
+  const crawlMs = crawlDurationMs || CRAWL_DURATION_MS;
+  const crawlEndMs = TITLE_CARD_MS + crawlMs;
+  const mottoDelayMs = crawlEndMs - CRAWL_FADE_OVERLAP_MS;
+  const brandDelayMs = mottoDelayMs + MOTTO_MS;
+  const introTotalMs = brandDelayMs + BRAND_MS;
+
+  // The crawl block starts with its TOP edge at the bottom of the screen
+  // (top: 100%) and travels upward. For it to actually clear the screen,
+  // it has to travel far enough that its own BOTTOM edge — which starts
+  // one whole block-height further down, off-screen — passes the top of
+  // the viewport too. That distance is (viewport height + block height),
+  // not a flat guess. -170vh was tuned by eye against Hnefatafl's
+  // specific crawl and quietly stopped being enough the moment any other
+  // game's text ran longer — worse, giving it more TIME to travel that
+  // same fixed distance (the fix tried last time) only made it crawl
+  // slower over the same too-short trip, it never actually went any
+  // further. Measuring the real rendered height here instead means this
+  // can't recur for any future game's crawl, however long.
+  const crawlRef = useRef(null);
+  const [crawlDistancePx, setCrawlDistancePx] = useState(() => (typeof window !== "undefined" ? window.innerHeight * 1.7 : 1200));
+  useEffect(() => {
+    if (crawlRef.current) {
+      setCrawlDistancePx(window.innerHeight + crawlRef.current.scrollHeight);
+    }
+  }, [crawlText]);
+
+  useEffect(() => {
+    const timer = setTimeout(onDone, introTotalMs);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      onClick={onDone}
+      style={{
+        position: "fixed", inset: 0, zIndex: 3000, overflow: "hidden", cursor: "pointer",
+        background: "radial-gradient(ellipse at 50% 30%, #0d1a1a 0%, #060b0d 55%, #030405 100%)",
+      }}
+    >
+      <div style={{
+        position: "absolute", inset: 0, opacity: 0.35, pointerEvents: "none",
+        background: `
+          radial-gradient(ellipse 60% 30% at 20% 15%, rgba(53,208,160,0.25), transparent 60%),
+          radial-gradient(ellipse 50% 25% at 75% 10%, rgba(201,150,47,0.18), transparent 60%),
+          radial-gradient(ellipse 70% 35% at 50% 0%, rgba(53,208,160,0.15), transparent 65%)
+        `,
+      }} />
+
+      <button onClick={onDone} style={{
+        position: "absolute", top: 16, right: 16, zIndex: 3001,
+        background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,233,176,0.35)",
+        color: "#ece7da", fontSize: 12, fontWeight: 700, letterSpacing: 1,
+        padding: "7px 14px", borderRadius: 999, cursor: "pointer",
+      }}>
+        SKIP ▶
+      </button>
+
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 30px",
+        animation: `introTitleFade ${TITLE_CARD_MS}ms ease forwards`,
+      }}>
+        <div style={{ fontSize: 12, letterSpacing: 5, color: "#8b9a97", fontWeight: 700, marginBottom: 10 }}>
+          {seriesLabel}
+        </div>
+        <div style={{ fontFamily: "Georgia, serif", fontWeight: 900, fontSize: 40, color: "#e8c468", textShadow: "0 0 28px rgba(232,196,104,0.6)", letterSpacing: 2 }}>
+          {gameTitle}
+        </div>
+        {gameTagline && (
+          <div style={{ fontSize: 13, color: "#8b9a97", marginTop: 10, maxWidth: 320 }}>{gameTagline}</div>
+        )}
+      </div>
+
+      <div style={{ position: "absolute", inset: 0, perspective: "450px", overflow: "hidden" }}>
+        <div style={{
+          position: "absolute", bottom: 0, left: 0, right: 0, height: "100%",
+          transformOrigin: "50% 100%", transform: "rotateX(33deg)",
+        }}>
+          <div ref={crawlRef} style={{
+            position: "absolute", left: "50%", top: "100%", width: "92%", maxWidth: 560,
+            animation: `crawlUp ${crawlMs}ms linear forwards`,
+            animationDelay: `${TITLE_CARD_MS}ms`,
+            opacity: 0, transform: "translateX(-50%) translateY(0)",
+          }}>
+            {crawlText.map((para, i) => (
+              <p key={i} style={{
+                fontFamily: "Georgia, serif", fontWeight: 700, color: "#e8c468",
+                fontSize: 22, lineHeight: 1.7, textAlign: "center", marginBottom: 36,
+                textShadow: "0 0 10px rgba(232,196,104,0.35)",
+              }}>
+                {para}
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 30px",
+        opacity: 0, animation: `mottoFade ${MOTTO_MS}ms ease forwards`,
+        animationDelay: `${mottoDelayMs}ms`,
+      }}>
+        {(motto || [["ᚠᚬᚱᛏᚢᚾᛅ", "(Fortune)"], ["ᚠᚬᚢᚬᚢᚱᛋ", "(Favours)"], ["ᚦᛅ ᛫ ᛒᚱᚬᚢᛅ", "(The Brave)"]]).map(([text, gloss], i) => (
+          <React.Fragment key={i}>
+            <div style={{ fontFamily: mottoFont || "'Noto Sans Runic', serif", fontSize: mottoFontSize || 42, letterSpacing: 3, color: "#e8c468", textShadow: "0 0 16px rgba(232,196,104,0.5)", marginTop: i === 0 ? 0 : 26 }}>
+              {text}
+            </div>
+            <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: 20, color: "#8b9a97", marginTop: 10, maxWidth: 320 }}>
+              {gloss}
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 30px",
+        opacity: 0, animation: `brandFade ${BRAND_MS}ms ease forwards`,
+        animationDelay: `${brandDelayMs}ms`,
+      }}>
+        <div style={{ fontFamily: "'Noto Sans Runic', serif", fontSize: 38, letterSpacing: 4, color: "#e8c468", textShadow: "0 0 22px rgba(232,196,104,0.6)" }}>
+          ᛋᚴᚢᛏ ᛫ ᚬᛒᛒ
+        </div>
+        <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: 24, color: "#8b9a97", marginTop: 8 }}>
+          (scvd.app)
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes introTitleFade {
+          0% { opacity: 0; transform: scale(0.88); }
+          12% { opacity: 1; transform: scale(1); }
+          78% { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(1.12); }
+        }
+        @keyframes crawlUp {
+          0% { transform: translateX(-50%) translateY(0); opacity: 1; }
+          88% { opacity: 1; }
+          100% { transform: translateX(-50%) translateY(-${crawlDistancePx}px); opacity: 0; }
+        }
+        @keyframes mottoFade {
+          0% { opacity: 0; }
+          14% { opacity: 1; }
+          86% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        @keyframes brandFade {
+          0% { opacity: 0; }
+          16% { opacity: 1; }
+          82% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// Historically checked against multiple sources rather than composed from
+// memory — the Finkel/tablet nuance in particular (the 177 BC tablet is
+// NOT a direct transcription of Ur's original rules; Finkel's reconstruction
+// draws on it plus the board's own shape and rosette symbolism) is stated
+// carefully rather than overclaimed.
+const UR_CRAWL = [
+  "Nearly 4,600 years ago, in the Sumerian city of Ur — long before Rome, long before Greece — a game was already old.",
+  "Kings and commoners alike raced seven pieces of shell and bone across twenty squares inlaid with lapis lazuli.",
+  "For three thousand years it was played across the ancient world. Then, for nearly two thousand more, it was entirely forgotten.",
+  "In 1922, archaeologist Leonard Woolley began digging into the Royal Tombs of Ur — and found the boards. Nobody alive could read how to play them.",
+  "The answer came from somewhere stranger still: a Babylonian tablet, written in 177 BC — over two thousand years after the boards themselves were buried.",
+  "British Museum curator Irving Finkel spent decades piecing the rules back together, from that tablet and from the board's own telltale shape.",
+  "The dice are rolling again. The rosette — sacred to Ishtar herself — still watches over the middle row.",
+];
+
+// The Kurna dating below is stated with its real caveat (Berger's Coptic-
+// cross objection), same honesty standard as everywhere else in this
+// build — not smoothed over for a punchier line.
+const NMM_CRAWL = [
+  "Twenty-four points. Three concentric squares. Not a single die in sight — Nine Men's Morris may be the oldest surviving game of pure strategy on Earth.",
+  "The earliest known board is carved into the roofing slabs of a temple at Kurna, Egypt — cut by workers' hands some 3,400 years ago.",
+  "Even that claim has its skeptics: a few of the Kurna markings carry symbols added centuries later, so no one can date them with total certainty.",
+  "What's beyond doubt is the game's spread — Roman legionaries carved it into barracks floors and fort stones from Egypt to the wind-battered edge of Britain.",
+  "The Romans called it merels, after merellus — a humble word for \"gaming piece.\"",
+  "By Shakespeare's day it was common enough that Titania complains the flooded fields have left \"the nine men's morris... filled up with mud.\"",
+  "No dice. No luck. Just you, your opponent, and the mill.",
+];
+
+function RoyalGameOfUr({ onBack, isPro, freemium, onGameCompleted, onUnlock, unlocking, checkoutError, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm }) {
+  const GAME_KEY = "ur";
+  const UR_INTRO_SEEN_KEY = "ancient_games_intro_seen_ur_v1";
+  const [showIntro, setShowIntro] = useState(() => {
+    try { return localStorage.getItem(UR_INTRO_SEEN_KEY) !== "1"; } catch (e) { return true; }
+  });
+  function dismissIntro() {
+    try { localStorage.setItem(UR_INTRO_SEEN_KEY, "1"); } catch (e) { /* ignore */ }
+    setShowIntro(false);
+  }
+  const [themeKey, setThemeKey] = useState("dark");
+  const t = THEMES[themeKey];
+  const [upsell, setUpsell] = useState(null);
+  function selectTheme(key) {
+    const theme = THEMES[key];
+    if (theme.tier === "pro" && !isPro) {
+      setUpsell(theme.name);
+      setTimeout(() => setUpsell(null), 2200);
+      return;
+    }
+    setThemeKey(key);
+  }
+  const [mode, setMode] = useState("challenge"); // "play" (hotseat) | "challenge" (vs AI)
+  const [variantKey, setVariantKey] = useState(UR_DEFAULT_VARIANT_KEY);
+  const variant = UR_VARIANTS[variantKey];
+  const [gateActive, setGateActive] = useState(() => !isPro && isQuotaExhausted(freemium, GAME_KEY, "challenge"));
+  const wonRef = useRef(false); // tracks a genuine null->non-null winner transition, so a completed game is only ever counted once
+
+  // Turn-side labels swap depending on mode — "You"/"CPU" only make sense
+  // when one side really is an AI. In hotseat Play, both are humans taking
+  // turns on the same device, same convention as Hnefatafl's Play mode.
+  function sideLabel(side) {
+    if (mode === "play") return side === "you" ? "Player 1" : "Player 2";
+    return side === "you" ? "You" : "CPU";
+  }
+
+  // Board sizing — same responsive-width approach as Jumpin' Pin.
+  const PAD = 26, MIN_CELL = 34, MAX_CELL = 56, MAX_BOARD_WIDTH = 560;
+  const [viewportWidth, setViewportWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 390);
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const CELL = useMemo(() => {
+    const usableWidth = Math.min(viewportWidth - 24, MAX_BOARD_WIDTH);
+    const raw = (usableWidth - PAD * 2) / (COLS - 1);
+    return Math.max(MIN_CELL, Math.min(MAX_CELL, raw));
+  }, [viewportWidth]);
+  const boardWidth = (COLS - 1) * CELL + PAD * 2;
+  const boardHeight = (ROWS - 1) * CELL + PAD * 2;
+
+  // ---------- Game state ----------
+  // youPos / cpuPos: array of 7 entries, each -1 (in hand), 0-13 (on board
+  // at that path index), or 14 (borne off / home). Piece count (7) and the
+  // path itself are the same in both rule variants — only dice count,
+  // zero-roll handling, and rosette safety differ (see UR_VARIANTS).
+  const [youPos, setYouPos] = useState(() => Array(7).fill(-1));
+  const [cpuPos, setCpuPos] = useState(() => Array(7).fill(-1));
+  const [turn, setTurn] = useState("you"); // "you" | "cpu"
+  const [dice, setDice] = useState(null); // array of booleans (length = variant.diceCount), or null if not rolled yet
+  const [rollValue, setRollValue] = useState(null);
+  const [message, setMessage] = useState("Roll to begin.");
+  const [winner, setWinner] = useState(null); // "you" | "cpu" | null
+  const [rolling, setRolling] = useState(false);
+  const [rollPopKey, setRollPopKey] = useState(0);
+  const [rosettePopKey, setRosettePopKey] = useState(0);
+  const [homePop, setHomePop] = useState(null); // { side, key } | null
+  const [bearOffGlow, setBearOffGlow] = useState(null); // { side, key } | null
+  const cpuTimer = useRef(null);
+
+  const youHome = youPos.filter((p) => p === 14).length;
+  const cpuHome = cpuPos.filter((p) => p === 14).length;
+  const youInHand = youPos.filter((p) => p === -1).length;
+  const cpuInHand = cpuPos.filter((p) => p === -1).length;
+
+  // Occupancy lookup for the board's real squares (not path index — actual r,c).
+  const occupancy = useMemo(() => urOccupancy(youPos, cpuPos), [youPos, cpuPos]);
+
+  // Legal moves — thin wrapper over the shared pure engine (urLegalMoves),
+  // so the UI and the AI search can never disagree about what's legal.
+  const legalMoves = useCallback((side, roll) => urLegalMoves(youPos, cpuPos, side, roll, variant), [youPos, cpuPos, variant]);
+
+  const currentLegalMoves = useMemo(() => legalMoves(turn, rollValue), [legalMoves, turn, rollValue]);
+
+  const rollDice = useCallback(() => {
+    if (winner || rolling || dice !== null) return;
+    setRolling(true);
+    setMessage("Rolling…");
+    let ticks = 0;
+    const spin = setInterval(() => {
+      setDice(Array.from({ length: variant.diceCount }, () => Math.random() < 0.5));
+      ticks++;
+      if (ticks > 6) {
+        clearInterval(spin);
+        const final = Array.from({ length: variant.diceCount }, () => Math.random() < 0.5);
+        const sum = final.filter(Boolean).length;
+        const value = resolveRollValue(sum, variant);
+        setDice(final);
+        setRollValue(value);
+        setRolling(false);
+        setRollPopKey((k) => k + 1);
+      }
+    }, 80);
+  }, [winner, rolling, dice, variant]);
+
+  // After a roll lands, check whether the mover actually has any legal move.
+  useEffect(() => {
+    if (rollValue === null || rolling) return;
+    const moves = legalMoves(turn, rollValue);
+    if (rollValue === 0) {
+      setMessage(`${sideLabel(turn)} rolled 0 — turn passes.`);
+      const t2 = setTimeout(() => passTurn(), 900);
+      return () => clearTimeout(t2);
+    }
+    if (moves.length === 0) {
+      setMessage(`Rolled ${rollValue} — no legal move. Turn passes.`);
+      const t2 = setTimeout(() => passTurn(), 900);
+      return () => clearTimeout(t2);
+    }
+    setMessage(
+      mode === "play" || turn === "you"
+        ? `${sideLabel(turn)} rolled ${rollValue} — pick a piece to move.`
+        : `${sideLabel(turn)} rolled ${rollValue}…`
+    );
+    // eslint-disable-next-line
+  }, [rollValue, rolling, mode]);
+
+  function passTurn() {
+    setDice(null);
+    setRollValue(null);
+    setTurn((tn) => (tn === "you" ? "cpu" : "you"));
+  }
+
+  function applyMove(side, move) {
+    const setPos = side === "you" ? setYouPos : setCpuPos;
+    const path = side === "you" ? PATH_YOU : PATH_CPU;
+    setPos((prev) => {
+      const next = [...prev];
+      next[move.pieceIdx] = move.to;
+      return next;
+    });
+    if (move.captures && move.to < 14) {
+      const sq = path[move.to];
+      const occ = occupancy.get(key(sq.r, sq.c));
+      if (occ) {
+        const setOther = occ.side === "you" ? setYouPos : setCpuPos;
+        setOther((prev) => { const next = [...prev]; next[occ.idx] = -1; return next; });
+      }
+    }
+    const landedRosette = move.to < 14 && isRosette(path[move.to].r, path[move.to].c);
+
+    if (move.to === 14) {
+      setBearOffGlow({ side, key: Date.now() });
+      setTimeout(() => setBearOffGlow(null), 1300);
+      setHomePop({ side, key: Date.now() + 1 });
+      setTimeout(() => setHomePop(null), 1300);
+    }
+
+    // Win check happens after state settles — checked in an effect below via
+    // a small delay so the board visibly shows the final piece first.
+    setTimeout(() => {
+      const willBeHome = (side === "you" ? youHome : cpuHome) + (move.to === 14 ? 1 : 0);
+      if (willBeHome >= 7) {
+        setWinner(side);
+        setMessage(
+          mode === "play"
+            ? `${sideLabel(side)} brought all pieces home!`
+            : side === "you" ? "You've brought all your pieces home!" : "The computer got all its pieces home first."
+        );
+        return;
+      }
+      if (landedRosette) {
+        setMessage("Landed on a rosette — extra roll!");
+        setRosettePopKey((k) => k + 1);
+        setDice(null);
+        setRollValue(null);
+      } else {
+        passTurn();
+      }
+    }, 250);
+  }
+
+  function handlePieceClick(side, idx) {
+    if (winner || side !== turn || rollValue === null || rolling) return;
+    // In Challenge mode the CPU's own pieces are never human-clickable,
+    // even during its own turn — closes a real gap in the original
+    // prototype where nothing stopped a stray tap on a CPU piece from
+    // hijacking its move out from under the AI's own scheduled decision.
+    if (mode === "challenge" && side !== "you") return;
+    const move = currentLegalMoves.find((m) => m.pieceIdx === idx);
+    if (!move) return;
+    applyMove(side, move);
+  }
+
+  // ---------- CPU opponent (Challenge mode only) ----------
+  // Real expectiminimax search now (see UR_VARIANTS block above) — no
+  // dice-cheating, the CPU rolls the same random dice you do, same as the
+  // heuristic version before it. What changed is move *selection*: instead
+  // of a hand-tuned priority list, it now actually looks ahead through the
+  // probability-weighted space of future rolls.
+  useEffect(() => {
+    if (mode !== "challenge") return;
+    if (turn !== "cpu" || winner) return;
+    if (dice === null && !rolling) {
+      const t1 = setTimeout(() => rollDice(), 600);
+      cpuTimer.current = t1;
+      return () => clearTimeout(t1);
+    }
+    if (rollValue !== null && !rolling) {
+      const moves = urLegalMoves(youPos, cpuPos, "cpu", rollValue, variant);
+      if (moves.length === 0) return; // the pass-turn effect handles this
+      const best = chooseUrAiMove(youPos, cpuPos, "cpu", rollValue, variant);
+      if (!best) return;
+      const t2 = setTimeout(() => applyMove("cpu", best), 700);
+      return () => clearTimeout(t2);
+    }
+    // eslint-disable-next-line
+  }, [mode, turn, dice, rollValue, rolling, winner, variant]);
+
+  const reset = useCallback(() => {
+    setYouPos(Array(7).fill(-1));
+    setCpuPos(Array(7).fill(-1));
+    setTurn("you");
+    setDice(null);
+    setRollValue(null);
+    setWinner(null);
+    setMessage("Roll to begin.");
+    setRolling(false);
+    wonRef.current = false;
+  }, []);
+
+  // Every "start a fresh game" action (mode switch, ruleset switch, the
+  // Reset/Play Again button) routes through this instead of calling reset()
+  // directly — same principle as Hnefatafl's freemium gate: the quota is
+  // checked at the moment a NEW game would begin, never mid-game, and Pro
+  // bypasses it entirely.
+  function startFreshGame(nextMode) {
+    if (!isPro && isQuotaExhausted(freemium, GAME_KEY, nextMode)) { setGateActive(true); return; }
+    setGateActive(false);
+    reset();
+  }
+  function handleSetMode(next) { setMode(next); startFreshGame(next); }
+  function handleSetVariantKey(next) { setVariantKey(next); startFreshGame(mode); }
+
+  // Counts a genuinely completed game toward the quota — never a resumed
+  // or abandoned one. wonRef starts false and is only ever flipped true by
+  // this exact transition, then reset back to false by reset() itself, so
+  // a single game can never be counted twice.
+  useEffect(() => {
+    if (winner && !wonRef.current) {
+      wonRef.current = true;
+      onGameCompleted(GAME_KEY, mode);
+    }
+  }, [winner, mode]);
+
+  const legalPieceIdxSet = useMemo(() => new Set(currentLegalMoves.map((m) => m.pieceIdx)), [currentLegalMoves]);
+  const legalDestSet = useMemo(() => {
+    const s = new Set();
+    currentLegalMoves.forEach((m) => {
+      if (m.to === 14) return;
+      const path = turn === "you" ? PATH_YOU : PATH_CPU;
+      const sq = path[m.to];
+      s.add(key(sq.r, sq.c));
+    });
+    return s;
+  }, [currentLegalMoves, turn]);
+
+  if (gateActive) {
+    return (
+      <FreemiumGate
+        t={t} gameLabel="Royal Game of Ur" modeLabel={mode === "play" ? "Play" : "Challenge"} onBack={onBack}
+        onUnlock={onUnlock} unlocking={unlocking} checkoutError={checkoutError}
+        restoreEmail={restoreEmail} setRestoreEmail={setRestoreEmail} restoreStatus={restoreStatus}
+        onSubmitRestore={onSubmitRestore} showRestoreForm={showRestoreForm} setShowRestoreForm={setShowRestoreForm}
+      />
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: t.bg, color: t.text, fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif", display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 12px 40px", transition: "background 200ms ease, color 200ms ease" }}>
+
+      {showIntro && (
+        <IntroCrawl
+          seriesLabel="ANCIENT GAMES · 02"
+          gameTitle="ROYAL GAME OF UR"
+          gameTagline="~4,600-year-old race game · seven pieces, four dice, one road home"
+          crawlText={UR_CRAWL}
+          crawlDurationMs={32000}
+          motto={[["ni2-tej3-je2 nam-sag9-ga in-tu-ud", "\"Fear of god creates good fortune\" — Sumerian proverb, Collection 26, Electronic Text Corpus of Sumerian Literature (Oxford), c. 3rd millennium BC"]]}
+          mottoFont="Georgia, serif"
+          mottoFontSize={26}
+          onDone={dismissIntro}
+        />
+      )}
+
+      <style>{`
+        @keyframes urMsgPop {
+          0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+          15% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+          25% { transform: translate(-50%, -50%) scale(1); }
+          75% { opacity: 1; }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+        }
+        @keyframes urGlowBurst {
+          0% { opacity: 0; }
+          18% { opacity: 0.9; }
+          70% { opacity: 0.9; }
+          100% { opacity: 0; }
+        }
+        .ur-glow-top, .ur-glow-bottom {
+          position: fixed; left: 0; right: 0; height: 30vh;
+          pointer-events: none; z-index: 900;
+          animation: urGlowBurst 1.3s ease-out forwards;
+        }
+        .ur-glow-top { top: 0; }
+        .ur-glow-bottom { bottom: 0; }
+      `}</style>
+
+      {bearOffGlow && (() => {
+        const c1 = bearOffGlow.side === "you" ? "232,196,104" : "127,232,201";
+        return (
+          <React.Fragment key={bearOffGlow.key}>
+            <div className="ur-glow-top" style={{ background: `linear-gradient(to bottom, rgba(${c1},0.35) 0%, transparent 100%)` }} />
+            <div className="ur-glow-bottom" style={{ background: `linear-gradient(to top, rgba(${c1},0.35) 0%, transparent 100%)` }} />
+          </React.Fragment>
+        );
+      })()}
+
+      {rollValue !== null && !rolling && (
+        <div
+          key={rollPopKey}
+          style={{
+            position: "fixed", top: "38vh", left: "50%",
+            zIndex: 950, pointerEvents: "none",
+            animation: "urMsgPop 1.1s ease forwards",
+          }}
+        >
+          <div style={{
+            fontSize: 96, fontWeight: 900, fontFamily: "Georgia, serif",
+            color: rollValue === 0 ? t.muted : t.accent,
+            textShadow: rollValue === 0
+              ? "0 2px 4px rgba(0,0,0,0.6)"
+              : `0 0 32px ${t.accent}99, 0 2px 6px rgba(0,0,0,0.8)`,
+          }}>
+            {rollValue}
+          </div>
+        </div>
+      )}
+
+      {rosettePopKey > 0 && (
+        <div
+          key={`rosette-${rosettePopKey}`}
+          style={{
+            position: "fixed", top: "38vh", left: "50%",
+            zIndex: 951, pointerEvents: "none",
+            animation: "urMsgPop 1.3s ease forwards",
+            textAlign: "center",
+          }}
+        >
+          <div style={{
+            fontSize: 40, fontWeight: 900, fontFamily: "Georgia, serif",
+            color: "#e8c468", whiteSpace: "nowrap",
+            textShadow: "0 0 28px rgba(232,196,104,0.85), 0 2px 6px rgba(0,0,0,0.8)",
+          }}>
+            ✦ ROLL AGAIN
+          </div>
+        </div>
+      )}
+
+      {homePop && (
+        <div
+          key={`home-${homePop.key}`}
+          style={{
+            position: "fixed", top: "38vh", left: "50%",
+            zIndex: 951, pointerEvents: "none",
+            animation: "urMsgPop 1.3s ease forwards",
+            textAlign: "center",
+          }}
+        >
+          <div style={{
+            fontSize: 44, fontWeight: 900, fontFamily: "Georgia, serif",
+            color: homePop.side === "you" ? "#e8c468" : CPU_FROM, whiteSpace: "nowrap",
+            textShadow: homePop.side === "you"
+              ? "0 0 28px rgba(232,196,104,0.85), 0 2px 6px rgba(0,0,0,0.8)"
+              : "0 0 28px rgba(127,232,201,0.85), 0 2px 6px rgba(0,0,0,0.8)",
+          }}>
+            🏁 HOME
+          </div>
+        </div>
+      )}
+
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, letterSpacing: 4, color: t.muted, fontWeight: 700, marginBottom: 4 }}>
+          ANCIENT GAMES · 02
+        </div>
+        <h1 style={{ fontSize: 27, fontWeight: 800, letterSpacing: 1, margin: 0, textTransform: "uppercase" }}>
+          Royal Game <span style={{ color: t.accent }}>of Ur</span>
+        </h1>
+        <div style={{ fontSize: 11, color: t.muted, marginTop: 4, letterSpacing: 0.5 }}>
+          ~4,600 years old · rules reconstructed by the British Museum
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap", justifyContent: "center" }}>
+        <button onClick={onBack} style={pillStyle(t, false)}>← Games</button>
+        <button onClick={() => setThemeKey(themeKey === "light" ? "dark" : "light")} style={pillStyle(t, true)}>
+          {themeKey === "light" ? "☀️ Light" : "🌙 Dark"}
+        </button>
+        <button onClick={() => handleSetMode("challenge")} style={pillStyle(t, mode === "challenge")}>🤖 Challenge</button>
+        <button onClick={() => handleSetMode("play")} style={pillStyle(t, mode === "play")}>🧑‍🤝‍🧑 Play</button>
+        <span style={{ width: 1, height: 20, background: t.panelBorder }} />
+        <button onClick={() => setShowIntro(true)} style={pillStyle(t, false)} title="Watch the intro again">
+          🎬
+        </button>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: 0.5 }}>Rules:</span>
+        <select
+          value={variantKey}
+          onChange={(e) => handleSetVariantKey(e.target.value)}
+          style={{
+            padding: "6px 10px", borderRadius: 999, border: `1px solid ${t.panelBorder}`,
+            background: t.panel, color: t.text, fontSize: 12, fontWeight: 700, cursor: "pointer",
+          }}
+        >
+          {Object.values(UR_VARIANTS).map((v) => (
+            <option key={v.key} value={v.key}>{v.name} — {v.subtitle}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Pro tone picker — identical tones, colours, and lock/upsell
+          behaviour as Hnefatafl and Jumpin' Pin, for a consistent feel
+          across the whole series. One Pro purchase, shared across both
+          games in this bundle, unlocks these here too. */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16, flexWrap: "wrap", justifyContent: "center" }}>
+        {Object.entries(THEMES)
+          .filter(([, v]) => v.tier === "pro")
+          .map(([key, v]) => (
+            <button
+              key={key}
+              onClick={() => selectTheme(key)}
+              title={v.name}
+              style={{
+                position: "relative", width: 30, height: 30, borderRadius: "50%",
+                border: themeKey === key ? `2px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+                background: v.swatch, cursor: "pointer", padding: 0,
+              }}
+            >
+              {!isPro && (
+                <span style={{
+                  position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "rgba(0,0,0,0.45)", borderRadius: "50%", fontSize: 12,
+                }}>
+                  🔒
+                </span>
+              )}
+            </button>
+          ))}
+        <span style={{ fontSize: 10, color: t.muted, marginLeft: 2 }}>PRO TONES</span>
+        {upsell && (
+          <span style={{ fontSize: 11, color: t.accent, fontWeight: 700, marginLeft: 6 }}>
+            🔒 {upsell} is a Pro tone — unlock unlimited play to use it.
+          </span>
+        )}
+      </div>
+
+      {/* Stats readout — same visual language as Jumpin' Pin's MOVES/PEGS/SCORE row */}
+      <div style={{ display: "flex", gap: 18, marginBottom: 14, fontFamily: "'Courier New', monospace", fontSize: 13, background: t.panel, border: `1px solid ${t.panelBorder}`, borderRadius: 10, padding: "8px 18px" }}>
+        <div>{sideLabel("you").toUpperCase()} HOME <span style={{ color: t.pegFrom, fontWeight: 700 }}>{youHome}</span>/7</div>
+        <div>{sideLabel("cpu").toUpperCase()} HOME <span style={{ color: CPU_FROM, fontWeight: 700 }}>{cpuHome}</span>/7</div>
+        <div>TURN <span style={{ color: t.accent, fontWeight: 700 }}>{sideLabel(turn)}</span></div>
+      </div>
+
+      {/* Message line */}
+      <div style={{ fontSize: 13, color: t.muted, marginBottom: 14, textAlign: "center", minHeight: 18, fontWeight: 600 }}>
+        {message}
+      </div>
+
+      {/* Dice */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          {(dice || Array(variant.diceCount).fill(null)).map((d, i) => (
+            <div key={i} style={{
+              width: 26, height: 26, borderRadius: 6,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: d === null ? t.panel : d ? t.accentSoft : t.panel,
+              border: `1px solid ${d ? t.accent : t.panelBorder}`,
+              color: d ? t.accent : t.muted, fontSize: 14, fontWeight: 800,
+            }}>
+              {d === null ? "?" : d ? "▲" : "△"}
+            </div>
+          ))}
+        </div>
+        {rollValue !== null && !rolling && (
+          <div style={{ fontSize: 20, fontWeight: 800, color: t.accent, minWidth: 24, textAlign: "center" }}>{rollValue}</div>
+        )}
+        <button
+          onClick={rollDice}
+          disabled={(mode === "challenge" && turn !== "you") || dice !== null || rolling || !!winner}
+          style={btnStyle(t, (mode === "challenge" && turn !== "you") || dice !== null || rolling || !!winner, true)}
+        >
+          🎲 Roll
+        </button>
+      </div>
+
+      {/* Board */}
+      <div style={{ position: "relative", width: boardWidth, height: boardHeight, background: t.panel, borderRadius: 18, boxShadow: `inset 0 0 0 1px ${t.panelBorder}, 0 8px 24px rgba(0,0,0,0.35)`, marginBottom: 18 }}>
+        {ALL_SQUARES.map(({ r, c }) => {
+          const x = PAD + c * CELL, y = PAD + r * CELL;
+          const occ = occupancy.get(key(r, c));
+          const rosette = isRosette(r, c);
+          const isDest = legalDestSet.has(key(r, c));
+          const role = squareRole(r, c);
+          const size = CELL - 6;
+
+          // Start/finish colouring is keyed to that path's piece colour, so
+          // each lane reads as a visually distinct run across the shared
+          // board, same idea as colour-coding a relay track rather than
+          // using arrows.
+          const isYouRole = role === "you-start" || role === "you-finish";
+          const isCpuRole = role === "cpu-start" || role === "cpu-finish";
+          const isFinish = role === "you-finish" || role === "cpu-finish";
+          const isStart = role === "you-start" || role === "cpu-start";
+          const roleColor = isYouRole ? t.pegTo : isCpuRole ? CPU_TO : null;
+
+          let squareBoxShadow = t.holeShadow;
+          if (isDest) squareBoxShadow = `inset 0 0 0 2px ${t.accent}`;
+          else if (isFinish) squareBoxShadow = `inset 0 0 0 3px ${roleColor}`;
+          else if (isStart) squareBoxShadow = `inset 0 0 0 2px ${roleColor}, ${t.holeShadow}`;
+
+          return (
+            <div key={key(r, c)} style={{
+              position: "absolute", left: x - size / 2, top: y - size / 2, width: size, height: size,
+              borderRadius: 8,
+              background: isFinish ? (isYouRole ? "rgba(232,196,104,0.14)" : "rgba(127,232,201,0.14)") : t.holeEmpty,
+              boxShadow: squareBoxShadow,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {isFinish && !occ && (
+                <span style={{ fontSize: size * 0.4, opacity: 0.85 }}>🏁</span>
+              )}
+              {rosette && !isFinish && !occ && (
+                <span style={{ fontSize: size * 0.42, color: t.accent, opacity: 0.75 }}>✦</span>
+              )}
+              <span style={{
+                position: "absolute", top: 2, left: 4,
+                fontSize: Math.max(9, size * 0.22), fontWeight: 700,
+                color: isYouRole ? t.pegTo : isCpuRole ? CPU_TO : t.muted,
+                opacity: 0.8, pointerEvents: "none",
+                fontFamily: "'Courier New', monospace",
+              }}>
+                {stepNumber(r, c)}
+              </span>
+              {occ && (
+                <button
+                  onClick={() => handlePieceClick(occ.side, occ.idx)}
+                  aria-label={`${occ.side} piece`}
+                  style={{
+                    width: size - 6, height: size - 6, borderRadius: "50%", border: "none",
+                    cursor: (occ.side === turn && legalPieceIdxSet.has(occ.idx)) ? "pointer" : "default",
+                    background: occ.side === "you"
+                      ? `radial-gradient(circle at 35% 30%, ${t.pegFrom}, ${t.pegTo})`
+                      : `radial-gradient(circle at 35% 30%, ${CPU_FROM}, ${CPU_TO})`,
+                    boxShadow: (occ.side === turn && legalPieceIdxSet.has(occ.idx))
+                      ? `0 0 0 2px ${t.accent}, 0 2px 4px rgba(0,0,0,0.5)`
+                      : "0 2px 3px rgba(0,0,0,0.5)",
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* In-hand piece pools — both columns clickable now, not just "your
+          hand". The original only wired up the "you" column, which meant
+          hotseat Play (added this phase) would've had no way for Player 2
+          to ever bring a fresh piece onto the board — a real functional
+          gap, not just a cosmetic one, closed here rather than left for
+          someone to discover mid-game. */}
+      <div style={{ display: "flex", gap: 24, marginBottom: 8 }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 10, color: t.muted, letterSpacing: 1, marginBottom: 6 }}>{sideLabel("you").toUpperCase()} HAND</div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {Array.from({ length: youInHand }).map((_, i) => {
+              const idx = youPos.findIndex((p, ix) => p === -1 && youPos.slice(0, ix).filter((x) => x === -1).length === i);
+              const clickable = turn === "you" && legalPieceIdxSet.has(idx) && rollValue !== null;
+              return (
+                <button key={i} onClick={() => handlePieceClick("you", idx)} style={{
+                  width: 20, height: 20, borderRadius: "50%", border: "none", cursor: clickable ? "pointer" : "default",
+                  background: `radial-gradient(circle at 35% 30%, ${t.pegFrom}, ${t.pegTo})`,
+                  boxShadow: clickable ? `0 0 0 2px ${t.accent}` : "0 1px 2px rgba(0,0,0,0.4)",
+                }} />
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 10, color: t.muted, letterSpacing: 1, marginBottom: 6 }}>{sideLabel("cpu").toUpperCase()} HAND</div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {Array.from({ length: cpuInHand }).map((_, i) => {
+              const idx = cpuPos.findIndex((p, ix) => p === -1 && cpuPos.slice(0, ix).filter((x) => x === -1).length === i);
+              const clickable = mode === "play" && turn === "cpu" && legalPieceIdxSet.has(idx) && rollValue !== null;
+              return (
+                <button key={i} onClick={() => handlePieceClick("cpu", idx)} style={{
+                  width: 20, height: 20, borderRadius: "50%", border: "none", cursor: clickable ? "pointer" : "default",
+                  background: `radial-gradient(circle at 35% 30%, ${CPU_FROM}, ${CPU_TO})`,
+                  boxShadow: clickable ? `0 0 0 2px ${t.accent}` : "0 1px 2px rgba(0,0,0,0.4)",
+                }} />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <button onClick={() => startFreshGame(mode)} style={{ ...btnStyle(t, false), marginTop: 10 }}>
+        🔄 Reset
+      </button>
+
+      {winner && (
+        <div style={{ marginTop: 18, textAlign: "center", padding: "14px 20px", borderRadius: 12, background: t.panel, border: `1px solid ${t.panelBorder}`, maxWidth: 320 }}>
+          <div style={{ fontSize: 12, letterSpacing: 2, color: t.muted, marginBottom: 4 }}>GAME OVER</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: t.accent, marginBottom: 6 }}>
+            {mode === "play" ? `${sideLabel(winner)} wins!` : winner === "you" ? "You win! 🏆" : "The computer wins."}
+          </div>
+          <button onClick={() => startFreshGame(mode)} style={{ ...btnStyle(t, false, true), marginTop: 8 }}>Play Again</button>
+        </div>
+      )}
+
+      <div style={{ fontSize: 10, color: t.muted, marginTop: 24, textAlign: "center", maxWidth: 320, lineHeight: 1.6 }}>
+        Roll {variant.diceCount} binary dice, race your seven pieces along the board, and bring them all home first.
+        {sideLabel("you")}'s lane is bordered gold, {sideLabel("cpu")}'s lane teal — solid border + 🏁 marks each finish square (a piece must land exactly there to come home).
+        The small number in each square's corner is that lane's step order (1-14) — the shared middle row uses one number for both, since both players cross the exact same squares there.
+        Land on a rosette (✦) for a free extra roll{variant.rosettesSafe ? " — rosettes are also safe from capture." : ". Under these rules a piece there can still be captured."}
+        Land on an opponent elsewhere on the shared row to send them back to hand.
+      </div>
+    </div>
+  );
+}
+
+
+// ---------- Board geometry ----------
+// Classic 24-point board: three concentric squares (outer/middle/inner),
+// each contributing 8 points (4 corners + 4 side-midpoints), joined by 4
+// "spoke" lines running from each outer midpoint through the corresponding
+// middle and inner midpoints. Laid out on a 0-6 grid, same rendering
+// approach as Jumpin' Pin/Ur's PAD+CELL sizing.
+const POINTS = [
+  // outer ring, indices 0-7
+  { x: 0, y: 0 }, { x: 3, y: 0 }, { x: 6, y: 0 },
+  { x: 6, y: 3 }, { x: 6, y: 6 }, { x: 3, y: 6 },
+  { x: 0, y: 6 }, { x: 0, y: 3 },
+  // middle ring, indices 8-15
+  { x: 1, y: 1 }, { x: 3, y: 1 }, { x: 5, y: 1 },
+  { x: 5, y: 3 }, { x: 5, y: 5 }, { x: 3, y: 5 },
+  { x: 1, y: 5 }, { x: 1, y: 3 },
+  // inner ring, indices 16-23
+  { x: 2, y: 2 }, { x: 3, y: 2 }, { x: 4, y: 2 },
+  { x: 4, y: 3 }, { x: 4, y: 4 }, { x: 3, y: 4 },
+  { x: 2, y: 4 }, { x: 2, y: 3 },
+];
+
+// The 16 possible mill-lines (straight runs of 3 points).
+const MILLS = [
+  // outer ring sides
+  [0, 1, 2], [2, 3, 4], [4, 5, 6], [6, 7, 0],
+  // middle ring sides
+  [8, 9, 10], [10, 11, 12], [12, 13, 14], [14, 15, 8],
+  // inner ring sides
+  [16, 17, 18], [18, 19, 20], [20, 21, 22], [22, 23, 16],
+  // the four spokes connecting the rings
+  [1, 9, 17], [3, 11, 19], [5, 13, 21], [7, 15, 23],
+];
+
+// Adjacency graph and per-point mill membership, both derived from MILLS —
+// each mill [a,b,c] contributes edges a-b and b-c (b being the point
+// physically between a and c on that line).
+const ADJACENCY = Array.from({ length: 24 }, () => new Set());
+const POINT_MILLS = Array.from({ length: 24 }, () => []);
+const EDGES = [];
+MILLS.forEach((mill) => {
+  const [a, b, c] = mill;
+  ADJACENCY[a].add(b); ADJACENCY[b].add(a);
+  ADJACENCY[b].add(c); ADJACENCY[c].add(b);
+  EDGES.push([a, b], [b, c]);
+  mill.forEach((idx) => POINT_MILLS[idx].push(mill));
+});
+
+function millComplete(points, side, mill) {
+  return mill.every((idx) => points[idx] === side);
+}
+function pointsInMills(points, side) {
+  const inMill = new Set();
+  MILLS.forEach((mill) => { if (millComplete(points, side, mill)) mill.forEach((i) => inMill.add(i)); });
+  return inMill;
+}
+function legalDestinations(points, side, fromIdx, flying) {
+  if (flying) return points.map((v, i) => v === null ? i : null).filter((i) => i !== null);
+  return [...ADJACENCY[fromIdx]].filter((i) => points[i] === null);
+}
+function sideCanMove(points, side, flying) {
+  for (let i = 0; i < 24; i++) {
+    if (points[i] !== side) continue;
+    if (legalDestinations(points, side, i, flying).length > 0) return true;
+  }
+  return false;
+}
+
+// ---------- Nine Men's Morris rule variants ----------
+// Three genuinely documented variants:
+//   Standard — 9 pieces, phased (place all, then move), flying enabled
+//     once reduced to 3 on board. This is the convention most digital
+//     implementations default to.
+//   Classic — identical to Standard but flying disabled entirely, which
+//     several written rule sets treat as the "purist" version, explicitly
+//     calling flying an optional addition for newer/younger players.
+//   Lasker — proposed by chess grandmaster Emanuel Lasker: no separate
+//     placement/movement phases at all. Every turn, if you still have
+//     pieces in hand, you freely choose to EITHER place a new one OR move
+//     one already on the board. Traditionally played with 10 pieces per
+//     side rather than 9.
+// One explicit assumption, not found addressed directly in the sources
+// checked: whether Lasker's hybrid turns still get flying at 3-remaining.
+// Kept enabled here, same as Standard — it's the lower-risk default and
+// most modern write-ups treat flying as a near-universal convention
+// regardless of phase structure. Flagged rather than silently assumed.
+const NMM_VARIANTS = {
+  standard: { key: "standard", name: "Standard", subtitle: "9 pieces · flying enabled", pieceCount: 9, flyingEnabled: true, laskerHybrid: false },
+  classic: { key: "classic", name: "Classic", subtitle: "9 pieces · no flying", pieceCount: 9, flyingEnabled: false, laskerHybrid: false },
+  lasker: { key: "lasker", name: "Lasker", subtitle: "10 pieces · place or move any turn", pieceCount: 10, flyingEnabled: true, laskerHybrid: true },
+};
+const NMM_DEFAULT_VARIANT_KEY = "standard";
+
+function nmmOpponent(side) { return side === "you" ? "cpu" : "you"; }
+
+// NOTE on the "multiple mills" scholarly variant: some rule sets award TWO
+// removals if a single placement/move completes two mill-lines at once
+// (rare, but geometrically possible at a few shared points). Deliberately
+// not implemented — every composite move here removes at most one piece
+// even if POINT_MILLS[destIdx] contains more than one completed mill. That
+// keeps the removal UI a single click rather than a multi-step sequence,
+// and single-removal is the more commonly assumed default in the sources
+// checked (the double-removal behaviour was explicitly framed as "a
+// variation", not the baseline). Flagged, not silently dropped.
+
+// Generates every legal composite move for `side`: a primary action
+// (place or move) optionally followed by a forced opponent-piece removal
+// if that action completes a mill. This is the single source of truth the
+// AI searches over — the UI's own click-driven handlePointClick is written
+// separately for responsiveness, but both are checked against the same
+// legalDestinations/millComplete/pointsInMills primitives so they can't
+// disagree about what's legal.
+function nmmGenerateMoves(points, side, hand, variant, inPlacementPhase) {
+  const flying = variant.flyingEnabled && !inPlacementPhase && points.filter((p) => p === side).length === 3;
+  const canPlace = variant.laskerHybrid ? hand > 0 : (inPlacementPhase && hand > 0);
+  const canMove = variant.laskerHybrid ? true : !inPlacementPhase;
+
+  const primaries = [];
+  if (canPlace) {
+    for (let i = 0; i < 24; i++) if (points[i] === null) primaries.push({ type: "place", to: i });
+  }
+  if (canMove) {
+    for (let i = 0; i < 24; i++) {
+      if (points[i] !== side) continue;
+      for (const dest of legalDestinations(points, side, i, flying)) primaries.push({ type: "move", from: i, to: dest });
+    }
+  }
+
+  const moves = [];
+  for (const primary of primaries) {
+    const next = points.slice();
+    if (primary.type === "move") next[primary.from] = null;
+    next[primary.to] = side;
+    const formed = POINT_MILLS[primary.to].some((mill) => millComplete(next, side, mill));
+    if (!formed) { moves.push({ primary, removeIdx: null }); continue; }
+    const oppSide = nmmOpponent(side);
+    const oppPieces = [];
+    for (let i = 0; i < 24; i++) if (next[i] === oppSide) oppPieces.push(i);
+    const inMill = pointsInMills(next, oppSide);
+    const removable = oppPieces.filter((i) => !inMill.has(i));
+    const choices = removable.length > 0 ? removable : oppPieces;
+    for (const removeIdx of choices) moves.push({ primary, removeIdx });
+  }
+  return moves;
+}
+
+function nmmApplyMove(points, side, hand, move) {
+  const next = points.slice();
+  if (move.primary.type === "move") next[move.primary.from] = null;
+  next[move.primary.to] = side;
+  if (move.removeIdx !== null) next[move.removeIdx] = null;
+  const nextHand = move.primary.type === "place" ? hand - 1 : hand;
+  return { points: next, hand: nextHand };
+}
+
+function nmmEvaluate(points, youHand, cpuHand, aiSide) {
+  const oppSide = nmmOpponent(aiSide);
+  const aiOnBoard = points.filter((p) => p === aiSide).length;
+  const oppOnBoard = points.filter((p) => p === oppSide).length;
+  const aiHand = aiSide === "you" ? youHand : cpuHand;
+  const oppHand = aiSide === "you" ? cpuHand : youHand;
+  if (oppOnBoard + oppHand < 3) return 100000;
+  if (aiOnBoard + aiHand < 3) return -100000;
+  let score = (aiOnBoard - oppOnBoard) * 30;
+  // Mobility proxy: sum of each piece's adjacency count. Corner points (2
+  // neighbours) are structurally weaker than crossroads (4), which is a
+  // real, well-known strategic fact about this board — cheap to compute
+  // and worth more than material alone near the "no legal move" loss
+  // condition.
+  for (let i = 0; i < 24; i++) {
+    if (points[i] === aiSide) score += ADJACENCY[i].size;
+    else if (points[i] === oppSide) score -= ADJACENCY[i].size;
+  }
+  return score;
+}
+
+// Depth-limited minimax with alpha-beta pruning — no randomness in this
+// game, so unlike Ur's expectiminimax, a plain search is the honest tool
+// here. One "ply" = one side's fully-resolved composite move (including
+// any removal), matching how both Hnefatafl's and Ur's search treat a
+// full turn as the unit the tree alternates on.
+const NMM_SEARCH_DEPTH = 3; // tuning knob — early placement-phase branching is the expensive case; drop to 2 first if it ever feels sluggish
+
+function nmmMinimax(points, youHand, cpuHand, sideToMove, depth, alpha, beta, aiSide, variant) {
+  const oppSide = nmmOpponent(sideToMove);
+  const oppOnBoard = points.filter((p) => p === oppSide).length;
+  const oppHand = oppSide === "you" ? youHand : cpuHand;
+  if (oppOnBoard + oppHand < 3) return sideToMove === aiSide ? 100000 + depth : -100000 - depth;
+  if (depth === 0) return nmmEvaluate(points, youHand, cpuHand, aiSide);
+
+  const inPlacementPhase = !variant.laskerHybrid && (youHand > 0 || cpuHand > 0);
+  const hand = sideToMove === "you" ? youHand : cpuHand;
+  const moves = nmmGenerateMoves(points, sideToMove, hand, variant, inPlacementPhase);
+  if (moves.length === 0) {
+    // No legal move at all — sideToMove loses immediately (Morris' reversed-
+    // from-chess "can't move, you lose" rule).
+    return sideToMove === aiSide ? -100000 - depth : 100000 + depth;
+  }
+
+  const maximizing = sideToMove === aiSide;
+  let best = maximizing ? -Infinity : Infinity;
+  for (const move of moves) {
+    const result = nmmApplyMove(points, sideToMove, hand, move);
+    const nextYouHand = sideToMove === "you" ? result.hand : youHand;
+    const nextCpuHand = sideToMove === "cpu" ? result.hand : cpuHand;
+    const val = nmmMinimax(result.points, nextYouHand, nextCpuHand, oppSide, depth - 1, alpha, beta, aiSide, variant);
+    if (maximizing) { if (val > best) best = val; if (val > alpha) alpha = val; }
+    else { if (val < best) best = val; if (val < beta) beta = val; }
+    if (beta <= alpha) break;
+  }
+  return best;
+}
+
+function chooseNmmMove(points, youHand, cpuHand, aiSide, variant) {
+  const inPlacementPhase = !variant.laskerHybrid && (youHand > 0 || cpuHand > 0);
+  const hand = aiSide === "you" ? youHand : cpuHand;
+  const moves = nmmGenerateMoves(points, aiSide, hand, variant, inPlacementPhase);
+  if (moves.length === 0) return null;
+  const oppSide = nmmOpponent(aiSide);
+  let bestMove = moves[0], bestVal = -Infinity;
+  for (const move of moves) {
+    const result = nmmApplyMove(points, aiSide, hand, move);
+    const nextYouHand = aiSide === "you" ? result.hand : youHand;
+    const nextCpuHand = aiSide === "cpu" ? result.hand : cpuHand;
+    const val = nmmMinimax(result.points, nextYouHand, nextCpuHand, oppSide, NMM_SEARCH_DEPTH - 1, -Infinity, Infinity, aiSide, variant);
+    if (val > bestVal) { bestVal = val; bestMove = move; }
+  }
+  return bestMove;
+}
+
+function PieceStack({ t, label, hand, captured, pegFrom, pegTo, width }) {
+  const dotSize = 15, gap = 3, maxSlots = 10; // 10 not 9 — Lasker's piece count is the new max, standard/classic just render fewer
+  const slotHeight = maxSlots * dotSize + (maxSlots - 1) * gap;
+  return (
+    <div style={{ width, display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+      <div style={{ fontSize: 9, color: t.muted, letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
+        {label}
+      </div>
+      {/* Fixed-height, bottom-anchored: the stack stays rooted to the floor
+          of this box and drains from the top as pieces get placed. */}
+      <div style={{ height: slotHeight, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap }}>
+        {Array.from({ length: hand }).map((_, i) => (
+          <div key={`hand-${i}`} style={{
+            width: dotSize, height: dotSize, borderRadius: "50%",
+            background: `radial-gradient(circle at 35% 30%, ${pegFrom}, ${pegTo})`,
+            boxShadow: "0 1px 2px rgba(0,0,0,0.4)",
+          }} />
+        ))}
+      </div>
+      {captured > 0 && (
+        <>
+          <div style={{ width: "60%", height: 1, background: t.panelBorder, margin: "8px 0" }} />
+          <div style={{ fontSize: 8, color: t.muted, letterSpacing: 0.5, marginBottom: 4 }}>OUT</div>
+          {/* Same fixed-height, bottom-anchored box — but here it means new
+              captures fill the box upward from the floor, like a gauge. */}
+          <div style={{ height: slotHeight, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", gap }}>
+            {Array.from({ length: captured }).map((_, i) => (
+              <div key={`cap-${i}`} style={{
+                width: dotSize, height: dotSize, borderRadius: "50%",
+                background: `radial-gradient(circle at 35% 30%, ${pegFrom}, ${pegTo})`,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.4)",
+              }} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Deliberately plainer visual treatment than the local game — no PieceStack
+// component, no capture pop animations. Same principle as Hnefatafl's own
+// online mode: prove the feature works first, polish once it's proven
+// itself with real friend-pairs.
+function NmmOnlineGameView({ t, isPro, freemium, onGameCompleted, onUnlock, unlocking, checkoutError, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm, onBack }) {
+  const GAME_KEY = "nmm";
+  const [phase, setPhase] = useState("loading"); // loading | menu | invitePending | joinPreview | active
+  const [myRecord, setMyRecord] = useState(() => loadOnlineGameRecord());
+  const [game, setGame] = useState(null);
+  const [inviteUrl, setInviteUrl] = useState("");
+  const [joinPreview, setJoinPreview] = useState(null);
+  const [joinToken, setJoinToken] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [pendingLocalRemoval, setPendingLocalRemoval] = useState(null); // { primary, removable: Set }
+  const [errorMsg, setErrorMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copyLabel, setCopyLabel] = useState("Copy Link");
+  const [gateActive, setGateActive] = useState(() => !isPro && isQuotaExhausted(freemium, GAME_KEY, "online"));
+  const wonRef = useRef(false);
+
+  useEffect(() => {
+    (async () => {
+      if (myRecord && myRecord.gameId && myRecord.gameType === "nmm") {
+        try {
+          const state = await onlineApiGet(`/games/${myRecord.gameId}/state`);
+          setGame(state);
+          wonRef.current = state.status === "finished";
+          setPhase(state.status === "waiting" ? "invitePending" : "active");
+          return;
+        } catch (e) {
+          clearOnlineGameRecord();
+          setMyRecord(null);
+        }
+      }
+      const token = getInviteTokenFromUrl();
+      if (token) {
+        try {
+          const preview = await onlineApiGet(`/invite/${token}`);
+          if (preview.gameType !== "nmm") {
+            setErrorMsg("That invite is for a different game.");
+            stripInviteFromUrl();
+            setPhase("menu");
+            return;
+          }
+          setJoinToken(token);
+          setJoinPreview(preview);
+          setPhase("joinPreview");
+          return;
+        } catch (e) {
+          setErrorMsg("That invite link isn't valid anymore — ask your friend to send a new one.");
+          stripInviteFromUrl();
+        }
+      }
+      setPhase("menu");
+    })();
+    // eslint-disable-next-line
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "invitePending" && phase !== "active") return;
+    if (!myRecord?.gameId) return;
+    const timer = setInterval(async () => {
+      try {
+        const state = await onlineApiGet(`/games/${myRecord.gameId}/state`);
+        setGame(state);
+        if (phase === "invitePending" && state.status === "active") setPhase("active");
+        if (state.status === "finished" && !wonRef.current) {
+          wonRef.current = true;
+          onGameCompleted(GAME_KEY, "online");
+        }
+      } catch (e) { /* transient hiccup, try again next tick */ }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [phase, myRecord]);
+
+  async function createInvite() {
+    if (!isPro && isQuotaExhausted(freemium, GAME_KEY, "online")) { setGateActive(true); return; }
+    setBusy(true);
+    setErrorMsg("");
+    try {
+      const res = await onlineApiPost("/invite/create", { gameType: "nmm", variant: NMM_DEFAULT_VARIANT_KEY });
+      const rec = { gameId: res.gameId, secret: res.hostSecret, side: "you", gameType: "nmm", variant: res.variant };
+      saveOnlineGameRecord(rec);
+      setMyRecord(rec);
+      setInviteUrl(res.url);
+      wonRef.current = false;
+      setPhase("invitePending");
+    } catch (e) {
+      setErrorMsg(e.message || "Couldn't create an invite right now.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function joinGame() {
+    if (!joinToken) return;
+    if (!isPro && isQuotaExhausted(freemium, GAME_KEY, "online")) { setGateActive(true); return; }
+    setBusy(true);
+    setErrorMsg("");
+    try {
+      const res = await onlineApiPost(`/invite/${joinToken}/redeem`, {});
+      const rec = { gameId: res.gameId, secret: res.guestSecret, side: res.guestSide, gameType: "nmm", variant: res.variant };
+      saveOnlineGameRecord(rec);
+      setMyRecord(rec);
+      stripInviteFromUrl();
+      wonRef.current = false;
+      const state = await onlineApiGet(`/games/${res.gameId}/state`);
+      setGame(state);
+      setPhase("active");
+    } catch (e) {
+      setErrorMsg(e.message || "Couldn't join that game — the link may have just been used.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function leaveGame() {
+    clearOnlineGameRecord();
+    setMyRecord(null);
+    setGame(null);
+    setSelected(null);
+    setPendingLocalRemoval(null);
+    setPhase("menu");
+  }
+
+  async function shareInvite() {
+    try {
+      if (navigator.share) await navigator.share({ title: "Nine Men's Morris", text: "Join me for a game of Nine Men's Morris:", url: inviteUrl });
+      else await copyInvite();
+    } catch (e) { /* cancelled share sheet, not an error */ }
+  }
+  async function copyInvite() {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopyLabel("Copied!");
+      setTimeout(() => setCopyLabel("Copy Link"), 1800);
+    } catch (e) { /* clipboard denied — link is still shown to copy manually */ }
+  }
+
+  const variant = NMM_VARIANTS[game?.variant] || NMM_VARIANTS[NMM_DEFAULT_VARIANT_KEY];
+  const mySide = myRecord?.side;
+  const myTurn = game && game.status === "active" && game.turn === mySide;
+  const inPlacementPhase = game ? !variant.laskerHybrid && (game.youHand > 0 || game.cpuHand > 0) : false;
+  const myHand = game ? (mySide === "you" ? game.youHand : game.cpuHand) : 0;
+  const canPlaceNow = variant.laskerHybrid ? myHand > 0 : (inPlacementPhase && myHand > 0);
+  const canMoveNow = variant.laskerHybrid || !inPlacementPhase;
+  const myOnBoard = game ? game.points.filter((p) => p === mySide).length : 0;
+  const myFlying = variant.flyingEnabled && !inPlacementPhase && myOnBoard === 3;
+
+  const legalDestSet = useMemo(() => {
+    if (!game || selected === null || !myTurn) return new Set();
+    return new Set(legalDestinations(game.points, selected, myFlying));
+  }, [game, selected, myTurn, myFlying]);
+
+  // Submits a fully-decided composite move (mill removal, if any, already
+  // chosen) to the server — the actual source of truth. Client-side mill
+  // pre-detection below only exists to drive the two-tap "place, then pick
+  // who to remove" UI; the server independently re-derives whether a mill
+  // formed and never trusts this client's opinion of it.
+  async function submitMove(primary, removeIdx) {
+    setBusy(true);
+    setErrorMsg("");
+    try {
+      const updated = await onlineApiPost(`/games/${myRecord.gameId}/move`, { move: { primary, removeIdx } }, myRecord.secret);
+      setGame(updated);
+      if (updated.status === "finished" && !wonRef.current) {
+        wonRef.current = true;
+        onGameCompleted(GAME_KEY, "online");
+      }
+    } catch (e) {
+      setErrorMsg(e.message || "That move didn't go through — the board may have just changed.");
+    } finally {
+      setPendingLocalRemoval(null);
+      setSelected(null);
+      setBusy(false);
+    }
+  }
+
+  function tryPrimary(primary) {
+    setSelected(null);
+    const tentative = game.points.slice();
+    if (primary.type === "move") tentative[primary.from] = null;
+    tentative[primary.to] = mySide;
+    const formed = POINT_MILLS[primary.to].some((mill) => millComplete(tentative, mySide, mill));
+    if (!formed) { submitMove(primary, null); return; }
+    const oppSide = mySide === "you" ? "cpu" : "you";
+    const oppPieces = [];
+    for (let i = 0; i < 24; i++) if (tentative[i] === oppSide) oppPieces.push(i);
+    const inMill = pointsInMills(tentative, oppSide);
+    const removable = oppPieces.filter((i) => !inMill.has(i));
+    setPendingLocalRemoval({ primary, removable: new Set(removable.length > 0 ? removable : oppPieces) });
+  }
+
+  function handlePointClick(idx) {
+    if (!game || !myTurn || busy) return;
+    if (pendingLocalRemoval) {
+      if (!pendingLocalRemoval.removable.has(idx)) return;
+      submitMove(pendingLocalRemoval.primary, idx);
+      return;
+    }
+    if (canPlaceNow && game.points[idx] === null) { tryPrimary({ type: "place", to: idx }); return; }
+    if (selected === null) {
+      if (game.points[idx] === mySide && canMoveNow && legalDestinations(game.points, idx, myFlying).length > 0) setSelected(idx);
+      return;
+    }
+    if (legalDestSet.has(idx)) {
+      tryPrimary({ type: "move", from: selected, to: idx });
+    } else if (game.points[idx] === mySide) {
+      setSelected(idx);
+    } else {
+      setSelected(null);
+    }
+  }
+
+  const wrap = { display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 460 };
+
+  if (gateActive) {
+    return (
+      <FreemiumGate
+        t={t} gameLabel="Nine Men's Morris" modeLabel="Online" onBack={onBack}
+        onUnlock={onUnlock} unlocking={unlocking} checkoutError={checkoutError}
+        restoreEmail={restoreEmail} setRestoreEmail={setRestoreEmail} restoreStatus={restoreStatus}
+        onSubmitRestore={onSubmitRestore} showRestoreForm={showRestoreForm} setShowRestoreForm={setShowRestoreForm}
+      />
+    );
+  }
+
+  if (phase === "loading") return <div style={{ ...wrap, color: t.muted, fontSize: 13, padding: 30 }}>Loading…</div>;
+
+  if (phase === "menu") {
+    const count = freemium.counts[freemiumSlotKey(GAME_KEY, "online")] || 0;
+    const remaining = Math.max(0, FREE_GAMES_PER_MODE_PER_DAY - count);
+    return (
+      <div style={wrap}>
+        <div style={{ fontSize: 14, color: t.text, textAlign: "center", lineHeight: 1.6, marginBottom: 10 }}>
+          Send a friend a private link and play a game together — no account needed. Only someone with the exact link can join; there's no public lobby or search.
+        </div>
+        <div style={{ fontSize: 12, color: t.muted, textAlign: "center", marginBottom: 16 }}>
+          {isPro ? "Unlimited online games — thanks for going Pro." : `${remaining} of ${FREE_GAMES_PER_MODE_PER_DAY} free online games left today.`}
+        </div>
+        <button onClick={createInvite} disabled={busy} style={{ ...btnStyle(t, busy, true), padding: "12px 22px", fontSize: 14 }}>
+          {busy ? "Creating…" : "🤝 Invite a Friend"}
+        </button>
+        {errorMsg && <div style={{ color: "#ff6b5b", fontSize: 12, marginTop: 12, textAlign: "center" }}>{errorMsg}</div>}
+      </div>
+    );
+  }
+
+  if (phase === "joinPreview") {
+    return (
+      <div style={wrap}>
+        <div style={{ fontSize: 15, color: t.text, textAlign: "center", lineHeight: 1.6, marginBottom: 16 }}>
+          You've been invited to a game of Nine Men's Morris{joinPreview?.variant ? ` (${NMM_VARIANTS[joinPreview.variant]?.key === joinPreview.variant ? joinPreview.variant : joinPreview.variant} rules)` : ""}.
+        </div>
+        <button onClick={joinGame} disabled={busy} style={{ ...btnStyle(t, busy, true), padding: "12px 22px", fontSize: 14 }}>
+          {busy ? "Joining…" : "⚔️ Join Game"}
+        </button>
+        {errorMsg && <div style={{ color: "#ff6b5b", fontSize: 12, marginTop: 12, textAlign: "center" }}>{errorMsg}</div>}
+      </div>
+    );
+  }
+
+  if (phase === "invitePending") {
+    return (
+      <div style={wrap}>
+        <div style={{ fontSize: 14, color: t.text, textAlign: "center", marginBottom: 14 }}>
+          Waiting for your friend to open the link and join…
+        </div>
+        <div style={{
+          width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.panelBorder}`,
+          background: t.panel, color: t.muted, fontSize: 12, wordBreak: "break-all", marginBottom: 10, textAlign: "center",
+        }}>
+          {inviteUrl}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={shareInvite} style={{ ...btnStyle(t, false), fontSize: 13 }}>📤 Share</button>
+          <button onClick={copyInvite} style={{ ...btnStyle(t, false), fontSize: 13 }}>{copyLabel}</button>
+          <button onClick={leaveGame} style={{ ...btnStyle(t, false), fontSize: 13 }}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!game) return <div style={{ ...wrap, color: t.muted, fontSize: 13, padding: 30 }}>Loading…</div>;
+
+  const CELL = 26, PAD = 24, BOARD_PX = 6 * CELL + PAD * 2;
+
+  return (
+    <div style={wrap}>
+      <div style={{ fontSize: 13, color: t.text, textAlign: "center", marginBottom: 6 }}>
+        {game.status === "finished"
+          ? (game.winner === mySide ? "You won!" : "Your friend won.")
+          : pendingLocalRemoval
+          ? "Mill! Tap one of your friend's pieces to remove it."
+          : myTurn ? "Your move." : "Waiting for your friend's move…"}
+      </div>
+      <div style={{ fontSize: 11, color: t.muted, marginBottom: 12 }}>
+        You: {game.points.filter((p) => p === mySide).length} on board{myHand > 0 ? ` (+${myHand} in hand)` : ""}
+      </div>
+
+      <div style={{ position: "relative", width: BOARD_PX, height: BOARD_PX, background: t.panel, borderRadius: 14, boxShadow: `inset 0 0 0 1px ${t.panelBorder}` }}>
+        {EDGES.map(([a, b], i) => {
+          const pa = POINTS[a], pb = POINTS[b];
+          const x1 = PAD + pa.x * CELL, y1 = PAD + pa.y * CELL;
+          const x2 = PAD + pb.x * CELL, y2 = PAD + pb.y * CELL;
+          const horizontal = y1 === y2;
+          const style = horizontal
+            ? { left: Math.min(x1, x2), top: y1 - 1, width: Math.abs(x2 - x1), height: 2 }
+            : { left: x1 - 1, top: Math.min(y1, y2), width: 2, height: Math.abs(y2 - y1) };
+          return <div key={i} style={{ position: "absolute", background: t.lineColor, ...style }} />;
+        })}
+        {POINTS.map((p, idx) => {
+          const x = PAD + p.x * CELL, y = PAD + p.y * CELL;
+          const side = game.points[idx];
+          const isDest = legalDestSet.has(idx);
+          const isRemovable = pendingLocalRemoval && pendingLocalRemoval.removable.has(idx);
+          const isSelected = selected === idx;
+          const size = 22;
+          return (
+            <div key={idx} onClick={() => handlePointClick(idx)} style={{
+              position: "absolute", left: x - 14, top: y - 14, width: 28, height: 28,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: myTurn ? "pointer" : "default",
+            }}>
+              {!side && (
+                <div style={{
+                  width: 10, height: 10, borderRadius: "50%", background: t.holeEmpty,
+                  boxShadow: isDest ? `0 0 0 3px ${t.accent}` : isRemovable ? "0 0 0 3px #ff6b57" : "inset 0 1px 2px rgba(0,0,0,0.5)",
+                }} />
+              )}
+              {side && (
+                <div style={{
+                  width: size, height: size, borderRadius: "50%",
+                  background: side === "you"
+                    ? `radial-gradient(circle at 35% 30%, ${t.pegFrom}, ${t.pegTo})`
+                    : `radial-gradient(circle at 35% 30%, ${CPU_FROM}, ${CPU_TO})`,
+                  boxShadow: isSelected ? `0 0 0 3px ${t.accent}` : isRemovable ? "0 0 0 3px #ff6b57" : "0 2px 3px rgba(0,0,0,0.5)",
+                }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {errorMsg && <div style={{ color: "#ff6b5b", fontSize: 12, marginTop: 10, textAlign: "center" }}>{errorMsg}</div>}
+      <button onClick={leaveGame} style={{ ...btnStyle(t, false), fontSize: 12, marginTop: 14 }}>
+        {game.status === "finished" ? "Leave Game" : "Forfeit & Leave"}
+      </button>
+    </div>
+  );
+}
+
+function NineMensMorris({ onBack, isPro, freemium, onGameCompleted, onUnlock, unlocking, checkoutError, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm }) {
+  const GAME_KEY = "nmm";
+  const NMM_INTRO_SEEN_KEY = "ancient_games_intro_seen_nmm_v1";
+  const [showIntro, setShowIntro] = useState(() => {
+    try { return localStorage.getItem(NMM_INTRO_SEEN_KEY) !== "1"; } catch (e) { return true; }
+  });
+  function dismissIntro() {
+    try { localStorage.setItem(NMM_INTRO_SEEN_KEY, "1"); } catch (e) { /* ignore */ }
+    setShowIntro(false);
+  }
+  const [themeKey, setThemeKey] = useState("dark");
+  const t = THEMES[themeKey];
+  const [upsell, setUpsell] = useState(null);
+  function selectTheme(key) {
+    const theme = THEMES[key];
+    if (theme.tier === "pro" && !isPro) {
+      setUpsell(theme.name);
+      setTimeout(() => setUpsell(null), 2200);
+      return;
+    }
+    setThemeKey(key);
+  }
+  const [mode, setMode] = useState(() => (getInviteTokenFromUrl() ? "online" : "challenge")); // "play" (hotseat) | "challenge" (vs AI) | "online"
+  const [variantKey, setVariantKey] = useState(NMM_DEFAULT_VARIANT_KEY);
+  const variant = NMM_VARIANTS[variantKey];
+  const [gateActive, setGateActive] = useState(() => !isPro && isQuotaExhausted(freemium, GAME_KEY, "challenge"));
+  const wonRef = useRef(false);
+
+  function sideLabel(side) {
+    if (mode === "play") return side === "you" ? "Player 1" : "Player 2";
+    return side === "you" ? "You" : "CPU";
+  }
+
+  const PAD = 30, MIN_CELL = 38, MAX_CELL = 66, MAX_BOARD_WIDTH = 480;
+  const SIDE_COL_WIDTH = 34;
+  const [viewportWidth, setViewportWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 390);
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const CELL = useMemo(() => {
+    const usableWidth = Math.min(viewportWidth - 24 - (SIDE_COL_WIDTH + 10) * 2, MAX_BOARD_WIDTH);
+    const raw = (usableWidth - PAD * 2) / 6;
+    return Math.max(MIN_CELL, Math.min(MAX_CELL, raw));
+  }, [viewportWidth]);
+  const boardSize = 6 * CELL + PAD * 2;
+
+  // ---------- Game state ----------
+  const [points, setPoints] = useState(() => Array(24).fill(null)); // null | "you" | "cpu"
+  const [youHand, setYouHand] = useState(variant.pieceCount);
+  const [cpuHand, setCpuHand] = useState(variant.pieceCount);
+  const [turn, setTurn] = useState("you");
+  const [selected, setSelected] = useState(null);
+  const [pendingRemoval, setPendingRemoval] = useState(null); // "you" | "cpu" | null
+  const [winner, setWinner] = useState(null);
+  const [message, setMessage] = useState("Place your first piece.");
+  const [millPopKey, setMillPopKey] = useState(0);
+  const [millPopSide, setMillPopSide] = useState("you");
+  const [glow, setGlow] = useState(null); // { side, key } | null
+  const [capturedYou, setCapturedYou] = useState(0);
+  const [capturedCpu, setCapturedCpu] = useState(0);
+  const cpuTimer = useRef(null);
+  const cpuRemovalRef = useRef(null); // stashes the AI's already-decided removal choice between the place/move tick and the removal tick
+
+  const youOnBoard = points.filter((p) => p === "you").length;
+  const cpuOnBoard = points.filter((p) => p === "cpu").length;
+
+  // "Placement phase" is a real global-turn concept for Standard/Classic
+  // (place all pieces first, then move) but doesn't exist at all under
+  // Lasker (place-or-move is a free per-turn choice) — laskerHybrid short-
+  // circuits this to permanently false, which correctly cascades through
+  // every other phase-dependent value below.
+  const inPlacementPhase = !variant.laskerHybrid && (youHand > 0 || cpuHand > 0);
+  const youFlying = variant.flyingEnabled && !inPlacementPhase && youOnBoard === 3;
+  const cpuFlying = variant.flyingEnabled && !inPlacementPhase && cpuOnBoard === 3;
+
+  const turnHand = turn === "you" ? youHand : cpuHand;
+  const canPlaceNow = variant.laskerHybrid ? turnHand > 0 : (inPlacementPhase && turnHand > 0);
+  const canMoveNow = variant.laskerHybrid || !inPlacementPhase;
+  const humanCanAct = mode === "play" || turn === "you";
+
+  const legalPieceSet = useMemo(() => {
+    if (!canMoveNow || pendingRemoval || winner) return new Set();
+    const s = new Set();
+    for (let i = 0; i < 24; i++) {
+      if (points[i] !== turn) continue;
+      if (legalDestinations(points, turn, i, turn === "you" ? youFlying : cpuFlying).length > 0) s.add(i);
+    }
+    return s;
+  }, [points, canMoveNow, turn, pendingRemoval, winner, youFlying, cpuFlying]);
+
+  const legalDestSet = useMemo(() => {
+    if (selected === null) return new Set();
+    return new Set(legalDestinations(points, turn, selected, turn === "you" ? youFlying : cpuFlying));
+  }, [selected, points, turn, youFlying, cpuFlying]);
+
+  const removableSet = useMemo(() => {
+    if (!pendingRemoval) return new Set();
+    const opp = pendingRemoval === "you" ? "cpu" : "you";
+    const oppPieces = [];
+    for (let i = 0; i < 24; i++) if (points[i] === opp) oppPieces.push(i);
+    const inMill = pointsInMills(points, opp);
+    const notInMill = oppPieces.filter((i) => !inMill.has(i));
+    return new Set(notInMill.length > 0 ? notInMill : oppPieces);
+  }, [pendingRemoval, points]);
+
+  function triggerMill(side) {
+    setMillPopSide(side);
+    setMillPopKey((k) => k + 1);
+    setGlow({ side, key: Date.now() });
+    setTimeout(() => setGlow(null), 1300);
+  }
+
+  function afterPlacementOrMove(nextPoints, side, destIdx) {
+    const formedMills = POINT_MILLS[destIdx].filter((mill) => millComplete(nextPoints, side, mill));
+    if (formedMills.length > 0) {
+      triggerMill(side);
+      setMessage(`${sideLabel(side)} formed a mill — remove an opposing piece.`);
+      setPendingRemoval(side);
+    } else {
+      finishTurn(nextPoints, side);
+    }
+  }
+
+  function finishTurn(nextPoints, sideJustMoved) {
+    const opp = sideJustMoved === "you" ? "cpu" : "you";
+    const oppOnBoard = nextPoints.filter((p) => p === opp).length;
+    const oppHand = opp === "you" ? youHand : cpuHand;
+    if (oppOnBoard + oppHand < 3) {
+      setWinner(sideJustMoved);
+      setMessage(`${sideLabel(sideJustMoved)} wins — ${sideLabel(opp)} is down to two pieces!`);
+      return;
+    }
+    const oppFlying = variant.flyingEnabled && !inPlacementPhase && oppOnBoard === 3;
+    if (!inPlacementPhase && !sideCanMove(nextPoints, opp, oppFlying)) {
+      setWinner(sideJustMoved);
+      setMessage(`${sideLabel(sideJustMoved)} wins — ${sideLabel(opp)} has no legal moves!`);
+      return;
+    }
+    setTurn(opp);
+    setSelected(null);
+    setMessage(`${sideLabel(opp)}'s move.`);
+  }
+
+  function placeAt(side, idx) {
+    if (points[idx] !== null) return;
+    const next = [...points];
+    next[idx] = side;
+    setPoints(next);
+    if (side === "you") setYouHand((h) => h - 1); else setCpuHand((h) => h - 1);
+    afterPlacementOrMove(next, side, idx);
+  }
+
+  function moveTo(side, fromIdx, toIdx) {
+    const next = [...points];
+    next[fromIdx] = null;
+    next[toIdx] = side;
+    setPoints(next);
+    afterPlacementOrMove(next, side, toIdx);
+  }
+
+  function removeAt(side, idx) {
+    const next = [...points];
+    next[idx] = null;
+    setPoints(next);
+    const opp = side === "you" ? "cpu" : "you";
+    if (opp === "you") setCapturedYou((c) => c + 1); else setCapturedCpu((c) => c + 1);
+    setPendingRemoval(null);
+    finishTurn(next, side);
+  }
+
+  function handlePointClick(idx) {
+    if (winner) return;
+    if (mode === "challenge" && turn !== "you") return;
+    const side = turn;
+
+    if (pendingRemoval === side) {
+      if (removableSet.has(idx)) removeAt(side, idx);
+      return;
+    }
+    if (canPlaceNow && points[idx] === null) {
+      // Under Lasker, a click on an empty point always reads as "place" —
+      // intending to move instead is expressed by clicking one of your own
+      // pieces FIRST (the branch below), so there's no real ambiguity even
+      // though both actions are legal on the same turn.
+      placeAt(side, idx);
+      return;
+    }
+    if (selected === null) {
+      if (points[idx] === side && legalPieceSet.has(idx)) setSelected(idx);
+      return;
+    }
+    if (legalDestSet.has(idx)) {
+      moveTo(side, selected, idx);
+    } else if (points[idx] === side && legalPieceSet.has(idx)) {
+      setSelected(idx);
+    } else {
+      setSelected(null);
+    }
+  }
+
+  // ---------- CPU opponent (Challenge mode only) ----------
+  // Real minimax + alpha-beta now, replacing the old three-heuristic setup
+  // (separate hand-tuned priority lists for placement/movement/removal).
+  // chooseNmmMove decides a full composite turn — primary action plus
+  // whichever removal it determined is best — in one search, so the CPU's
+  // removal choice is the one the search actually reasoned about, not a
+  // second, disconnected heuristic guess. cpuRemovalRef bridges the two
+  // React ticks placeAt/moveTo → afterPlacementOrMove(async render) →
+  // this effect firing again with pendingRemoval==="cpu": the removal
+  // index picked in the FIRST tick is what actually gets used in the
+  // second, not a re-decided one.
+  useEffect(() => {
+    if (mode !== "challenge") return;
+    if (turn !== "cpu" || winner) return;
+    if (pendingRemoval === "cpu") {
+      const idx = cpuRemovalRef.current;
+      const fallback = [...removableSet][0];
+      const chosenIdx = idx !== null && removableSet.has(idx) ? idx : fallback;
+      const t1 = setTimeout(() => removeAt("cpu", chosenIdx), 500);
+      cpuTimer.current = t1;
+      return () => clearTimeout(t1);
+    }
+    const chosen = chooseNmmMove(points, youHand, cpuHand, "cpu", variant);
+    if (!chosen) return; // no legal move — finishTurn already handles the loss condition from the preceding turn
+    cpuRemovalRef.current = chosen.removeIdx;
+    const t1 = setTimeout(() => {
+      if (chosen.primary.type === "place") placeAt("cpu", chosen.primary.to);
+      else moveTo("cpu", chosen.primary.from, chosen.primary.to);
+    }, 700);
+    cpuTimer.current = t1;
+    return () => clearTimeout(t1);
+    // eslint-disable-next-line
+  }, [mode, turn, pendingRemoval, points, youHand, cpuHand, winner, variant]);
+
+  const reset = useCallback(() => {
+    setPoints(Array(24).fill(null));
+    setYouHand(variant.pieceCount); setCpuHand(variant.pieceCount);
+    setTurn("you"); setSelected(null);
+    setPendingRemoval(null); setWinner(null);
+    setCapturedYou(0); setCapturedCpu(0);
+    setMessage("Place your first piece.");
+    cpuRemovalRef.current = null;
+    wonRef.current = false;
+  }, [variant]);
+
+  function startFreshGame(nextMode) {
+    if (!isPro && isQuotaExhausted(freemium, GAME_KEY, nextMode)) { setGateActive(true); return; }
+    setGateActive(false);
+    reset();
+  }
+  function handleSetMode(next) { setMode(next); startFreshGame(next); }
+  function handleSetVariantKey(next) { setVariantKey(next); startFreshGame(mode); }
+
+  useEffect(() => {
+    if (winner && !wonRef.current) {
+      wonRef.current = true;
+      onGameCompleted(GAME_KEY, mode);
+    }
+  }, [winner, mode]);
+
+  const inMillSet = useMemo(() => new Set([...pointsInMills(points, "you"), ...pointsInMills(points, "cpu")]), [points]);
+
+  if (gateActive) {
+    return (
+      <FreemiumGate
+        t={t} gameLabel="Nine Men's Morris" modeLabel={mode === "play" ? "Play" : "Challenge"} onBack={onBack}
+        onUnlock={onUnlock} unlocking={unlocking} checkoutError={checkoutError}
+        restoreEmail={restoreEmail} setRestoreEmail={setRestoreEmail} restoreStatus={restoreStatus}
+        onSubmitRestore={onSubmitRestore} showRestoreForm={showRestoreForm} setShowRestoreForm={setShowRestoreForm}
+      />
+    );
+  }
+
+  if (mode === "online") {
+    return (
+      <NmmOnlineGameView
+        t={t} isPro={isPro} freemium={freemium} onGameCompleted={onGameCompleted}
+        onUnlock={onUnlock} unlocking={unlocking} checkoutError={checkoutError}
+        restoreEmail={restoreEmail} setRestoreEmail={setRestoreEmail} restoreStatus={restoreStatus}
+        onSubmitRestore={onSubmitRestore} showRestoreForm={showRestoreForm} setShowRestoreForm={setShowRestoreForm}
+        onBack={onBack}
+      />
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: t.bg, color: t.text, fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif", display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 12px 40px", transition: "background 200ms ease, color 200ms ease" }}>
+
+      {showIntro && (
+        <IntroCrawl
+          seriesLabel="ANCIENT GAMES · 03"
+          gameTitle="NINE MEN'S MORRIS"
+          gameTagline="~3,400-year-old strategy game · no dice, no luck, just the mill"
+          crawlText={NMM_CRAWL}
+          crawlDurationMs={31000}
+          motto={[["FORTES FORTUNA ADIUVAT", "\"Fortune Favours The Brave\" — Terence, Phormio, 161 BC"]]}
+          mottoFont="Georgia, serif"
+          mottoFontSize={26}
+          onDone={dismissIntro}
+        />
+      )}
+
+      <style>{`
+        @keyframes msgPop {
+          0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+          15% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+          25% { transform: translate(-50%, -50%) scale(1); }
+          75% { opacity: 1; }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+        }
+        @keyframes glowBurst {
+          0% { opacity: 0; } 18% { opacity: 0.9; } 70% { opacity: 0.9; } 100% { opacity: 0; }
+        }
+        .nmm-glow-top, .nmm-glow-bottom {
+          position: fixed; left: 0; right: 0; height: 30vh;
+          pointer-events: none; z-index: 900;
+          animation: glowBurst 1.3s ease-out forwards;
+        }
+        .nmm-glow-top { top: 0; }
+        .nmm-glow-bottom { bottom: 0; }
+      `}</style>
+
+      {glow && (() => {
+        const c1 = glow.side === "you" ? "232,196,104" : "127,232,201";
+        return (
+          <React.Fragment key={glow.key}>
+            <div className="nmm-glow-top" style={{ background: `linear-gradient(to bottom, rgba(${c1},0.35) 0%, transparent 100%)` }} />
+            <div className="nmm-glow-bottom" style={{ background: `linear-gradient(to top, rgba(${c1},0.35) 0%, transparent 100%)` }} />
+          </React.Fragment>
+        );
+      })()}
+
+      {millPopKey > 0 && (
+        <div
+          key={`mill-${millPopKey}`}
+          style={{ position: "fixed", top: "38vh", left: "50%", zIndex: 951, pointerEvents: "none", animation: "msgPop 1.3s ease forwards", textAlign: "center" }}
+        >
+          <div style={{
+            fontSize: 56, fontWeight: 900, fontFamily: "Georgia, serif", whiteSpace: "nowrap",
+            color: millPopSide === "you" ? "#e8c468" : CPU_FROM,
+            textShadow: millPopSide === "you"
+              ? "0 0 32px rgba(232,196,104,0.85), 0 2px 6px rgba(0,0,0,0.8)"
+              : "0 0 32px rgba(127,232,201,0.85), 0 2px 6px rgba(0,0,0,0.8)",
+          }}>
+            MILL!
+          </div>
+        </div>
+      )}
+
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, letterSpacing: 4, color: t.muted, fontWeight: 700, marginBottom: 4 }}>
+          ANCIENT GAMES · 03
+        </div>
+        <h1 style={{ fontSize: 25, fontWeight: 800, letterSpacing: 1, margin: 0, textTransform: "uppercase" }}>
+          Nine Men<span style={{ color: t.accent }}>'</span>s Morris
+        </h1>
+        <div style={{ fontSize: 11, color: t.muted, marginTop: 4, letterSpacing: 0.5 }}>
+          Roman &amp; Egyptian roots · pure strategy, no luck
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap", justifyContent: "center" }}>
+        <button onClick={onBack} style={pillStyle(t, false)}>← Games</button>
+        <button onClick={() => setThemeKey(themeKey === "light" ? "dark" : "light")} style={pillStyle(t, true)}>
+          {themeKey === "light" ? "☀️ Light" : "🌙 Dark"}
+        </button>
+        <button onClick={() => handleSetMode("challenge")} style={pillStyle(t, mode === "challenge")}>🤖 Challenge</button>
+        <button onClick={() => handleSetMode("play")} style={pillStyle(t, mode === "play")}>🧑‍🤝‍🧑 Play</button>
+        <button onClick={() => setMode("online")} style={pillStyle(t, mode === "online")}>🤝 Online</button>
+        <span style={{ width: 1, height: 20, background: t.panelBorder }} />
+        <button onClick={() => setShowIntro(true)} style={pillStyle(t, false)} title="Watch the intro again">
+          🎬
+        </button>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: 0.5 }}>Rules:</span>
+        <select
+          value={variantKey}
+          onChange={(e) => handleSetVariantKey(e.target.value)}
+          style={{
+            padding: "6px 10px", borderRadius: 999, border: `1px solid ${t.panelBorder}`,
+            background: t.panel, color: t.text, fontSize: 12, fontWeight: 700, cursor: "pointer",
+          }}
+        >
+          {Object.values(NMM_VARIANTS).map((v) => (
+            <option key={v.key} value={v.key}>{v.name} — {v.subtitle}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Pro tone picker — identical tones, colours, and lock/upsell
+          behaviour as Hnefatafl and Jumpin' Pin, for a consistent feel
+          across the whole series. One Pro purchase, shared across both
+          games in this bundle, unlocks these here too. */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16, flexWrap: "wrap", justifyContent: "center" }}>
+        {Object.entries(THEMES)
+          .filter(([, v]) => v.tier === "pro")
+          .map(([key, v]) => (
+            <button
+              key={key}
+              onClick={() => selectTheme(key)}
+              title={v.name}
+              style={{
+                position: "relative", width: 30, height: 30, borderRadius: "50%",
+                border: themeKey === key ? `2px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+                background: v.swatch, cursor: "pointer", padding: 0,
+              }}
+            >
+              {!isPro && (
+                <span style={{
+                  position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "rgba(0,0,0,0.45)", borderRadius: "50%", fontSize: 12,
+                }}>
+                  🔒
+                </span>
+              )}
+            </button>
+          ))}
+        <span style={{ fontSize: 10, color: t.muted, marginLeft: 2 }}>PRO TONES</span>
+        {upsell && (
+          <span style={{ fontSize: 11, color: t.accent, fontWeight: 700, marginLeft: 6 }}>
+            🔒 {upsell} is a Pro tone — unlock unlimited play to use it.
+          </span>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 18, marginBottom: 14, fontFamily: "'Courier New', monospace", fontSize: 13, background: t.panel, border: `1px solid ${t.panelBorder}`, borderRadius: 10, padding: "8px 18px" }}>
+        <div>{sideLabel("you").toUpperCase()} <span style={{ color: t.pegFrom, fontWeight: 700 }}>{youOnBoard}</span>{youHand > 0 ? ` (+${youHand})` : ""}</div>
+        <div>{sideLabel("cpu").toUpperCase()} <span style={{ color: CPU_FROM, fontWeight: 700 }}>{cpuOnBoard}</span>{cpuHand > 0 ? ` (+${cpuHand})` : ""}</div>
+        <div>TURN <span style={{ color: t.accent, fontWeight: 700 }}>{sideLabel(turn)}</span></div>
+      </div>
+
+      <div style={{ fontSize: 13, color: t.muted, marginBottom: 14, textAlign: "center", minHeight: 18, fontWeight: 600, maxWidth: 300 }}>
+        {message}
+      </div>
+
+      {humanCanAct && (turn === "you" ? youFlying : cpuFlying) && (
+        <div style={{ fontSize: 11, color: t.accent, fontWeight: 700, marginBottom: 10 }}>
+          Down to 3 — {sideLabel(turn)} can fly to any empty point!
+        </div>
+      )}
+
+      {/* Board, flanked by each side's piece stacks — top group is pieces
+          still to be placed, bottom group (past the divider) is pieces
+          that have been captured. Same column reused for both, since a
+          piece only ever moves from "in hand" to "on board" to "captured",
+          never backwards. */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 18 }}>
+        <PieceStack t={t} label={sideLabel("you").toUpperCase()} hand={youHand} captured={capturedYou} pegFrom={t.pegFrom} pegTo={t.pegTo} width={SIDE_COL_WIDTH} />
+
+        <div style={{ position: "relative", width: boardSize, height: boardSize, background: t.panel, borderRadius: 18, boxShadow: `inset 0 0 0 1px ${t.panelBorder}, 0 8px 24px rgba(0,0,0,0.35)` }}>
+        {EDGES.map(([a, b], i) => {
+          const pa = POINTS[a], pb = POINTS[b];
+          const x1 = PAD + pa.x * CELL, y1 = PAD + pa.y * CELL;
+          const x2 = PAD + pb.x * CELL, y2 = PAD + pb.y * CELL;
+          const horizontal = y1 === y2;
+          const style = horizontal
+            ? { left: Math.min(x1, x2), top: y1 - 1, width: Math.abs(x2 - x1), height: 2 }
+            : { left: x1 - 1, top: Math.min(y1, y2), width: 2, height: Math.abs(y2 - y1) };
+          return <div key={i} style={{ position: "absolute", background: t.lineColor, ...style }} />;
+        })}
+
+        {POINTS.map((p, idx) => {
+          const x = PAD + p.x * CELL, y = PAD + p.y * CELL;
+          const side = points[idx];
+          const size = Math.min(30, CELL * 0.5);
+          const isDest = legalDestSet.has(idx);
+          const isRemovable = pendingRemoval === turn && removableSet.has(idx);
+          const isSelected = selected === idx;
+          const isPlaceable = canPlaceNow && humanCanAct && side === null && !pendingRemoval;
+          const isMySelectable = humanCanAct && side === turn && legalPieceSet.has(idx) && canMoveNow;
+          const clickable = (humanCanAct) && (isPlaceable || isDest || isRemovable || isMySelectable);
+
+          return (
+            <div key={idx} onClick={() => handlePointClick(idx)} style={{
+              position: "absolute", left: x - Math.max(size, 16) / 2, top: y - Math.max(size, 16) / 2,
+              width: Math.max(size, 16), height: Math.max(size, 16),
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: clickable ? "pointer" : "default",
+            }}>
+              {!side && (
+                <div style={{
+                  width: 12, height: 12, borderRadius: "50%",
+                  background: t.holeEmpty,
+                  boxShadow: (isDest || isPlaceable)
+                    ? `0 0 0 3px ${t.accent}`
+                    : isRemovable ? `0 0 0 3px #ff6b57` : `inset 0 1px 2px rgba(0,0,0,0.5)`,
+                }} />
+              )}
+              {side && (
+                <div style={{
+                  width: size, height: size, borderRadius: "50%",
+                  background: side === "you"
+                    ? `radial-gradient(circle at 35% 30%, ${t.pegFrom}, ${t.pegTo})`
+                    : `radial-gradient(circle at 35% 30%, ${CPU_FROM}, ${CPU_TO})`,
+                  boxShadow: isSelected
+                    ? `0 0 0 3px ${t.accent}, 0 2px 4px rgba(0,0,0,0.5)`
+                    : isRemovable
+                    ? `0 0 0 3px #ff6b57, 0 2px 4px rgba(0,0,0,0.5)`
+                    : isMySelectable
+                    ? `0 0 0 2px ${t.accent}66, 0 2px 4px rgba(0,0,0,0.5)`
+                    : "0 2px 3px rgba(0,0,0,0.5)",
+                  transform: isSelected ? "scale(1.12)" : "scale(1)",
+                  transition: "transform 120ms ease, box-shadow 120ms ease",
+                }} />
+              )}
+            </div>
+          );
+        })}
+        </div>
+
+        <PieceStack t={t} label={sideLabel("cpu").toUpperCase()} hand={cpuHand} captured={capturedCpu} pegFrom={CPU_FROM} pegTo={CPU_TO} width={SIDE_COL_WIDTH} />
+      </div>
+
+      <button onClick={() => startFreshGame(mode)} style={btnStyle(t, false)}>
+        🔄 Reset
+      </button>
+
+      {winner && (
+        <div style={{ marginTop: 18, textAlign: "center", padding: "14px 20px", borderRadius: 12, background: t.panel, border: `1px solid ${t.panelBorder}`, maxWidth: 320 }}>
+          <div style={{ fontSize: 12, letterSpacing: 2, color: t.muted, marginBottom: 4 }}>GAME OVER</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: t.accent, marginBottom: 6 }}>
+            {mode === "play" ? `${sideLabel(winner)} wins!` : winner === "you" ? "You win! 🏆" : "The computer wins."}
+          </div>
+          <button onClick={() => startFreshGame(mode)} style={{ ...btnStyle(t, false, true), marginTop: 8 }}>Play Again</button>
+        </div>
+      )}
+
+      <div style={{ fontSize: 10, color: t.muted, marginTop: 24, textAlign: "center", maxWidth: 320, lineHeight: 1.6 }}>
+        {variant.laskerHybrid
+          ? `Place all ${variant.pieceCount} of your pieces whenever you like — on any turn you may place a new piece OR move one already on the board, your choice.`
+          : `Place all ${variant.pieceCount} of your pieces, then take turns sliding one piece along a line to an empty point.`}
+        Line up three in a row along any drawn line to form a MILL and remove an opposing piece — pieces already in a mill are protected while any of the opponent's pieces stand outside one.
+        {variant.flyingEnabled ? " Drop to 3 pieces and you can fly anywhere." : " This ruleset has no flying phase — movement always stays to adjacent points, even down to your last 3."}
+        {" "}Reduce your opponent below 3 pieces, or leave them with no legal move, to win.
+      </div>
+    </div>
+  );
+}
+
+// ---------- Bundle shell ----------
+// Phase 1 scope: just the container. No shared systems yet (freemium/Pro,
+// online, rule variants) — each game below is exactly the prototype it was,
+// just reachable from one entry point instead of two separate files, with
+// its own back button wired in. Later phases layer real features onto
+// each game individually; this component's job is only ever "which game is
+// mounted right now."
+function GameCard({ t, title, subtitle, blurb, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6,
+        width: "100%", maxWidth: 360, padding: "18px 20px", borderRadius: 14,
+        border: `1px solid ${t.panelBorder}`, background: t.panel, cursor: "pointer",
+        textAlign: "left",
+      }}
+    >
+      <div style={{ fontSize: 11, letterSpacing: 2, color: t.muted, fontWeight: 700 }}>{subtitle}</div>
+      <div style={{ fontSize: 19, fontWeight: 800, color: t.text, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>
+      <div style={{ fontSize: 12.5, color: t.muted, lineHeight: 1.5 }}>{blurb}</div>
+    </button>
+  );
+}
+
+function AncientGamesBundle() {
+  const [themeKey, setThemeKey] = useState("dark");
+  const t = THEMES[themeKey];
+  const [activeGame, setActiveGame] = useState(() => (getInviteTokenFromUrl() ? "nmm" : null)); // null | "ur" | "nmm" — auto-opens NMM if an invite link brought you here (the only game online play supports so far)
+
+  // ---------- Bundle-wide Pro + freemium ----------
+  const [isPro, setIsPro] = useState(() => !!loadProRecord());
+  const [freemium, setFreemium] = useState(() => loadFreemiumState());
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [restoreEmail, setRestoreEmail] = useState("");
+  const [restoreStatus, setRestoreStatus] = useState("");
+  const [showRestoreForm, setShowRestoreForm] = useState(false);
+
+  // Detect a return from Stripe checkout (?session_id=...) on load, and
+  // activate Pro on THIS device if it's genuinely a paid session. Stripe's
+  // {CHECKOUT_SESSION_ID} placeholder gets substituted into the redirect
+  // URL automatically — see success_url in the checkout/create endpoint.
+  useEffect(() => {
+    const sessionId = new URLSearchParams(window.location.search).get("session_id");
+    if (!sessionId) return;
+    (async () => {
+      try {
+        const res = await bundleApiPost("/checkout/activate", { sessionId });
+        if (res.activated) {
+          const record = { activatedAt: Date.now(), source: "checkout" };
+          writeProRecord(record);
+          setIsPro(true);
+        } else {
+          setCheckoutError(`Payment didn't verify as complete (${res.reason || "unknown reason"}). If you were charged, use "Already purchased? Restore it" below with the email you paid with.`);
+        }
+      } catch (e) {
+        // A failure here is quiet-by-design in one sense — it happens on
+        // page load, not from a button the person just pressed, so a loud
+        // error banner immediately on arrival would be jarring. But
+        // "silent" should never mean "invisible everywhere" — logging it
+        // means a real failure is still discoverable via DevTools instead
+        // of vanishing without a trace, which is the exact mistake being
+        // fixed in startCheckout() below.
+        console.error("Checkout activation failed:", e);
+      }
+      finally {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("session_id");
+        window.history.replaceState({}, "", url.toString());
+      }
+    })();
+  }, []);
+
+  function recordGameCompleted(gameKey, mode) {
+    setFreemium((prev) => {
+      const slot = freemiumSlotKey(gameKey, mode);
+      const next = { ...prev, counts: { ...prev.counts, [slot]: (prev.counts[slot] || 0) + 1 } };
+      writeFreemiumState(next);
+      return next;
+    });
+  }
+
+  async function startCheckout() {
+    setCheckoutBusy(true);
+    setCheckoutError("");
+    try {
+      const res = await bundleApiPost("/checkout/create", {});
+      window.location.href = res.url;
+    } catch (e) {
+      setCheckoutBusy(false);
+      setCheckoutError(e.message || "Couldn't reach the payments server. Try again in a moment.");
+    }
+  }
+
+  async function onSubmitRestore() {
+    if (!restoreEmail) return;
+    setRestoreStatus("Sending…");
+    try {
+      await bundleApiPost("/restore/request", { email: restoreEmail });
+      setRestoreStatus("Check your email for a restore link.");
+    } catch (e) {
+      setRestoreStatus(e.message || "Couldn't send that — try again in a moment.");
+    }
+  }
+
+  // Detect a restore-link click (?restore=TOKEN) on load, same pattern as
+  // the checkout redirect above.
+  useEffect(() => {
+    const restoreToken = new URLSearchParams(window.location.search).get("restore");
+    if (!restoreToken) return;
+    (async () => {
+      try {
+        const res = await bundleApiPost("/restore/confirm", { token: restoreToken });
+        if (res.activated) { writeProRecord({ activatedAt: Date.now(), source: "restore" }); setIsPro(true); }
+      } catch (e) { /* ignore — they'll see the gate and can retry */ }
+      finally {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("restore");
+        window.history.replaceState({}, "", url.toString());
+      }
+    })();
+  }, []);
+
+  const shared = {
+    isPro, freemium, onGameCompleted: recordGameCompleted,
+    onUnlock: startCheckout, unlocking: checkoutBusy, checkoutError,
+    restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm,
+  };
+
+  if (activeGame === "ur") return <RoyalGameOfUr onBack={() => setActiveGame(null)} {...shared} />;
+  if (activeGame === "nmm") return <NineMensMorris onBack={() => setActiveGame(null)} {...shared} />;
+
+  return (
+    <div style={{
+      minHeight: "100vh", background: t.bg, color: t.text,
+      display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 20px",
+      fontFamily: "system-ui, -apple-system, sans-serif",
+    }}>
+      <div style={{ textAlign: "center", marginBottom: 28 }}>
+        <div style={{ fontSize: 11, letterSpacing: 4, color: t.muted, fontWeight: 700, marginBottom: 4 }}>
+          ANCIENT GAMES · 02 &amp; 03
+        </div>
+        <h1 style={{ fontSize: 25, fontWeight: 800, letterSpacing: 1, margin: 0, textTransform: "uppercase" }}>
+          Two Ancient <span style={{ color: t.accent }}>Classics</span>
+        </h1>
+        <div style={{ fontSize: 11, color: t.muted, marginTop: 4, letterSpacing: 0.5 }}>
+          One bundle, one Pro unlock, two genuinely different games
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap", justifyContent: "center" }}>
+        <button onClick={() => setThemeKey(themeKey === "light" ? "dark" : "light")} style={pillStyle(t, true)}>
+          {themeKey === "light" ? "☀️ Light" : "🌙 Dark"}
+        </button>
+        {isPro ? (
+          <span style={{ ...pillStyle(t, true), cursor: "default" }}>✓ Pro — unlimited</span>
+        ) : (
+          <button onClick={startCheckout} disabled={checkoutBusy} style={pillStyle(t, false)}>
+            {checkoutBusy ? "Opening checkout…" : "🔓 Unlock Both — $2"}
+          </button>
+        )}
+      </div>
+      {checkoutError && (
+        <div style={{ fontSize: 12, color: "#ff6b5b", maxWidth: 300, textAlign: "center", marginBottom: 24 }}>{checkoutError}</div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%", alignItems: "center" }}>
+        <GameCard
+          t={t}
+          subtitle="ANCIENT GAMES · 02"
+          title="Royal Game of Ur"
+          blurb="Race 7 pieces along the sacred path, 2600 BC Mesopotamia. Four dice, five rosettes, one ancient grudge match."
+          onClick={() => setActiveGame("ur")}
+        />
+        <GameCard
+          t={t}
+          subtitle="ANCIENT GAMES · 03"
+          title="Nine Men's Morris"
+          blurb="Pure strategy, no luck. Form mills to capture, survive down to three pieces and start flying."
+          onClick={() => setActiveGame("nmm")}
+        />
+      </div>
+
+      <div style={{ fontSize: 10, color: t.muted, marginTop: 32, textAlign: "center", maxWidth: 340, lineHeight: 1.6 }}>
+        {isPro
+          ? "Pro unlocked — unlimited games in both titles, no daily limits."
+          : `${FREE_GAMES_PER_MODE_PER_DAY} free games per mode per day, in each game. One $2 purchase removes the cap in both.`}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<AncientGamesBundle />);
+</script>
+</body>
+</html>

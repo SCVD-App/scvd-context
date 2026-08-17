@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Jumpin' Pin</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#10181c"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"/>
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: #10181c; min-height: 100vh; overflow-x: hidden; }
+body { display: flex; justify-content: center; }
+#root { width: 100%; max-width: 600px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useCallback, useEffect, useRef } = React;
+
+const ICONS = {
+  RotateCcw: "↺", Lightbulb: "💡", RefreshCw: "🔄", Lock: "🔒",
+  Sun: "☀️", Moon: "🌙", Clock: "⏱️", Share2: "📤", Copy: "✅", Swords: "⚔️",
+};
+function Icon({ name }) {
+  return <span style={{ display: "inline-block", lineHeight: 1 }}>{ICONS[name]}</span>;
+}
+
+const PAD = 26;
+const MIN_CELL = 26;
+const MAX_CELL = 44;
+const MAX_BOARD_WIDTH = 560; // cap so it doesn't get silly on a tablet/desktop preview
+
+// ---------- Pro unlock (Stripe) ----------
+// Match this to whatever the deployed Worker's URL actually is once it's live.
+const WORKER_URL = "https://jumpinpin.emblen-scott.workers.dev";
+
+const LS_TOKEN = "jp_token";
+const LS_DEVICE = "jp_device";
+const LS_PRO = "jp_pro";
+
+// A random ID the client keeps forever, purely so the Worker can tell "same
+// device re-activating" apart from "a new device" without any real device
+// fingerprinting. Not a security boundary — just avoids double-counting a
+// legitimate user refreshing the post-checkout success page.
+function getDeviceId() {
+  let id = localStorage.getItem(LS_DEVICE);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(LS_DEVICE, id);
+  }
+  return id;
+}
+
+// ---------- Shape generators (pure geometry, no hand-placed holes) ----------
+
+function classicCross() {
+  const holes = [];
+  for (let r = 0; r < 7; r++) {
+    for (let c = 0; c < 7; c++) {
+      const cornerBlock = (r < 2 || r > 4) && (c < 2 || c > 4);
+      if (!cornerBlock) holes.push({ r, c });
+    }
+  }
+  return { holes, rows: 7, cols: 7 };
+}
+
+function hourglass() {
+  const size = 9;
+  const center = 4;
+  const holes = [];
+  for (let r = 0; r < size; r++) {
+    const dist = Math.abs(r - center);
+    const half = Math.max(0, dist - 1);
+    for (let c = center - half; c <= center + half; c++) {
+      holes.push({ r, c });
+    }
+  }
+  return { holes, rows: size, cols: size };
+}
+
+function crescent() {
+  const size = 13;
+  const cx = 6, cy = 6;
+  const R = 6.1;
+  const r2 = 5.3;
+  const dx = 2.9;
+  const holes = [];
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const dOuter = Math.hypot(c - cx, r - cy);
+      const dInner = Math.hypot(c - cx - dx, r - cy);
+      if (dOuter <= R && dInner > r2) holes.push({ r, c });
+    }
+  }
+  return { holes, rows: size, cols: size };
+}
+
+function arcadeCircle() {
+  const size = 13;
+  const cx = 6, cy = 6;
+  const R = 6.1;
+  const wedgeDeg = 34;
+  const holes = [];
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const dx = c - cx, dy = r - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > R) continue;
+      if (dist < 0.6) {
+        holes.push({ r, c });
+        continue;
+      }
+      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      const inWedge = angle > -wedgeDeg && angle < wedgeDeg;
+      if (!inWedge) holes.push({ r, c });
+    }
+  }
+  return { holes, rows: size, cols: size };
+}
+
+// Cog / gearwheel — nod to the workshop side of the brand
+function gearwheel() {
+  const size = 13, cx = 6, cy = 6, teeth = 8;
+  const holes = [];
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const dx = c - cx, dy = r - cy;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      const toothMod = 0.55 * (0.5 + 0.5 * Math.cos(teeth * angle));
+      const rMax = 4.3 + toothMod * 2.1;
+      if (dist <= rMax) holes.push({ r, c });
+    }
+  }
+  return { holes, rows: size, cols: size };
+}
+
+// Guitar pick — rounded triangle via polar equation
+function pick() {
+  const size = 13, cx = 6, cy = 3.6;
+  const holes = [];
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const dx = c - cx, dy = r - cy;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      const rMax = 3.6 * (1 + 0.42 * Math.cos(3 * (angle - Math.PI / 2)));
+      if (dist <= rMax && rMax > 0) holes.push({ r, c });
+    }
+  }
+  return { holes, rows: size, cols: size };
+}
+
+// Tide — a sine-wave band, nod to the Jumpinpin Channel current
+function tide() {
+  const rows = 9, cols = 13;
+  const holes = [];
+  const amp = 1.9, freq = 0.62, bandHalf = 1.5;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const centerRow = 4 + amp * Math.sin(c * freq);
+      if (Math.abs(r - centerRow) <= bandHalf) holes.push({ r, c });
+    }
+  }
+  return { holes, rows, cols };
+}
+
+// Diamond — clean rhombus via Manhattan distance
+function diamond() {
+  const size = 11, cx = 5, cy = 5, R = 5;
+  const holes = [];
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (Math.abs(r - cy) + Math.abs(c - cx) <= R) holes.push({ r, c });
+    }
+  }
+  return { holes, rows: size, cols: size };
+}
+
+function buildShape(gen) {
+  const { holes, rows, cols } = gen();
+  const set = new Set(holes.map((h) => `${h.r},${h.c}`));
+  const cx = holes.reduce((s, h) => s + h.c, 0) / holes.length;
+  const cy = holes.reduce((s, h) => s + h.r, 0) / holes.length;
+  let start = holes[0];
+  let best = Infinity;
+  for (const h of holes) {
+    const d = (h.c - cx) ** 2 + (h.r - cy) ** 2;
+    if (d < best) {
+      best = d;
+      start = h;
+    }
+  }
+  return { holes, set, rows, cols, start };
+}
+
+const SHAPES = {
+  classic: { label: "Classic Cross", tier: "free", build: buildShape(classicCross) },
+  hourglass: { label: "Hourglass", tier: "free", build: buildShape(hourglass) },
+  crescent: { label: "Crescent", tier: "pro", build: buildShape(crescent) },
+  arcade: { label: "Arcade Circle", tier: "pro", build: buildShape(arcadeCircle) },
+  gearwheel: { label: "Gearwheel", tier: "pro", build: buildShape(gearwheel) },
+  pick: { label: "Pick", tier: "pro", build: buildShape(pick) },
+  tide: { label: "Tide", tier: "pro", build: buildShape(tide) },
+  diamond: { label: "Diamond", tier: "pro", build: buildShape(diamond) },
+};
+
+// The true best-possible outcome for each board, from an actual exhaustive
+// memoized search (not an estimate). `proven: true` means the search
+// completed fully — mathematically impossible to beat. `proven: false` means
+// it's the best result found within a generous time budget; still very
+// unlikely to be beaten, but honestly not certified as the hard ceiling.
+const OPTIMUMS = {
+  classic: { best: 1, proven: true },
+  hourglass: { best: 7, proven: true },
+  tide: { best: 9, proven: true },
+  pick: { best: 3, proven: false },
+  diamond: { best: 8, proven: false },
+  gearwheel: { best: 12, proven: false },
+  crescent: { best: 5, proven: false },
+  arcade: { best: 15, proven: false },
+};
+
+const EQUALLED_MESSAGES = [
+  "You just equalled the best score we were able to achieve!",
+  "That's our exact best — nobody's beaten it, including us.",
+  "Matched the ceiling. That's as good as this board gets.",
+];
+
+const CLOSE_MESSAGES = [
+  "So close — tantalisingly near our best ever.",
+  "Right on the edge of the optimum.",
+  "That's within a whisker of the best possible result.",
+];
+
+const DIRS = [
+  [-2, 0],
+  [2, 0],
+  [0, -2],
+  [0, 2],
+];
+
+function keyOf(r, c) {
+  return `${r},${c}`;
+}
+
+function initPegs(shape) {
+  const pegs = new Set(shape.set);
+  pegs.delete(keyOf(shape.start.r, shape.start.c));
+  return pegs;
+}
+
+function getTargets(pegs, shape, r, c) {
+  const targets = [];
+  for (const [dr, dc] of DIRS) {
+    const mr = r + dr / 2,
+      mc = c + dc / 2;
+    const tr = r + dr,
+      tc = c + dc;
+    const tKey = keyOf(tr, tc);
+    const mKey = keyOf(mr, mc);
+    if (shape.set.has(tKey) && !pegs.has(tKey) && pegs.has(mKey)) {
+      targets.push({ r: tr, c: tc, mid: mKey });
+    }
+  }
+  return targets;
+}
+
+function anyMovesLeft(pegs, shape) {
+  for (const key of pegs) {
+    const [r, c] = key.split(",").map(Number);
+    if (getTargets(pegs, shape, r, c).length > 0) return true;
+  }
+  return false;
+}
+
+function scoreMessage(count) {
+  if (count === 1) return "One peg left. Certified problem solver.";
+  if (count === 2) return "Two left — sharp finish.";
+  if (count <= 4) return "Solid clear.";
+  return "Board's got you this time. Reset and go again.";
+}
+
+// Golf-card scoring: fewer pegs left, more points banked.
+function scoreForPegs(count) {
+  if (count >= 1 && count <= 5) return 10;
+  if (count >= 6 && count <= 10) return 5;
+  if (count >= 11 && count <= 15) return 1;
+  return 0;
+}
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+// ---------- Themes ----------
+// Free tier: Light / Dark. Pro tier: locked tone skins (unlocked with Pro).
+
+const THEMES = {
+  light: {
+    tier: "free",
+    name: "Light",
+    bg: "#f2ecd9",
+    panel: "#e9e0c8",
+    panelBorder: "#cdbf9c",
+    holeEmpty: "#c8b78e",
+    holeShadow: "inset 0 2px 4px rgba(60,45,15,0.45)",
+    pegFrom: "#f4dd96",
+    pegTo: "#8a6d1a",
+    accent: "#1f9a78",
+    accentSoft: "#d8ead4",
+    text: "#2a2416",
+    muted: "#7a6f57",
+    swatch: "#e9e0c8",
+  },
+  dark: {
+    tier: "free",
+    name: "Dark",
+    bg: "#10181c",
+    panel: "#1b262b",
+    panelBorder: "#2c3a40",
+    holeEmpty: "#081012",
+    holeShadow: "inset 0 2px 4px rgba(0,0,0,0.7)",
+    pegFrom: "#e8c468",
+    pegTo: "#8a6d1a",
+    accent: "#35d0a0",
+    accentSoft: "#123028",
+    text: "#ece7da",
+    muted: "#8b9a97",
+    swatch: "#1b262b",
+  },
+  sandbar: {
+    tier: "pro",
+    name: "Sandbar Gold",
+    bg: "#241a10",
+    panel: "#3a2a17",
+    panelBorder: "#5c4322",
+    holeEmpty: "#160f08",
+    holeShadow: "inset 0 2px 4px rgba(0,0,0,0.6)",
+    pegFrom: "#ffd98a",
+    pegTo: "#c17a1f",
+    accent: "#ff9d4d",
+    accentSoft: "#4a2f14",
+    text: "#fbe9d0",
+    muted: "#c2a37c",
+    swatch: "linear-gradient(135deg,#ffd98a,#c17a1f)",
+  },
+  channel: {
+    tier: "pro",
+    name: "Deep Channel",
+    bg: "#0a1020",
+    panel: "#131c33",
+    panelBorder: "#243256",
+    holeEmpty: "#05070f",
+    holeShadow: "inset 0 2px 4px rgba(0,0,0,0.6)",
+    pegFrom: "#9fd8ff",
+    pegTo: "#2f6fa8",
+    accent: "#5fd0ff",
+    accentSoft: "#122844",
+    text: "#e4edff",
+    muted: "#7f8db3",
+    swatch: "linear-gradient(135deg,#9fd8ff,#2f6fa8)",
+  },
+  curves: {
+    tier: "pro",
+    name: "Chasin' Curves",
+    bg: "#0f1216",
+    panel: "#1a1e24",
+    panelBorder: "#c9a24a55",
+    holeEmpty: "#0a0c0f",
+    holeShadow: "inset 0 2px 4px rgba(0,0,0,0.6)",
+    pegFrom: "#e6cf9a",
+    pegTo: "#8f1d1d",
+    accent: "#c9a24a",
+    accentSoft: "#2a1414",
+    text: "#f2e9d8",
+    muted: "#a89a7c",
+    swatch: "linear-gradient(135deg,#e6cf9a,#8f1d1d)",
+  },
+};
+
+// ---------- Intro crawl ----------
+// Same component as the rest of the Ancient Games series (Hnefatafl, Two
+// Ancient Classics) — ported verbatim, same runic "Fortune Favours The
+// Brave" / SCVD.app closing stinger, since that's fixed series branding
+// rather than per-game content. Only the crawl copy and INTRO_SEEN_KEY
+// differ here.
+const TITLE_CARD_MS = 3500;
+const CRAWL_DURATION_MS = 26000; // default; this game passes its own crawlDurationMs below since its text runs longer
+const CRAWL_FADE_OVERLAP_MS = 3000;
+const MOTTO_MS = 7000;
+const BRAND_MS = 4000;
+
+function IntroCrawl({ seriesLabel, gameTitle, gameTagline, crawlText, motto, mottoFont, mottoFontSize, crawlDurationMs, onDone }) {
+  const crawlMs = crawlDurationMs || CRAWL_DURATION_MS;
+  const crawlEndMs = TITLE_CARD_MS + crawlMs;
+  const mottoDelayMs = crawlEndMs - CRAWL_FADE_OVERLAP_MS;
+  const brandDelayMs = mottoDelayMs + MOTTO_MS;
+  const introTotalMs = brandDelayMs + BRAND_MS;
+
+  // Measures the crawl block's real rendered height rather than assuming a
+  // fixed -170vh travel distance clears it — see the identical fix and
+  // fuller explanation in Two Ancient Classics' copy of this component.
+  // Short version: -170vh was tuned by eye against a specific crawl length
+  // and silently stopped being enough for any longer one, and slowing the
+  // animation down (more TIME) never fixes that, since it still only ever
+  // travels the same fixed DISTANCE, just slower.
+  const crawlRef = useRef(null);
+  const [crawlDistancePx, setCrawlDistancePx] = useState(() => (typeof window !== "undefined" ? window.innerHeight * 1.7 : 1200));
+  useEffect(() => {
+    if (crawlRef.current) {
+      setCrawlDistancePx(window.innerHeight + crawlRef.current.scrollHeight);
+    }
+  }, [crawlText]);
+
+  useEffect(() => {
+    const timer = setTimeout(onDone, introTotalMs);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      onClick={onDone}
+      style={{
+        position: "fixed", inset: 0, zIndex: 3000, overflow: "hidden", cursor: "pointer",
+        background: "radial-gradient(ellipse at 50% 30%, #0d1a1a 0%, #060b0d 55%, #030405 100%)",
+      }}
+    >
+      <div style={{
+        position: "absolute", inset: 0, opacity: 0.35, pointerEvents: "none",
+        background: `
+          radial-gradient(ellipse 60% 30% at 20% 15%, rgba(53,208,160,0.25), transparent 60%),
+          radial-gradient(ellipse 50% 25% at 75% 10%, rgba(201,150,47,0.18), transparent 60%),
+          radial-gradient(ellipse 70% 35% at 50% 0%, rgba(53,208,160,0.15), transparent 65%)
+        `,
+      }} />
+
+      <button onClick={onDone} style={{
+        position: "absolute", top: 16, right: 16, zIndex: 3001,
+        background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,233,176,0.35)",
+        color: "#ece7da", fontSize: 12, fontWeight: 700, letterSpacing: 1,
+        padding: "7px 14px", borderRadius: 999, cursor: "pointer",
+      }}>
+        SKIP ▶
+      </button>
+
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 30px",
+        animation: `introTitleFade ${TITLE_CARD_MS}ms ease forwards`,
+      }}>
+        <div style={{ fontSize: 12, letterSpacing: 5, color: "#8b9a97", fontWeight: 700, marginBottom: 10 }}>
+          {seriesLabel}
+        </div>
+        <div style={{ fontFamily: "Georgia, serif", fontWeight: 900, fontSize: 40, color: "#e8c468", textShadow: "0 0 28px rgba(232,196,104,0.6)", letterSpacing: 2 }}>
+          {gameTitle}
+        </div>
+        {gameTagline && (
+          <div style={{ fontSize: 13, color: "#8b9a97", marginTop: 10, maxWidth: 320 }}>{gameTagline}</div>
+        )}
+      </div>
+
+      <div style={{ position: "absolute", inset: 0, perspective: "450px", overflow: "hidden" }}>
+        <div style={{
+          position: "absolute", bottom: 0, left: 0, right: 0, height: "100%",
+          transformOrigin: "50% 100%", transform: "rotateX(33deg)",
+        }}>
+          <div ref={crawlRef} style={{
+            position: "absolute", left: "50%", top: "100%", width: "92%", maxWidth: 560,
+            animation: `crawlUp ${crawlMs}ms linear forwards`,
+            animationDelay: `${TITLE_CARD_MS}ms`,
+            opacity: 0, transform: "translateX(-50%) translateY(0)",
+          }}>
+            {crawlText.map((para, i) => (
+              <p key={i} style={{
+                fontFamily: "Georgia, serif", fontWeight: 700, color: "#e8c468",
+                fontSize: 22, lineHeight: 1.7, textAlign: "center", marginBottom: 36,
+                textShadow: "0 0 10px rgba(232,196,104,0.35)",
+              }}>
+                {para}
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 30px",
+        opacity: 0, animation: `mottoFade ${MOTTO_MS}ms ease forwards`,
+        animationDelay: `${mottoDelayMs}ms`,
+      }}>
+        {(motto || [["ᚠᚬᚱᛏᚢᚾᛅ", "(Fortune)"], ["ᚠᚬᚢᚬᚢᚱᛋ", "(Favours)"], ["ᚦᛅ ᛫ ᛒᚱᚬᚢᛅ", "(The Brave)"]]).map(([text, gloss], i) => (
+          <React.Fragment key={i}>
+            <div style={{ fontFamily: mottoFont || "'Noto Sans Runic', serif", fontSize: mottoFontSize || 42, letterSpacing: 3, color: "#e8c468", textShadow: "0 0 16px rgba(232,196,104,0.5)", marginTop: i === 0 ? 0 : 26 }}>
+              {text}
+            </div>
+            <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: 20, color: "#8b9a97", marginTop: 10, maxWidth: 320 }}>
+              {gloss}
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 30px",
+        opacity: 0, animation: `brandFade ${BRAND_MS}ms ease forwards`,
+        animationDelay: `${brandDelayMs}ms`,
+      }}>
+        <div style={{ fontFamily: "'Noto Sans Runic', serif", fontSize: 38, letterSpacing: 4, color: "#e8c468", textShadow: "0 0 22px rgba(232,196,104,0.6)" }}>
+          ᛋᚴᚢᛏ ᛫ ᚬᛒᛒ
+        </div>
+        <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: 24, color: "#8b9a97", marginTop: 8 }}>
+          (scvd.app)
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes introTitleFade {
+          0% { opacity: 0; transform: scale(0.88); }
+          12% { opacity: 1; transform: scale(1); }
+          78% { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(1.12); }
+        }
+        @keyframes crawlUp {
+          0% { transform: translateX(-50%) translateY(0); opacity: 1; }
+          88% { opacity: 1; }
+          100% { transform: translateX(-50%) translateY(-${crawlDistancePx}px); opacity: 0; }
+        }
+        @keyframes mottoFade {
+          0% { opacity: 0; }
+          14% { opacity: 1; }
+          86% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        @keyframes brandFade {
+          0% { opacity: 0; }
+          16% { opacity: 1; }
+          82% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// Peg solitaire's real history — verified, not composed: first documented
+// print reference is the French magazine Mercure Galant, August 1697,
+// which describes the board, rules, and sample problems; the earliest
+// depiction is Claude Auguste Berey's engraving of Anne de Rohan-Chabot,
+// Princess of Soubise, at the court of Louis XIV. The popular "invented by
+// a nobleman imprisoned in the Bastille" story is a documented myth — its
+// first appearance in print is 1810, over a century after the fact, and
+// game historian John Beasley found no evidence supporting it despite
+// extensive searching. Framed here as the honest, funnier story rather
+// than the romantic one: this is genuinely the youngest game in the
+// series by about 3,000 years, and that's the whole joke.
+const JUMPIN_PIN_CRAWL = [
+  "Let's be honest: Jumpin' Pin isn't ancient. Not even close.",
+  "The real story starts in 1697, at the court of Louis XIV — a French magazine printed the rules, and an engraving shows a princess of the court playing this very board.",
+  "The romantic version — a nobleman inventing it in the Bastille — is a myth. It surfaces in print over a century later. No evidence it ever happened.",
+  "So why does a 328-year-old French parlour game carry the number 01 in a series called Ancient Games?",
+  "Because building it is what started the whole thing — one peg board led to a question that kept getting older answers.",
+  "Nine Men's Morris, carved into a Roman temple roof 3,400 years ago. Hnefatafl, played by Viking raiders a thousand years back. The Royal Game of Ur, buried in a king's tomb 4,600 years before any of us were born.",
+  "One peg board. One long walk backward through history. The gateway to the ancient world, it turns out, was a puzzle from the court of the Sun King.",
+];
+
+function JumpinPin() {
+  const [shapeKey, setShapeKey] = useState("hourglass");
+  const shape = SHAPES[shapeKey].build;
+
+  // Board fills real available width instead of a fixed pixel size — a
+  // 7-column board and a 13-column board need different peg sizes to both
+  // occupy the same footprint on screen. Recomputes on resize/rotation.
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 390
+  );
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const CELL = useMemo(() => {
+    const usableWidth = Math.min(viewportWidth - 24, MAX_BOARD_WIDTH); // 24 = the outer 12px side padding, both sides
+    const raw = (usableWidth - PAD * 2) / (shape.cols - 1);
+    return Math.max(MIN_CELL, Math.min(MAX_CELL, raw));
+  }, [viewportWidth, shape.cols]);
+
+  const [pegs, setPegs] = useState(() => initPegs(shape));
+  const [selected, setSelected] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [moves, setMoves] = useState(0);
+  const [hint, setHint] = useState(false);
+
+  const JUMPIN_PIN_INTRO_SEEN_KEY = "ancient_games_intro_seen_jumpinpin_v1";
+  const [showIntro, setShowIntro] = useState(() => {
+    try { return localStorage.getItem(JUMPIN_PIN_INTRO_SEEN_KEY) !== "1"; } catch (e) { return true; }
+  });
+  function dismissIntro() {
+    try { localStorage.setItem(JUMPIN_PIN_INTRO_SEEN_KEY, "1"); } catch (e) { /* ignore */ }
+    setShowIntro(false);
+  }
+  const [themeKey, setThemeKey] = useState("dark");
+  const [isPro, setIsPro] = useState(() => localStorage.getItem(LS_PRO) === "true");
+  const [upsell, setUpsell] = useState(null);
+  const t = THEMES[themeKey];
+
+  // ---------- Pro unlock flow state ----------
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [unlockNotice, setUnlockNotice] = useState(null); // transient status line under the unlock button
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreEmail, setRestoreEmail] = useState("");
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreSent, setRestoreSent] = useState(false);
+  const [manualTokenOpen, setManualTokenOpen] = useState(false);
+  const [manualToken, setManualToken] = useState("");
+
+  // Attempts to activate a token on this device: verify it's paid, then
+  // register this device against it (capped at 10 activations per token —
+  // see worker.js). Used both right after a Stripe redirect and when a
+  // restored token is pasted in manually.
+  const activateToken = useCallback(async (token) => {
+    setUnlockNotice("Checking your purchase…");
+    try {
+      // Payment confirmation can lag a beat or two behind the redirect while
+      // the Stripe webhook lands, so poll briefly rather than failing once.
+      let verified = null;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const res = await fetch(`${WORKER_URL}/verify-token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const data = await res.json();
+        if (data.valid) {
+          verified = data;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      if (!verified) {
+        setUnlockNotice("Couldn't confirm payment yet — try Restore Purchase in a minute.");
+        return;
+      }
+
+      const actRes = await fetch(`${WORKER_URL}/activate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, deviceId: getDeviceId() }),
+      });
+      const actData = await actRes.json();
+
+      if (actData.activated) {
+        localStorage.setItem(LS_TOKEN, token);
+        localStorage.setItem(LS_PRO, "true");
+        setIsPro(true);
+        setUnlockNotice(null);
+        setManualTokenOpen(false);
+        setManualToken("");
+      } else if (actData.reason === "activation limit reached") {
+        setUnlockNotice("This code has reached its device limit. Contact support@scvd.app if that's not right.");
+      } else {
+        setUnlockNotice("That code didn't check out — double check it and try again.");
+      }
+    } catch (e) {
+      setUnlockNotice("Something went wrong checking your purchase — try again shortly.");
+    }
+  }, []);
+
+  // On load: pick up ?jp_token=... from a Stripe redirect, or re-check a
+  // previously stored token that hasn't activated yet (e.g. tab closed
+  // mid-flow). Doesn't re-verify once isPro is already true locally.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const redirectToken = params.get("jp_token");
+    if (redirectToken) {
+      window.history.replaceState({}, "", window.location.pathname);
+      activateToken(redirectToken);
+      return;
+    }
+    const storedToken = localStorage.getItem(LS_TOKEN);
+    if (storedToken && localStorage.getItem(LS_PRO) !== "true") {
+      activateToken(storedToken);
+    }
+  }, [activateToken]);
+
+  const startCheckout = async () => {
+    setCheckoutBusy(true);
+    setUnlockNotice(null);
+    try {
+      const res = await fetch(`${WORKER_URL}/create-checkout`, { method: "POST" });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setUnlockNotice("Couldn't start checkout — try again shortly.");
+        setCheckoutBusy(false);
+      }
+    } catch (e) {
+      setUnlockNotice("Couldn't reach the store — check your connection and try again.");
+      setCheckoutBusy(false);
+    }
+  };
+
+  const submitRestore = async () => {
+    if (!restoreEmail.includes("@")) return;
+    setRestoreBusy(true);
+    try {
+      await fetch(`${WORKER_URL}/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: restoreEmail }),
+      });
+      setRestoreSent(true);
+    } catch (e) {
+      setRestoreSent(true); // same message either way — see worker.js /restore
+    } finally {
+      setRestoreBusy(false);
+    }
+  };
+
+  const [totalScore, setTotalScore] = useState(0);
+  const [roundsPlayed, setRoundsPlayed] = useState(0);
+  const [roundScored, setRoundScored] = useState(false);
+  const [hintUsed, setHintUsed] = useState(false);
+
+  const ROUND_SECONDS = 180;
+  const CHALLENGE_SECONDS = 90; // tighter than Practice-Timed — a challenge should bite
+  const [mode, setMode] = useState("practice"); // "practice" | "timed" | "challenge"
+  const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
+  const [timeUp, setTimeUp] = useState(false);
+
+  // Challenge is a fixed Classic Cross board with its own scoring: 10 penalty
+  // points per peg left, lower wins — real golf strokes, not the card's tiered
+  // points. Kept as a separate personal-best stat so the two currencies never mix.
+  const [challengeBest, setChallengeBest] = useState(null);
+
+  const noMovesLeft = useMemo(() => !anyMovesLeft(pegs, shape), [pegs, shape]);
+  const roundOver = noMovesLeft || timeUp;
+  const pegCount = pegs.size;
+  const isChallenge = mode === "challenge";
+  const challengeStrokes = pegCount * 10;
+  const roundPoints = hintUsed ? 0 : scoreForPegs(pegCount);
+
+  // Shareable score card — matches the ECEG pattern: a screenshot-based
+  // image share, kept deliberately separate from a text-only invite share
+  // (some share targets silently drop text when a file's attached too).
+  const [cardBusy, setCardBusy] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+
+  const shareCard = async () => {
+    // html2canvas isn't in the artifact-preview's allowed import list, so this
+    // won't render inside the Claude artifact — but the real deployment is a
+    // plain index.html like every other SCVD app, so load it there the same
+    // way ECEG does: add the html2canvas CDN script tag to index.html's <head>
+    if (typeof window.html2canvas === "undefined") {
+      console.warn("html2canvas not loaded — add the CDN script tag as in ECEG's index.html");
+      return;
+    }
+    setCardBusy(true);
+    try {
+      const el = document.getElementById("jumpinpin-scorecard");
+      const canvas = await window.html2canvas(el, { backgroundColor: t.bg, scale: 2, useCORS: true, logging: false });
+      canvas.toBlob((blob) => {
+        setCardBusy(false);
+        if (!blob) return;
+        const file = new File([blob], `jumpin-pin-${roundPoints}pts.png`, { type: "image/png" });
+        const shareData = { title: "Jumpin' Pin", files: [file] };
+        if (navigator.canShare && navigator.canShare(shareData)) {
+          navigator.share(shareData).catch(() => {});
+        }
+      }, "image/png");
+    } catch (e) {
+      setCardBusy(false);
+    }
+  };
+
+  // Legacy fallback for browsers without the Clipboard API — same
+  // hidden-textarea + execCommand trick Mic Drop's invite.html uses.
+  const fallbackCopy = (text) => {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.style.cssText = "position:fixed;opacity:0;";
+    document.body.appendChild(el);
+    el.select();
+    try {
+      document.execCommand("copy");
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    } catch (e) {
+      // nothing more we can do — no Clipboard API and execCommand failed
+    }
+    document.body.removeChild(el);
+  };
+
+  const inviteFriend = () => {
+    const appUrl = window.location.origin + window.location.pathname;
+    const statLine = isChallenge
+      ? `Classic Cross Challenge — ${challengeStrokes} (lower wins) · ${pegCount} peg${pegCount === 1 ? "" : "s"} left`
+      : `${SHAPES[shapeKey].label}${mode === "timed" ? " (Timed)" : ""} — ${pegCount} peg${pegCount === 1 ? "" : "s"} left · ${roundPoints} pts`;
+    const badgeLine = pegCount === 0
+      ? "Perfect Clear"
+      : isChallenge
+      ? "Challenge Veteran"
+      : mode === "timed"
+      ? "Speed Runner"
+      : pegCount <= 2
+      ? "Sharp Shooter"
+      : "Peg Wrangler";
+    // Same "receipts" template used across every SCVD app (originated in
+    // ECEG, also now in Hnefatafl) — hook, blank, stat + badge lines,
+    // blank, CTA + 🎮 link. Keep this exact shape if this gets ported to
+    // Ur/Nine Men's Morris — only the stat/badge content should change.
+    const shareText = [
+      "I just played Jumpin' Pin and I've got receipts.",
+      "",
+      statLine,
+      badgeLine,
+      "",
+      isChallenge ? "Beat my score — same board, same rules." : "Think you can beat it?",
+      `🎮 ${appUrl}`,
+    ].join("\n");
+    if (navigator.share) {
+      navigator.share({ title: "Jumpin' Pin", text: shareText }).catch(() => {
+        if (navigator.clipboard) navigator.clipboard.writeText(shareText);
+        else fallbackCopy(shareText);
+      });
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareText);
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    } else {
+      fallbackCopy(shareText);
+    }
+  };
+
+  const isTimedRound = mode === "timed" || mode === "challenge";
+
+  // Countdown runs in Timed and Challenge — stops the instant the round ends.
+  // In Challenge specifically, the clock is frozen until the first move —
+  // studying the opening board shouldn't cost you seconds, only committing should.
+  useEffect(() => {
+    if (!isTimedRound || roundOver) return;
+    if (mode === "challenge" && moves === 0) return;
+    if (timeLeft <= 0) {
+      setTimeUp(true);
+      return;
+    }
+    const id = setTimeout(() => setTimeLeft((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [isTimedRound, timeLeft, roundOver, mode, moves]);
+
+  // Bank points once per completed round. Challenge mode updates a separate
+  // personal-best (lowest strokes) rather than the card total — different currency.
+  useEffect(() => {
+    if (roundOver && !roundScored) {
+      if (isChallenge) {
+        if (!hintUsed) {
+          setChallengeBest((b) => (b === null || challengeStrokes < b ? challengeStrokes : b));
+        }
+      } else {
+        setTotalScore((s) => s + roundPoints);
+      }
+      setRoundsPlayed((r) => r + 1);
+      setRoundScored(true);
+    }
+  }, [roundOver, roundScored, roundPoints, isChallenge, challengeStrokes, hintUsed]);
+
+  // Compare the finished round against the board's real optimum. A hint
+  // disqualifies this the same way it disqualifies scoring — assisted runs
+  // don't get to claim the record.
+  const [achievement, setAchievement] = useState(null); // "equalled" | "close" | "beaten" | null
+  const [achievementMsg, setAchievementMsg] = useState("");
+  const [showPresidentLetter, setShowPresidentLetter] = useState(false);
+
+  useEffect(() => {
+    if (!roundOver || hintUsed) return;
+    const opt = OPTIMUMS[shapeKey];
+    if (!opt) return;
+    const gap = pegCount - opt.best;
+    if (gap < 0 && !opt.proven) {
+      // Genuinely beating a best-found (not proven) result — vanishingly
+      // rare, and only possible at all on boards we haven't exhaustively solved.
+      setAchievement("beaten");
+      setShowPresidentLetter(true);
+    } else if (gap === 0) {
+      setAchievement("equalled");
+      const pool = EQUALLED_MESSAGES;
+      setAchievementMsg(pool[Math.floor(Math.random() * pool.length)]);
+    } else if (gap > 0 && gap <= 2) {
+      setAchievement("close");
+      const pool = CLOSE_MESSAGES;
+      setAchievementMsg(pool[Math.floor(Math.random() * pool.length)]);
+    } else {
+      setAchievement(null);
+    }
+    // gap < 0 on a proven board should be structurally impossible — the game's
+    // own move rules enforce the same search space the solver already
+    // exhausted — but if it somehow happened, silently treating it as
+    // "equalled" rather than crashing is the safe fallback.
+  }, [roundOver, hintUsed, shapeKey, pegCount]);
+
+  const switchShape = useCallback(
+    (key) => {
+      if (isChallenge) return; // shape is locked to Classic Cross while in Challenge
+      const entry = SHAPES[key];
+      if (entry.tier === "pro" && !isPro) {
+        setUpsell(entry.label);
+        setTimeout(() => setUpsell(null), 2200);
+        return;
+      }
+      const s = entry.build;
+      setShapeKey(key);
+      setPegs(initPegs(s));
+      setSelected(null);
+      setHistory([]);
+      setMoves(0);
+      setHint(false);
+      setRoundScored(false);
+      setHintUsed(false);
+      setTimeLeft(ROUND_SECONDS);
+      setTimeUp(false);
+      setAchievement(null);
+      setAchievementMsg("");
+      setShowPresidentLetter(false);
+    },
+    [isPro, isChallenge]
+  );
+
+  const reset = useCallback(() => {
+    setPegs(initPegs(shape));
+    setSelected(null);
+    setHistory([]);
+    setMoves(0);
+    setRoundScored(false);
+    setHintUsed(false);
+    setTimeLeft(mode === "challenge" ? CHALLENGE_SECONDS : ROUND_SECONDS);
+    setTimeUp(false);
+    setAchievement(null);
+    setAchievementMsg("");
+    setShowPresidentLetter(false);
+  }, [shape, mode]);
+
+  const setModeAndReset = useCallback((nextMode) => {
+    setMode(nextMode);
+    const nextShapeKey = nextMode === "challenge" ? "classic" : shapeKey;
+    setShapeKey(nextShapeKey);
+    setPegs(initPegs(SHAPES[nextShapeKey].build));
+    setSelected(null);
+    setHistory([]);
+    setMoves(0);
+    setHint(false);
+    setRoundScored(false);
+    setHintUsed(false);
+    setTimeLeft(nextMode === "challenge" ? CHALLENGE_SECONDS : ROUND_SECONDS);
+    setTimeUp(false);
+    setAchievement(null);
+    setAchievementMsg("");
+    setShowPresidentLetter(false);
+  }, [shapeKey]);
+
+  const undo = useCallback(() => {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const prev = h[h.length - 1];
+      setPegs(new Set(prev));
+      setMoves((m) => Math.max(0, m - 1));
+      return h.slice(0, -1);
+    });
+    setSelected(null);
+  }, []);
+
+  const targets = useMemo(() => {
+    if (!selected) return [];
+    return getTargets(pegs, shape, selected.r, selected.c);
+  }, [selected, pegs, shape]);
+
+  const hintCells = useMemo(() => {
+    if (!hint) return new Set();
+    const s = new Set();
+    for (const key of pegs) {
+      const [r, c] = key.split(",").map(Number);
+      if (getTargets(pegs, shape, r, c).length > 0) s.add(key);
+    }
+    return s;
+  }, [hint, pegs, shape]);
+
+  const handleClick = (r, c) => {
+    if (roundOver) return;
+    const key = keyOf(r, c);
+    if (!shape.set.has(key)) return;
+
+    if (selected) {
+      const target = targets.find((tt) => tt.r === r && tt.c === c);
+      if (target) {
+        setHistory((h) => [...h, new Set(pegs)]);
+        const next = new Set(pegs);
+        next.delete(keyOf(selected.r, selected.c));
+        next.delete(target.mid);
+        next.add(key);
+        setPegs(next);
+        setMoves((m) => m + 1);
+        setSelected(null);
+        return;
+      }
+      if (pegs.has(key)) {
+        setSelected({ r, c });
+        return;
+      }
+      setSelected(null);
+      return;
+    }
+
+    if (pegs.has(key)) setSelected({ r, c });
+  };
+
+  const selectTheme = (key) => {
+    const theme = THEMES[key];
+    if (theme.tier === "pro" && !isPro) {
+      setUpsell(theme.name);
+      setTimeout(() => setUpsell(null), 2200);
+      return;
+    }
+    setThemeKey(key);
+  };
+
+  // Content spans (cols-1)/(rows-1) cell-pitches between hole centres, not
+  // cols/rows — using the full cols*CELL here left a whole extra cell of
+  // padding on the right that wasn't mirrored on the left, shifting every
+  // board visibly left of centre.
+  const width = (shape.cols - 1) * CELL + PAD * 2;
+  const height = (shape.rows - 1) * CELL + PAD * 2;
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: t.bg,
+        color: t.text,
+        fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "20px 12px 40px",
+        transition: "background 200ms ease, color 200ms ease",
+      }}
+    >
+      {showIntro && (
+        <IntroCrawl
+          seriesLabel="ANCIENT GAMES · 01"
+          gameTitle="JUMPIN' PIN"
+          gameTagline="~328 years old · one peg board, and one very long walk backward through history"
+          crawlText={JUMPIN_PIN_CRAWL}
+          crawlDurationMs={34000}
+          motto={[["La Fortune favorise les braves", "\"Fortune Favours The Brave\" — the same Terence line as Nine Men's Morris (Phormio, 161 BC), in the French rendering already in circulation by the 17th century, before Jules Verne's later \"sourit\" phrasing became the familiar one"]]}
+          mottoFont="Georgia, serif"
+          mottoFontSize={26}
+          onDone={dismissIntro}
+        />
+      )}
+
+      <style>{`
+        @keyframes jpGlowPulse { from { opacity: 0.75; } to { opacity: 1; } }
+        @keyframes jpMsgPop {
+          0% { opacity: 0; transform: translateY(10px) scale(0.95); }
+          15% { opacity: 1; transform: translateY(0) scale(1); }
+          80% { opacity: 1; }
+          100% { opacity: 0; transform: translateY(-8px); }
+        }
+        .jp-glow-top, .jp-glow-bottom {
+          position: fixed; left: 0; right: 0; height: 30vh;
+          pointer-events: none; z-index: 900;
+          transition: opacity 0.6s ease-out;
+        }
+        .jp-glow-top { top: 0; }
+        .jp-glow-bottom { bottom: 0; }
+      `}</style>
+
+      {achievement === "equalled" && (
+        <>
+          <div
+            className="jp-glow-top"
+            style={{
+              background: "linear-gradient(to bottom, rgba(232,196,104,0.32) 0%, transparent 100%)",
+              animation: "jpGlowPulse 1.8s ease-in-out infinite alternate",
+            }}
+          />
+          <div
+            className="jp-glow-bottom"
+            style={{
+              background: "linear-gradient(to top, rgba(232,196,104,0.32) 0%, transparent 100%)",
+              animation: "jpGlowPulse 1.8s ease-in-out infinite alternate",
+            }}
+          />
+        </>
+      )}
+
+      {(achievement === "equalled" || achievement === "close") && achievementMsg && (
+        <div
+          key={achievementMsg}
+          style={{
+            position: "fixed",
+            top: "18vh",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            pointerEvents: "none",
+            zIndex: 950,
+            animation: "jpMsgPop 3.5s ease forwards",
+            padding: "0 24px",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-block",
+              fontSize: achievement === "equalled" ? 22 : 16,
+              fontWeight: 900,
+              fontFamily: "Georgia, serif",
+              letterSpacing: "0.03em",
+              color: achievement === "equalled" ? "#e8c468" : t.accent,
+              textShadow:
+                achievement === "equalled"
+                  ? "0 0 24px rgba(232,196,104,0.85), 0 2px 4px rgba(0,0,0,0.8)"
+                  : "0 2px 4px rgba(0,0,0,0.6)",
+            }}
+          >
+            {achievementMsg}
+          </div>
+        </div>
+      )}
+
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, letterSpacing: 4, color: t.muted, fontWeight: 700, marginBottom: 4 }}>
+          ANCIENT GAMES · 01
+        </div>
+        <h1
+          style={{
+            fontSize: 27,
+            fontWeight: 800,
+            letterSpacing: 1,
+            margin: 0,
+            textTransform: "uppercase",
+          }}
+        >
+          Jumpin<span style={{ color: t.accent }}>'</span> Pin
+        </h1>
+        <div style={{ fontSize: 11, color: t.muted, marginTop: 4, letterSpacing: 0.5 }}>
+          one peg at a time
+        </div>
+      </div>
+
+      {/* Base toggle + Pro tones, one row — the base toggle is visually set
+          apart (pill shape vs. circular swatches) so it still can't read as
+          an axis that layers over a chosen tone, just sharing the row now
+          to save vertical space on shorter screens. */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14, flexWrap: "wrap", justifyContent: "center" }}>
+        <button
+          onClick={() => selectTheme(themeKey === "light" ? "dark" : "light")}
+          style={pillStyle(t, themeKey === "light" || themeKey === "dark")}
+        >
+          {themeKey === "light" ? <Icon name="Sun" /> : <Icon name="Moon" />}
+          {themeKey === "light" ? "Light" : "Dark"}
+        </button>
+        <span style={{ width: 1, height: 20, background: t.panelBorder }} />
+        {Object.entries(THEMES)
+          .filter(([, v]) => v.tier === "pro")
+          .map(([key, v]) => (
+            <button
+              key={key}
+              onClick={() => selectTheme(key)}
+              title={v.name}
+              style={{
+                position: "relative",
+                width: 30,
+                height: 30,
+                borderRadius: "50%",
+                border:
+                  themeKey === key ? `2px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+                background: v.swatch,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              {!isPro && (
+                <span
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "rgba(0,0,0,0.45)",
+                    borderRadius: "50%",
+                  }}
+                >
+                  <Icon name="Lock" />
+                </span>
+              )}
+            </button>
+          ))}
+        <span style={{ fontSize: 10, color: t.muted, marginLeft: 2 }}>PRO TONES</span>
+        <span style={{ width: 1, height: 20, background: t.panelBorder }} />
+        <button onClick={() => setShowIntro(true)} style={pillStyle(t, false)} title="Watch the intro again">
+          🎬
+        </button>
+      </div>
+
+      {/* Mode selector — same boards for Practice/Timed, fixed board + built-in clock for Challenge */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", justifyContent: "center" }}>
+        <button onClick={() => setModeAndReset("practice")} style={pillStyle(t, mode === "practice")}>
+          Practice
+        </button>
+        <button onClick={() => setModeAndReset("timed")} style={pillStyle(t, mode === "timed")}>
+          <Icon name="Clock" /> Timed · 3:00
+        </button>
+        <button onClick={() => setModeAndReset("challenge")} style={pillStyle(t, isChallenge)}>
+          <Icon name="Swords" /> Challenge · 1:30
+        </button>
+      </div>
+      {isChallenge && (
+        <div style={{ fontSize: 10, color: t.muted, marginBottom: 14, textAlign: "center", maxWidth: 280 }}>
+          Classic Cross · 90 seconds · 10 strokes per peg left · lower wins
+          <br />
+          Clock starts on your first move
+        </div>
+      )}
+
+      {upsell && (
+        <div
+          style={{
+            marginBottom: 12,
+            fontSize: 12,
+            fontWeight: 700,
+            padding: "6px 14px",
+            borderRadius: 999,
+            background: t.accentSoft,
+            color: t.accent,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          {upsell} is Pro
+          <button
+            onClick={startCheckout}
+            disabled={checkoutBusy}
+            style={{
+              border: "none",
+              borderRadius: 999,
+              padding: "3px 10px",
+              fontSize: 11,
+              fontWeight: 800,
+              background: t.accent,
+              color: t.bg,
+              cursor: "pointer",
+            }}
+          >
+            Unlock $2 USD
+          </button>
+        </div>
+      )}
+
+      {/* Pro unlock / restore — replaces the old dev-only preview checkbox */}
+      {isPro ? (
+        <div style={{ fontSize: 10, color: t.accent, marginBottom: 14, fontWeight: 700 }}>
+          ✓ Pro unlocked
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 14 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={startCheckout} disabled={checkoutBusy} style={btnStyle(t, checkoutBusy, true)}>
+              {checkoutBusy ? "Redirecting…" : "Unlock Pro — $2 USD"}
+            </button>
+            <button
+              onClick={() => { setRestoreOpen(true); setRestoreSent(false); }}
+              style={{ ...btnStyle(t, false), fontSize: 11, padding: "9px 10px" }}
+            >
+              Restore Purchase
+            </button>
+          </div>
+          {unlockNotice && (
+            <div style={{ fontSize: 10, color: t.muted, textAlign: "center", maxWidth: 260 }}>{unlockNotice}</div>
+          )}
+          <button
+            onClick={() => setManualTokenOpen((v) => !v)}
+            style={{ background: "none", border: "none", color: t.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
+          >
+            have a code already?
+          </button>
+          {manualTokenOpen && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={manualToken}
+                onChange={(e) => setManualToken(e.target.value)}
+                placeholder="paste code"
+                style={{
+                  fontSize: 11,
+                  padding: "7px 10px",
+                  borderRadius: 8,
+                  border: `1px solid ${t.panelBorder}`,
+                  background: t.panel,
+                  color: t.text,
+                  width: 160,
+                }}
+              />
+              <button
+                onClick={() => activateToken(manualToken.trim())}
+                disabled={!manualToken.trim()}
+                style={{ ...btnStyle(t, !manualToken.trim()), fontSize: 11, padding: "7px 12px" }}
+              >
+                Apply
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {restoreOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2000,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+          onClick={() => setRestoreOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 320,
+              width: "100%",
+              background: t.panel,
+              border: `1px solid ${t.panelBorder}`,
+              borderRadius: 14,
+              padding: 22,
+              color: t.text,
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>Restore Purchase</div>
+            {restoreSent ? (
+              <div style={{ fontSize: 12, color: t.muted, lineHeight: 1.6 }}>
+                If that email has a Jumpin' Pin purchase on file, a code is on its way — check your inbox and
+                paste it in via "have a code already?" below.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, color: t.muted, marginBottom: 12, lineHeight: 1.5 }}>
+                  Enter the email you used at checkout — we'll send your unlock code to it.
+                </div>
+                <input
+                  type="email"
+                  value={restoreEmail}
+                  onChange={(e) => setRestoreEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  style={{
+                    width: "100%",
+                    fontSize: 13,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: `1px solid ${t.panelBorder}`,
+                    background: t.bg,
+                    color: t.text,
+                    marginBottom: 12,
+                  }}
+                />
+                <button
+                  onClick={submitRestore}
+                  disabled={restoreBusy || !restoreEmail.includes("@")}
+                  style={{ ...btnStyle(t, restoreBusy || !restoreEmail.includes("@"), true), width: "100%", justifyContent: "center" }}
+                >
+                  {restoreBusy ? "Sending…" : "Send my code"}
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setRestoreOpen(false)}
+              style={{ marginTop: 10, width: "100%", background: "none", border: "none", color: t.muted, fontSize: 11, cursor: "pointer" }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Shape tabs — hidden during Challenge, board is fixed to Classic Cross */}
+      {!isChallenge && (
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          flexWrap: "wrap",
+          justifyContent: "center",
+          marginBottom: 16,
+        }}
+      >
+        {Object.entries(SHAPES).map(([key, val]) => {
+          const locked = val.tier === "pro" && !isPro;
+          return (
+            <button
+              key={key}
+              onClick={() => switchShape(key)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "7px 12px",
+                borderRadius: 999,
+                border:
+                  shapeKey === key ? `1px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+                background: shapeKey === key ? t.accentSoft : t.panel,
+                color: shapeKey === key ? t.accent : t.muted,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                letterSpacing: 0.3,
+              }}
+            >
+              {locked && <Icon name="Lock" />}
+              {val.label}
+            </button>
+          );
+        })}
+      </div>
+      )}
+
+      {/* Stats readout */}
+      <div
+        style={{
+          display: "flex",
+          gap: 18,
+          marginBottom: 16,
+          fontFamily: "'Courier New', monospace",
+          fontSize: 13,
+          background: t.panel,
+          border: `1px solid ${t.panelBorder}`,
+          borderRadius: 10,
+          padding: "8px 18px",
+        }}
+      >
+        <div>
+          MOVES <span style={{ color: t.pegFrom, fontWeight: 700 }}>{moves}</span>
+        </div>
+        <div>
+          PEGS <span style={{ color: t.accent, fontWeight: 700 }}>{pegCount}</span>
+        </div>
+        {isChallenge ? (
+          <div>
+            BEST{" "}
+            <span style={{ color: t.accent, fontWeight: 700 }}>
+              {challengeBest === null ? "—" : challengeBest}
+            </span>
+          </div>
+        ) : (
+          <div>
+            SCORE <span style={{ color: t.accent, fontWeight: 700 }}>{totalScore}</span>
+          </div>
+        )}
+        {isTimedRound && (
+          <div>
+            TIME{" "}
+            <span
+              style={{
+                color: timeLeft <= 30 ? "#ff6b57" : t.accent,
+                fontWeight: 700,
+              }}
+            >
+              {formatTime(timeLeft)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {!isChallenge && (
+        <div style={{ fontSize: 10, color: t.muted, marginTop: -8, marginBottom: 16 }}>
+          1–5 left = 10pts · 6–10 = 5pts · 11–15 = 1pt
+        </div>
+      )}
+
+      {/* Board */}
+      <div
+        style={{
+          position: "relative",
+          width,
+          height,
+          background: t.panel,
+          borderRadius: 18,
+          boxShadow: `inset 0 0 0 1px ${t.panelBorder}, 0 8px 24px rgba(0,0,0,0.35)`,
+        }}
+      >
+        {shape.holes.map(({ r, c }) => {
+          const key = keyOf(r, c);
+          const occupied = pegs.has(key);
+          const isSelected = selected && selected.r === r && selected.c === c;
+          const isTarget = targets.some((tt) => tt.r === r && tt.c === c);
+          const isHint = hintCells.has(key);
+          const x = PAD + c * CELL;
+          const y = PAD + r * CELL;
+
+          return (
+            <button
+              key={key}
+              onClick={() => handleClick(r, c)}
+              aria-label={occupied ? "peg" : "empty hole"}
+              style={{
+                position: "absolute",
+                left: x - CELL / 2 + 2,
+                top: y - CELL / 2 + 2,
+                width: CELL - 4,
+                height: CELL - 4,
+                borderRadius: "50%",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                background: occupied
+                  ? isSelected
+                    ? `radial-gradient(circle at 35% 30%, ${t.accent}, ${t.pegTo})`
+                    : isHint
+                    ? `radial-gradient(circle at 35% 30%, ${t.pegFrom}, ${t.accent})`
+                    : `radial-gradient(circle at 35% 30%, ${t.pegFrom}, ${t.pegTo})`
+                  : t.holeEmpty,
+                boxShadow: occupied
+                  ? isSelected
+                    ? `0 0 0 2px ${t.accent}, 0 2px 4px rgba(0,0,0,0.5)`
+                    : "0 2px 3px rgba(0,0,0,0.5)"
+                  : isTarget
+                  ? `inset 0 0 0 2px ${t.accent}`
+                  : t.holeShadow,
+                transition: "transform 120ms ease, box-shadow 120ms ease, background 200ms ease",
+                transform: isSelected ? "scale(1.12)" : "scale(1)",
+              }}
+            />
+          );
+        })}
+      </div>
+
+      {/* Controls */}
+      <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+        <button onClick={undo} disabled={history.length === 0} style={btnStyle(t, history.length === 0)}>
+          <Icon name="RotateCcw" /> Undo
+        </button>
+        <button
+          onClick={() =>
+            setHint((h) => {
+              const next = !h;
+              if (next) setHintUsed(true);
+              return next;
+            })
+          }
+          style={btnStyle(t, false, hint)}
+        >
+          <Icon name="Lightbulb" /> Hint
+        </button>
+        <button onClick={reset} style={btnStyle(t, false)}>
+          <Icon name="RefreshCw" /> Reset
+        </button>
+      </div>
+      {hintUsed && !roundOver && (
+        <div style={{ fontSize: 10, color: t.muted, marginTop: 8 }}>
+          Hint used — this round won't earn points
+        </div>
+      )}
+
+      {roundOver && (
+        <div
+          id="jumpinpin-scorecard"
+          style={{
+            marginTop: 18,
+            textAlign: "center",
+            padding: "12px 18px",
+            borderRadius: 12,
+            background: t.panel,
+            border: `1px solid ${t.panelBorder}`,
+            maxWidth: 320,
+          }}
+        >
+          <div style={{ fontSize: 12, letterSpacing: 2, color: t.muted, marginBottom: 4 }}>
+            {noMovesLeft ? "NO MOVES LEFT" : "TIME'S UP"}
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+            {scoreMessage(pegCount)}
+          </div>
+          {hintUsed ? (
+            <div style={{ fontSize: 14, fontWeight: 700, color: t.muted }}>
+              Hint used — {isChallenge ? "unranked this round" : "no points this round"}
+            </div>
+          ) : isChallenge ? (
+            <>
+              <div style={{ fontSize: 20, fontWeight: 800, color: t.accent }}>
+                {challengeStrokes} strokes
+              </div>
+              {(challengeBest === null || challengeStrokes <= challengeBest) && (
+                <div style={{ fontSize: 11, color: t.accent, marginTop: 2 }}>New personal best</div>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize: 20, fontWeight: 800, color: t.accent }}>
+              +{roundPoints} pts
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: t.muted, marginTop: 4 }}>
+            {isChallenge
+              ? `Classic Cross · personal best ${challengeBest === null ? "—" : challengeBest} strokes`
+              : `Round ${roundsPlayed} · card total ${totalScore}`}
+          </div>
+          {achievement === "equalled" && (
+            <div
+              style={{
+                marginTop: 10,
+                padding: "6px 12px",
+                borderRadius: 999,
+                background: "rgba(232,196,104,0.15)",
+                border: "1px solid rgba(232,196,104,0.5)",
+                color: "#e8c468",
+                fontSize: 11,
+                fontWeight: 800,
+                display: "inline-block",
+              }}
+            >
+              🏆 Equalled the best possible score ({OPTIMUMS[shapeKey].best} peg{OPTIMUMS[shapeKey].best === 1 ? "" : "s"})
+            </div>
+          )}
+          {achievement === "close" && (
+            <div style={{ marginTop: 8, fontSize: 11, color: t.accent, fontWeight: 700 }}>
+              ⭐ {pegCount - OPTIMUMS[shapeKey].best} off our best-ever result
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button
+              onClick={shareCard}
+              disabled={cardBusy}
+              style={{ ...btnStyle(t, cardBusy), flex: 1, justifyContent: "center" }}
+            >
+              <Icon name="Share2" /> {cardBusy ? "Rendering…" : "Share Card"}
+            </button>
+            <button
+              onClick={inviteFriend}
+              style={{ ...btnStyle(t, false), flex: 1, justifyContent: "center" }}
+            >
+              {inviteCopied ? <Icon name="Copy" /> : null}
+              {inviteCopied ? "Copied" : "Invite a Friend"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showPresidentLetter && (
+        <PresidentLetter
+          shapeLabel={SHAPES[shapeKey].label}
+          pegCount={pegCount}
+          onClose={() => setShowPresidentLetter(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Fictional "Office of the President" flourish — deliberately generic and
+// unnamed, not depicting any real public figure. Only ever reachable when a
+// board's recorded best is NOT proven optimal (see OPTIMUMS), since
+// "beating" a proven result is mathematically impossible.
+function PresidentLetter({ shapeLabel, pegCount, onClose }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 2000,
+        background: "rgba(0,0,0,0.85)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: 380,
+          width: "100%",
+          background: "#f5efe0",
+          color: "#2a2416",
+          borderRadius: 4,
+          padding: "36px 30px",
+          fontFamily: "Georgia, serif",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+          border: "6px double #8a6d1a",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ fontSize: 11, letterSpacing: 3, color: "#8a6d1a", marginBottom: 6 }}>
+          OFFICE OF THE PRESIDENT
+        </div>
+        <div style={{ fontSize: 11, letterSpacing: 2, color: "#8a6d1a", marginBottom: 20 }}>
+          OF JUMPIN' PIN
+        </div>
+        <div style={{ fontSize: 15, lineHeight: 1.7, marginBottom: 18 }}>
+          Let it be known, on this day, that a mind of{" "}
+          <strong>truly extraordinary</strong> capability has done what our own
+          exhaustive search could not: bettered the best result ever recorded
+          on <strong>{shapeLabel}</strong>, finishing with just{" "}
+          <strong>{pegCount}</strong> peg{pegCount === 1 ? "" : "s"} remaining.
+        </div>
+        <div style={{ fontSize: 15, lineHeight: 1.7, marginBottom: 24, fontStyle: "italic" }}>
+          The board has been recalculated in your honour. History will remember this.
+        </div>
+        <div style={{ fontSize: 12, letterSpacing: 1, color: "#8a6d1a", marginBottom: 24 }}>
+          — with the highest possible regard, entirely fictional and not to be taken seriously
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            padding: "10px 24px",
+            borderRadius: 6,
+            border: "1px solid #8a6d1a",
+            background: "#8a6d1a",
+            color: "#f5efe0",
+            fontFamily: "Georgia, serif",
+            fontWeight: 700,
+            fontSize: 13,
+            letterSpacing: 1,
+            cursor: "pointer",
+          }}
+        >
+          Accept Honour
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function pillStyle(t, active) {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "6px 12px",
+    borderRadius: 999,
+    border: active ? `1px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+    background: active ? t.accentSoft : t.panel,
+    color: active ? t.accent : t.muted,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  };
+}
+
+function btnStyle(t, disabled, active) {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "9px 14px",
+    borderRadius: 10,
+    border: active ? `1px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+    background: active ? t.accentSoft : t.panel,
+    color: disabled ? t.muted : active ? t.accent : t.text,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.5 : 1,
+  };
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<JumpinPin />);
+
+</script>
+</body>
+</html>
