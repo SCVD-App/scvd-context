@@ -4154,7 +4154,7 @@ function MicDrop() {
               <div style="font-size:48px; margin-bottom:14px;">👑</div>
               <div style="font-family:Georgia,serif; font-size:22px; font-weight:900; color:#C9A84C; letter-spacing:0.15em; margin-bottom:10px;">VIP ACCESS GRANTED</div>
               <div style="font-family:'Courier New',monospace; font-size:13px; color:#fff; letter-spacing:0.2em; margin-bottom:8px;">THE DRESSING ROOM IS OPEN</div>
-              <div style="font-family:'Courier New',monospace; font-size:12px; color:#888; letter-spacing:0.15em;">${days} DAYS OF PRO &middot; DROP SOME RECEIPTS</div>
+              <div style="font-family:'Courier New',monospace; font-size:12px; color:#888; letter-spacing:0.15em;">${days === null ? "LIFETIME PRO" : `${days} DAYS OF PRO`} &middot; DROP SOME RECEIPTS</div>
             `;
             overlay.appendChild(msg);
             document.body.appendChild(overlay);
@@ -4164,7 +4164,7 @@ function MicDrop() {
               setTimeout(() => overlay.remove(), 5000);
             }, 5000);
           })();
-          alert(`✦ Token activated — ${days} days of Pro access added. Thank you for your patience!`);
+          alert(type === "lifetime" ? "✦ Lifetime Pro activated — welcome to the backstage pass. Thank you for your patience!" : `✦ Token activated — ${days} days of Pro access added. Thank you for your patience!`);
         }}/>
 
         {/* Active users counter */}
