@@ -9,10 +9,12 @@
 //   - Var: APP_URL  (e.g. https://scvd-app.github.io/Cult-Connections)
 // ══════════════════════════════════════════════════════════
 
+// Tier config — inline price_data now, no pre-created Stripe Price IDs to manage.
+// days: null marks the lifetime tier — no expiry, no KV TTL, checked explicitly below.
 const TIERS = {
-  square_eyes:         { priceId: "price_1TvbPKKyyW3v9aYU8rIFbzx3", days: 30,  label: "Square Eyes" },
-  couch_potato:        { priceId: "price_1TvbRDKyyW3v9aYUFHckF0pw", days: 182, label: "Couch Potato" },
-  pop_culture_vulture: { priceId: "price_1TvbS0KyyW3v9aYUkoev77zQ", days: 365, label: "Pop Culture Vulture" },
+  square_eyes:         { amount: 299,  days: 30,   label: "Square Eyes" },
+  couch_potato:        { amount: 1199, days: 182,  label: "Couch Potato" },
+  pop_culture_vulture: { amount: 2499, days: null, label: "Pop Culture Vulture — Lifetime" },
 };
 
 const CORS_HEADERS = {
@@ -80,7 +82,10 @@ async function createCheckout(request, env) {
 
   const params = new URLSearchParams({
     "mode": "payment",
-    "line_items[0][price]": tierConfig.priceId,
+    "line_items[0][price_data][currency]": "usd",
+    "line_items[0][price_data][product_data][name]": `Cult Connections — ${tierConfig.label}`,
+    "line_items[0][price_data][product_data][description]": "Full puzzle access. No auto-renewal.",
+    "line_items[0][price_data][unit_amount]": tierConfig.amount.toString(),
     "line_items[0][quantity]": "1",
     "success_url": successUrl,
     "cancel_url": cancelUrl,
@@ -128,7 +133,7 @@ async function verifyToken(request, env) {
     return json({ valid: false, reason: "payment not yet confirmed — try again in a few seconds" });
   }
 
-  if (new Date(record.expiry).getTime() < Date.now()) {
+  if (record.expiry !== null && new Date(record.expiry).getTime() < Date.now()) {
     return json({ valid: false, reason: "unlock expired" });
   }
 
@@ -166,12 +171,18 @@ async function handleWebhook(request, env) {
       return json({ received: true });
     }
 
-    const expiry = new Date(Date.now() + tierConfig.days * 86400000).toISOString();
+    const isLifetime = tierConfig.days === null;
+    const expiry = isLifetime
+      ? null
+      : new Date(Date.now() + tierConfig.days * 86400000).toISOString();
 
     await env.CC_TOKENS.put(
       `cc_token:${token}`,
       JSON.stringify({ tier, status: "paid", expiry, created: Date.now() }),
-      { expirationTtl: tierConfig.days * 86400 + 86400 } // keep a day past expiry, then auto-clean
+      // Lifetime records get no TTL at all — permanent, matching Ancient Games
+      // and Mic Drop's lifetime tier. Time-limited tiers keep the existing
+      // "expire a day after the pass runs out" cleanup.
+      isLifetime ? {} : { expirationTtl: tierConfig.days * 86400 + 86400 }
     );
   }
 
