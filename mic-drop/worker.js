@@ -40,11 +40,11 @@ const STRIPE_PK = "pk_live_51TeuPdKyyW3v9aYURVlqJcnHMBdW5UtMCvtH1BSpBS26HrhpueUM
 const MAX_RECEIPTS = 9;
 
 // Plan definitions — must match index.html pricing
+// lifetime uses days: null as its marker — no expiry, verified separately in verifyToken
 const PLANS = {
-  monthly:  { days: 30,  amount:  299, label: "1 Month"  },
-  quarter:  { days: 90,  amount:  799, label: "3 Months" },
-  biannual: { days: 180, amount: 1499, label: "6 Months" },
-  annual:   { days: 365, amount: 2499, label: "1 Year"   },
+  monthly:  { days: 30,  amount:  399,  label: "1 Month"  },
+  biannual: { days: 180, amount: 1499,  label: "6 Months" },
+  lifetime: { days: null, amount: 3999, label: "Lifetime" },
 };
 
 // ── HMAC TOKEN HELPERS ───────────────────────────────────────────────────────
@@ -67,6 +67,17 @@ async function verifyToken(token, secret) {
   const parts = token.trim().split("_");
   if (parts.length !== 4 || parts[0] !== "micdrop") return null;
   const [, type, daysStr, submittedHmac] = parts;
+
+  // Lifetime tokens carry the literal string "forever" instead of a day count —
+  // never subject to the 400-day cap below, by design, not by accident.
+  if (type === "lifetime") {
+    if (daysStr !== "forever") return null;
+    const expected = await generateToken(type, daysStr, secret);
+    const expectedHmac = expected.split("_")[3];
+    if (submittedHmac !== expectedHmac) return null;
+    return { type, days: null };
+  }
+
   const days = parseInt(daysStr);
   if (!days || days < 1 || days > 400) return null;
   const expected = await generateToken(type, days, secret);
@@ -145,7 +156,7 @@ async function sendTokenEmail(resendKey, toEmail, token, planLabel, days) {
         ${token}
       </div>
       <div style="margin-top:16px;font-size:13px;color:#555;letter-spacing:0.1em;">
-        ${planLabel} — ${days} days of Pro access
+        ${planLabel} — ${days === null ? "yours forever, no expiry" : `${days} days of Pro access`}
       </div>
     </div>
     <div style="background:#111;border:1px solid #1e1e1e;border-radius:14px;padding:20px;margin-bottom:24px;">
@@ -358,7 +369,7 @@ Return ONLY valid JSON with these four keys. No explanation, no markdown, no cat
           "line_items[0][price_data][unit_amount]":               plan.amount.toString(),
           "line_items[0][quantity]":                              "1",
           "metadata[planId]":                planId,
-          "metadata[days]":                  plan.days.toString(),
+          "metadata[days]":                  plan.days === null ? "lifetime" : plan.days.toString(),
           "success_url":                     successUrl || "https://scvd-app.github.io/Mic-Drop/?payment=success",
           "cancel_url":                      cancelUrl  || "https://scvd-app.github.io/Mic-Drop/?payment=cancelled",
         });
@@ -387,18 +398,25 @@ Return ONLY valid JSON with these four keys. No explanation, no markdown, no cat
         if (event.type === "checkout.session.completed") {
           const session = event.data.object;
           const planId  = session.metadata?.planId;
-          const days    = parseInt(session.metadata?.days || "30");
+          const isLifetime = session.metadata?.days === "lifetime";
+          const days    = isLifetime ? null : parseInt(session.metadata?.days || "30");
           const plan    = PLANS[planId];
 
           if (plan && env.MICDROP_TOKEN_SECRET) {
-            const token = await generateToken("pro", days, env.MICDROP_TOKEN_SECRET);
+            const token = isLifetime
+              ? await generateToken("lifetime", "forever", env.MICDROP_TOKEN_SECRET)
+              : await generateToken("pro", days, env.MICDROP_TOKEN_SECRET);
             const email = session.customer_details?.email;
 
             if (env.MICDROP_KV) {
+              // Lifetime receipts are stored with no expirationTtl — permanent,
+              // same as Ancient Games' Pro records. Time-limited receipts keep
+              // the existing 400-day TTL.
+              const kvOpts = isLifetime ? {} : { expirationTtl: 60 * 60 * 24 * 400 };
               await env.MICDROP_KV.put(
                 `token:${session.id}`,
                 JSON.stringify({ token, planId, days, email, ts: Date.now() }),
-                { expirationTtl: 60 * 60 * 24 * 400 }
+                kvOpts
               );
             }
 

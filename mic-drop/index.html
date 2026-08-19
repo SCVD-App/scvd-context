@@ -179,7 +179,9 @@ const SPOTIFY_AUTH_URL     = "https://accounts.spotify.com/authorize";
 // Deliberately capped low right now — Spotify's Developer Mode only allows 5 test
 // users before requiring Extended Quota Mode (needs registered business + 250k MAU).
 // This flag lets us kill the feature globally in one place if the auth slot fills up.
-const SPOTIFY_BETA_ENABLED = true;
+// Hidden from UI until Spotify's Extended Quota Mode (250k+ MAU) is realistic for us —
+// code and OAuth flow left intact, just not surfaced. Flip back to true to re-enable.
+const SPOTIFY_BETA_ENABLED = false;
 // Metadata-only call, much cheaper than an AudD audio fingerprint — safe to poll often
 const SPOTIFY_POLL_INTERVAL = 5000;
 
@@ -999,7 +1001,7 @@ function OnboardingModal({ onClose }) {
 
 // ── PRO SPLASH PAGE ───────────────────────────────────────────────────────────
 function ProSplash({ onClose }) {
-  const [selected,    setSelected]    = useState("annual");
+  const [selected,    setSelected]    = useState("lifetime");
   const [fontScale,   setFontScale]   = useState(1.55); // 1 = normal, 1.25 = large, 1.55 = XL
   const [checkingOut, setCheckingOut] = useState(false);
   const [checkoutErr, setCheckoutErr] = useState("");
@@ -1034,10 +1036,9 @@ function ProSplash({ onClose }) {
   };
 
   const plans = [
-    { id:"monthly", label:"1 Month",  price:"$2.99",  saving:null },
-    { id:"quarter", label:"3 Months", price:"$7.99",  saving:"11% off" },
-    { id:"biannual",label:"6 Months", price:"$14.99", saving:"16% off" },
-    { id:"annual",  label:"1 Year",   price:"$24.99", saving:"30% off — best value" },
+    { id:"monthly", label:"1 Month",  price:"$3.99",  saving:null },
+    { id:"biannual",label:"6 Months", price:"$14.99", saving:"37% off" },
+    { id:"lifetime",label:"Lifetime", price:"$39.99", saving:"Yours forever — no renewal, ever" },
   ];
 
   // Animated pitch graph — gold reference line, red singer line
@@ -1158,7 +1159,7 @@ function ProSplash({ onClose }) {
             <span style={{ color:"#666", fontStyle:"italic" }}>(Disclaimer: Bill Gates doesn't even own Microsoft anymore but F that guy too.)</span><br/><br/>
             Bezos gets nothing out of this either. Just sayin'.<br/><br/>
             <span style={{ color:"#666", fontStyle:"italic" }}>We have nothing further to say about other tech billionaires at this time.</span><br/><br/>
-            <span style={{ color:"#ccc" }}>Mic Drop operates on an integrity model. Everyone pays the same. Elon's $2.99 is only as good as everyone else's.</span><br/><br/>
+            <span style={{ color:"#ccc" }}>Mic Drop operates on an integrity model. Everyone pays the same. Elon's $3.99 is only as good as everyone else's.</span><br/><br/>
             Opt in. No auto-renewal. No surprises. Unlike your gym, we actually want you to show up.
           </div>
         </div>
@@ -1810,7 +1811,7 @@ function SessionReport({ songs, onClose, onUnlock, isPro }) {
                 Unlock Pro ✦
               </button>
               <div style={{ fontSize:"17px", color:"#2a2a2a", fontFamily:"'Courier New',monospace", marginTop:"8px", textAlign:"center", letterSpacing:"0.1em", lineHeight:1.8 }}>
-                FROM $2.99 · NO APP STORE · OPT-IN ONLY
+                FROM $3.99 · NO APP STORE · OPT-IN ONLY
               </div>
             </div>
           </div>
@@ -2209,7 +2210,7 @@ function TokenEntry({ onActivate }) {
           setOpen(false);
           setToken("");
           setStatus("");
-          onActivate(data.days, token.trim());
+          onActivate(data.days, token.trim(), data.type);
         }, 1000);
       } else {
         setStatus("Invalid token — please check and try again");
@@ -3581,7 +3582,7 @@ function MicDrop() {
 
         // If Spotify's connected, it's the authoritative track source — skip the
         // AudD mic-fingerprint loop entirely rather than running both and racing.
-        if (spotifyStatusRef.current === "connected") {
+        if (SPOTIFY_BETA_ENABLED && spotifyStatusRef.current === "connected") {
           pollSpotifyNowPlaying(); // immediate — don't wait a full poll interval
           spotifyPollTimer.current = setInterval(pollSpotifyNowPlaying, SPOTIFY_POLL_INTERVAL);
         } else {
@@ -3590,7 +3591,7 @@ function MicDrop() {
         autoTimer.current = setInterval(() => {
           // Re-checked every tick, not just at arm-time, in case Spotify connects/
           // disconnects mid-session (e.g. token refresh fails and forces a disconnect).
-          if (spotifyStatusRef.current === "connected") return;
+          if (SPOTIFY_BETA_ENABLED && spotifyStatusRef.current === "connected") return;
           if (!identifying.current) recognizeTrack();
         }, RECOGNITION_INTERVAL);
         reportTimer.current = setInterval(() => {
@@ -3720,6 +3721,9 @@ function MicDrop() {
   // Check paid Pro status from token activation
   const getProPaidState = () => {
     try {
+      if (localStorage.getItem("micDrop_proLifetime") === "1") {
+        return { paid: true, daysLeft: null };
+      }
       const expiry = localStorage.getItem("micDrop_proExpiry");
       if (!expiry) return { paid: false, daysLeft: 0 };
       const ms = parseInt(expiry) - Date.now();
@@ -3852,7 +3856,7 @@ function MicDrop() {
               👑 BACKSTAGE PASS
             </span>
             <span style={{ fontSize:"12px", color:"#777", fontFamily:"'Courier New',monospace", marginLeft:"8px" }}>
-              {proPaid.daysLeft} day{proPaid.daysLeft !== 1 ? "s" : ""} left
+              {proPaid.daysLeft === null ? "Lifetime" : `${proPaid.daysLeft} day${proPaid.daysLeft !== 1 ? "s" : ""} left`}
             </span>
           </div>
         </div>
@@ -3908,7 +3912,7 @@ function MicDrop() {
                 cursor:"pointer", textTransform:"uppercase",
               }}
             >
-              Did we earn your $2.99 USD?
+              Did we earn your $3.99 USD?
             </div>
           </div>
         </div>
@@ -3990,12 +3994,12 @@ function MicDrop() {
       {trackInfo && !showReport && (
         <div className="track-card" style={{ width:"100%", maxWidth:"420px", padding:"0 20px 10px" }}>
           <div
-            onClick={spotifyStatus === "connected" ? toggleSpotifyPlayback : undefined}
+            onClick={SPOTIFY_BETA_ENABLED && spotifyStatus === "connected" ? toggleSpotifyPlayback : undefined}
             style={{
-              background: spotifyStatus === "connected" ? "rgba(29,185,84,0.06)" : withAlpha(theme.accent,0.07),
-              border: spotifyStatus === "connected" ? "1px solid rgba(29,185,84,0.30)" : `1px solid ${withAlpha(theme.accent,0.22)}`,
+              background: SPOTIFY_BETA_ENABLED && spotifyStatus === "connected" ? "rgba(29,185,84,0.06)" : withAlpha(theme.accent,0.07),
+              border: SPOTIFY_BETA_ENABLED && spotifyStatus === "connected" ? "1px solid rgba(29,185,84,0.30)" : `1px solid ${withAlpha(theme.accent,0.22)}`,
               borderRadius:"12px", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center",
-              cursor: spotifyStatus === "connected" ? "pointer" : "default",
+              cursor: SPOTIFY_BETA_ENABLED && spotifyStatus === "connected" ? "pointer" : "default",
               position:"relative",
             }}
           >
@@ -4009,7 +4013,7 @@ function MicDrop() {
                 <div style={{ fontSize:"20px", color:"#aaa", marginTop:"3px" }}><span style={{ color:theme.accent, fontWeight:"bold" }}>{trackInfo.bpm}</span> BPM</div>
               </div>
               {/* Play/pause affordance — the whole card is tappable, this icon just signals that */}
-              {spotifyStatus === "connected" && (
+              {SPOTIFY_BETA_ENABLED && spotifyStatus === "connected" && (
                 <div style={{
                   width:"32px", height:"32px", borderRadius:"50%", flexShrink:0,
                   background:"rgba(29,185,84,0.15)", border:"1px solid rgba(29,185,84,0.4)",
@@ -4093,22 +4097,29 @@ function MicDrop() {
       <div style={{ width:"100%", maxWidth:"420px", padding:"16px 20px 0", display:"flex", flexDirection:"column", alignItems:"center", gap:"10px" }}>
 
         {/* Token entry — for comp tokens and Pro unlock */}
-        <TokenEntry onActivate={(days, rawToken) => {
+        <TokenEntry onActivate={(days, rawToken, type) => {
           try {
-            // Stack tokens correctly — extend from current expiry if still valid
-            // otherwise start fresh from now
-            const DAY_MS = 24 * 60 * 60 * 1000;
-            const existing = localStorage.getItem("micDrop_proExpiry");
-            const baseTime = existing && parseInt(existing) > Date.now()
-              ? parseInt(existing)   // extend from current expiry end
-              : Date.now();          // start fresh from now
-            const newExpiry = baseTime + (days * DAY_MS);
-            localStorage.setItem("micDrop_proExpiry", newExpiry.toString());
-            // Store raw token for server-side receipt access
-            if (rawToken) localStorage.setItem("micDrop_proToken", rawToken);
-            // Calculate actual days remaining from now for display
-            const daysRemaining = Math.ceil((newExpiry - Date.now()) / DAY_MS);
-            setProPaid({ paid: true, daysLeft: daysRemaining });
+            if (type === "lifetime") {
+              // No expiry math at all — mirrors Ancient Games' simple Pro flag.
+              localStorage.setItem("micDrop_proLifetime", "1");
+              if (rawToken) localStorage.setItem("micDrop_proToken", rawToken);
+              setProPaid({ paid: true, daysLeft: null });
+            } else {
+              // Stack tokens correctly — extend from current expiry if still valid
+              // otherwise start fresh from now
+              const DAY_MS = 24 * 60 * 60 * 1000;
+              const existing = localStorage.getItem("micDrop_proExpiry");
+              const baseTime = existing && parseInt(existing) > Date.now()
+                ? parseInt(existing)   // extend from current expiry end
+                : Date.now();          // start fresh from now
+              const newExpiry = baseTime + (days * DAY_MS);
+              localStorage.setItem("micDrop_proExpiry", newExpiry.toString());
+              // Store raw token for server-side receipt access
+              if (rawToken) localStorage.setItem("micDrop_proToken", rawToken);
+              // Calculate actual days remaining from now for display
+              const daysRemaining = Math.ceil((newExpiry - Date.now()) / DAY_MS);
+              setProPaid({ paid: true, daysLeft: daysRemaining });
+            }
           } catch {}
           // VIP golden glow moment
           (() => {
