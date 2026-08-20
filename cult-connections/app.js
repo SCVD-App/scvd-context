@@ -289,14 +289,32 @@ function openPurchaseScreen(){
   const params = new URLSearchParams(window.location.search);
   const t = params.get('cc_token');
   if(t){
-    redeemToken(t).then(()=>{
-      // clean the token out of the URL bar
+    redeemToken(t).then((success)=>{
+      // Only clean the token out of the URL bar on success — if redemption
+      // failed (webhook still pending, network hiccup, etc.), leave it in
+      // place so a plain refresh can retry instead of losing it forever.
+      if(!success) return;
       const url = new URL(window.location.href);
       url.searchParams.delete('cc_token');
       window.history.replaceState({}, '', url.toString());
     });
   }
 })();
+
+// Manual token entry — the fallback path for when the automatic redirect
+// redemption above didn't succeed (or the token only exists via Stripe's
+// records because the URL already got cleaned before this fix existed).
+function submitManualToken(){
+  const input = document.getElementById('manualTokenInput');
+  const val = (input.value || '').trim();
+  if(!val){
+    showGruberToast('Paste your token first', 2000);
+    return;
+  }
+  redeemToken(val).then((success)=>{
+    if(success) input.value = '';
+  });
+}
 
 // ══════════════════════════════════════
 // SCREEN NAV

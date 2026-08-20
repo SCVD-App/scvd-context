@@ -109,6 +109,15 @@ async function createCheckout(request, env) {
     return json({ error: "Could not create checkout session" }, 502);
   }
 
+  // Now that we have the real session ID, attach it to the pending record —
+  // verify-token uses this as a fallback source of truth if the webhook is
+  // slow or never arrives.
+  await env.CC_TOKENS.put(
+    `cc_token:${token}`,
+    JSON.stringify({ tier, status: "pending", sessionId: session.id, created: Date.now() }),
+    { expirationTtl: 60 * 60 * 24 }
+  );
+
   return json({ url: session.url });
 }
 
@@ -130,6 +139,16 @@ async function verifyToken(request, env) {
   const record = JSON.parse(raw);
 
   if (record.status !== "paid") {
+    // Webhook hasn't flipped this yet — before giving up, ask Stripe directly.
+    // This closes the race entirely rather than just waiting longer: even if
+    // the webhook is delayed, dropped, or never arrives at all, a genuinely
+    // paid customer isn't left permanently locked out.
+    if (record.sessionId) {
+      const healed = await tryHealFromStripe(record, token, env);
+      if (healed) {
+        return json({ valid: true, tier: healed.tier, expiry: healed.expiry });
+      }
+    }
     return json({ valid: false, reason: "payment not yet confirmed — try again in a few seconds" });
   }
 
@@ -138,6 +157,41 @@ async function verifyToken(request, env) {
   }
 
   return json({ valid: true, tier: record.tier, expiry: record.expiry });
+}
+
+// ── SELF-HEAL FROM STRIPE ──
+// Called when a token is still "pending" locally — asks Stripe's API directly
+// whether the session actually paid, rather than only trusting the webhook.
+// Safe to call repeatedly: if Stripe also says unpaid, this is a no-op.
+async function tryHealFromStripe(record, token, env) {
+  try {
+    const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${record.sessionId}`, {
+      headers: { "Authorization": `Bearer ${env.STRIPE_SECRET_KEY}` },
+    });
+    if (!res.ok) return null;
+
+    const session = await res.json();
+    if (session.payment_status !== "paid") return null;
+
+    const tierConfig = TIERS[record.tier];
+    if (!tierConfig) return null;
+
+    const isLifetime = tierConfig.days === null;
+    const expiry = isLifetime
+      ? null
+      : new Date(Date.now() + tierConfig.days * 86400000).toISOString();
+
+    await env.CC_TOKENS.put(
+      `cc_token:${token}`,
+      JSON.stringify({ tier: record.tier, status: "paid", expiry, created: Date.now() }),
+      isLifetime ? {} : { expirationTtl: tierConfig.days * 86400 + 86400 }
+    );
+
+    return { tier: record.tier, expiry };
+  } catch (e) {
+    console.error("Self-heal check failed:", e.message);
+    return null;
+  }
 }
 
 // ── STRIPE WEBHOOK ──
