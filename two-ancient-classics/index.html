@@ -109,7 +109,7 @@ function btnStyle(t, disabled, active) {
 }
 
 // ---------- Bundle-wide freemium + Pro ----------
-// One Pro purchase ($2, "two games for the price of one") unlocks BOTH
+// One Pro purchase ($4, "two games for the price of one") unlocks BOTH
 // games — matches the pricing call already made. Quota shape is a direct
 // copy of Hnefatafl's own pattern: 3 free games per (game × mode) per day,
 // device-local midnight reset, only a GENUINE completed game counts
@@ -234,7 +234,7 @@ function FreemiumGate({ t, gameLabel, modeLabel, onBack, onUnlock, unlocking, ch
         You've played your {FREE_GAMES_PER_MODE_PER_DAY} free {gameLabel} {modeLabel} games today. Come back tomorrow, or unlock unlimited play across <strong>both</strong> games in this bundle — Royal Game of Ur and Nine Men's Morris — with a single Pro purchase.
       </p>
       <button onClick={onUnlock} disabled={unlocking} style={{ ...btnStyle(t, unlocking, true), padding: "12px 22px", fontSize: 14, marginBottom: 14 }}>
-        {unlocking ? "Opening checkout…" : "✓ Unlock Both Games — $2 USD"}
+        {unlocking ? "Opening checkout…" : "✓ Unlock Both Games — $4 USD"}
       </button>
       {checkoutError && (
         <div style={{ fontSize: 12, color: "#ff6b5b", maxWidth: 300, marginBottom: 14, lineHeight: 1.5 }}>{checkoutError}</div>
@@ -2726,7 +2726,7 @@ function AncientGamesBundle() {
           <span style={{ ...pillStyle(t, true), cursor: "default" }}>✓ Pro — unlimited</span>
         ) : (
           <button onClick={startCheckout} disabled={checkoutBusy} style={pillStyle(t, false)}>
-            {checkoutBusy ? "Opening checkout…" : "🔓 Unlock Both — $2 USD"}
+            {checkoutBusy ? "Opening checkout…" : "🔓 Unlock Both — $4 USD"}
           </button>
         )}
       </div>
@@ -2754,7 +2754,7 @@ function AncientGamesBundle() {
       <div style={{ fontSize: 10, color: t.muted, marginTop: 32, textAlign: "center", maxWidth: 340, lineHeight: 1.6 }}>
         {isPro
           ? "Pro unlocked — unlimited games in both titles, no daily limits."
-          : `${FREE_GAMES_PER_MODE_PER_DAY} free games per mode per day, in each game. One $2 USD purchase removes the cap in both.`}
+          : `${FREE_GAMES_PER_MODE_PER_DAY} free games per mode per day, in each game. One $4 USD purchase removes the cap in both.`}
       </div>
     </div>
   );

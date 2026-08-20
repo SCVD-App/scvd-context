@@ -1142,11 +1142,11 @@ function FreemiumGate({ t, modeLabel, onUnlock, unlocking, restoreEmail, setRest
       </div>
       <div style={{ fontSize: 15, color: t.text, lineHeight: 1.7, marginBottom: 20 }}>
         You've played your {FREE_GAMES_PER_MODE_PER_DAY} free {modeLabel} games today. Come back tomorrow for
-        {" "}{FREE_GAMES_PER_MODE_PER_DAY} more — or unlock unlimited play for a one-time <strong>$2 USD</strong>.
+        {" "}{FREE_GAMES_PER_MODE_PER_DAY} more — or unlock unlimited play for a one-time <strong>$4 USD</strong>.
         No subscription, no auto-renewal.
       </div>
       <button onClick={onUnlock} disabled={unlocking} style={{ ...btnStyle(t, unlocking, true), padding: "12px 26px", fontSize: 15 }}>
-        {unlocking ? "Redirecting to checkout…" : "🔓 Unlock Unlimited — $2 USD"}
+        {unlocking ? "Redirecting to checkout…" : "🔓 Unlock Unlimited — $4 USD"}
       </button>
 
       <div style={{ marginTop: 18 }}>
@@ -2415,7 +2415,7 @@ function Hnefatafl() {
           <button disabled style={pillStyle(t, true)}>✓ Pro</button>
         ) : (
           <button onClick={startCheckout} disabled={checkoutBusy} style={pillStyle(t, false)}>
-            {checkoutBusy ? "Redirecting…" : "💳 Purchase Pro — $2 USD"}
+            {checkoutBusy ? "Redirecting…" : "💳 Purchase Pro — $4 USD"}
           </button>
         )}
       </div>

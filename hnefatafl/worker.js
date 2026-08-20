@@ -24,7 +24,7 @@
 //   wrangler secret put RESEND_API_KEY
 // ══════════════════════════════════════════════════════════
 
-const PRICE_AMOUNT_CENTS = 200; // $2.00 USD
+const PRICE_AMOUNT_CENTS = 400; // $4.00 USD
 const CURRENCY = "usd"; // standing SCVD decision — all games ship in USD, not AUD
 const PRODUCT_NAME = "Hnefatafl — Unlimited Play (Lifetime)";
 const ACTIVATION_CAP = 10; // max devices per purchased token, matches Jumpin' Pin
