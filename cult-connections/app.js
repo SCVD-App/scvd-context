@@ -184,9 +184,13 @@ function getTrialDaysLeft(){
 function getStoredUnlock(){
   try{
     const tier = localStorage.getItem('cc_unlock_tier');
-    const expiry = localStorage.getItem('cc_unlock_expiry');
+    let expiry = localStorage.getItem('cc_unlock_expiry');
     if(!tier || !expiry) return null;
-    if(new Date(expiry).getTime() < Date.now()) return null; // expired
+    // Self-heal: devices that stored the pre-fix literal string "null" get
+    // treated the same as the correct "lifetime" sentinel from here on —
+    // no need to make anyone re-enter their token to fix a display bug.
+    if(expiry === 'null') expiry = 'lifetime';
+    if(expiry !== 'lifetime' && new Date(expiry).getTime() < Date.now()) return null; // expired
     return { tier, expiry, label: (CC_TIERS[tier]||{}).label || tier };
   }catch(e){ return null; }
 }
@@ -206,7 +210,10 @@ function renderAccessStatus(){
   if(!el) return;
   const state = getAccessState();
   if(state.mode === 'unlocked'){
-    el.textContent = `🔓 ${state.unlock.label} — unlocked until ${new Date(state.unlock.expiry).toLocaleDateString()}`;
+    const expiryText = state.unlock.expiry === 'lifetime'
+      ? 'Lifetime access'
+      : `unlocked until ${new Date(state.unlock.expiry).toLocaleDateString()}`;
+    el.textContent = `🔓 ${state.unlock.label} — ${expiryText}`;
     el.onclick = null;
   } else if(state.mode === 'trial'){
     el.textContent = `🎬 Free trial — ${state.daysLeft} day${state.daysLeft===1?'':'s'} left · Tap to unlock early`;
@@ -235,7 +242,10 @@ async function redeemToken(tokenStr, attempt = 1){
 
     if(data.valid){
       localStorage.setItem('cc_unlock_tier', data.tier);
-      localStorage.setItem('cc_unlock_expiry', data.expiry);
+      // localStorage only stores strings — a JS null silently becomes the
+      // literal text "null", which later parses as an Invalid Date. Use an
+      // explicit sentinel for lifetime instead.
+      localStorage.setItem('cc_unlock_expiry', data.expiry === null ? 'lifetime' : data.expiry);
       renderAccessStatus();
       showGruberToast(`🔓 Unlocked — ${(CC_TIERS[data.tier]||{}).label || data.tier}!`, 3000);
       return true;
