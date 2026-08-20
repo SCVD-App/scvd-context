@@ -36,7 +36,7 @@
 //   - Var:    APP_URL                (https://scvd-app.github.io/Jumpin-Pin)
 // ══════════════════════════════════════════════════════════
 
-const PRICE_USD_CENTS = 200; // $2.00 USD, one-time
+const PRICE_USD_CENTS = 400; // $4.00 USD, one-time
 const MAX_ACTIVATIONS = 10;
 const RESTORE_RATE_LIMIT_SECONDS = 300; // 1 restore request per email per 5 min
 

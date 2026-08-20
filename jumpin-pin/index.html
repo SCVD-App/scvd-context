@@ -1267,7 +1267,7 @@ function JumpinPin() {
               cursor: "pointer",
             }}
           >
-            Unlock $2 USD
+            Unlock $4 USD
           </button>
         </div>
       )}
@@ -1281,7 +1281,7 @@ function JumpinPin() {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 14 }}>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={startCheckout} disabled={checkoutBusy} style={btnStyle(t, checkoutBusy, true)}>
-              {checkoutBusy ? "Redirecting…" : "Unlock Pro — $2 USD"}
+              {checkoutBusy ? "Redirecting…" : "Unlock Pro — $4 USD"}
             </button>
             <button
               onClick={() => { setRestoreOpen(true); setRestoreSent(false); }}
