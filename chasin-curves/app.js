@@ -1909,7 +1909,7 @@ const InAppBrowserWarning = ({ appName, onDismiss }) => {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, color: C.red, fontWeight: 700 }}>You're in {appName}'s built-in browser</div>
           <div style={{ fontSize: 10, color: C.dim, marginTop: 2, lineHeight: 1.5 }}>
-            It can lose GPS trails and sign you out without warning, especially if {appName} goes to the background mid-trip. For reliable trip recording, open this page in Safari or Chrome instead.
+            It can lose GPS trails and sign you out without warning, especially if {appName} goes to the background mid-trip. If you've already added Chasin' Curves to your Home Screen, tap that icon instead — it skips this problem entirely. Otherwise, open this link in Safari or Chrome.
           </div>
         </div>
       </div>
