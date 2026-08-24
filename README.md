@@ -2,7 +2,7 @@
 
 **Owner:** SCVD-App (Scott Emblen)  
 **Purpose:** Persistent project context accessible by Claude across all chat sessions  
-**Last Updated:** 16 August 2026 — Ancient Games series folders added (Jumpin' Pin, Two Ancient Classics, Hnefatafl)
+**Last Updated:** 24 August 2026 — `scvd-web/` folder added (the scvd.app landing page, mirrored from its own separate repo at `C:\Dev\SCVD-WEB` — see the note under Repo Structure on why only the files are copied, never that repo's `.git`)
 
 ---
 
@@ -32,6 +32,8 @@ Claude will fetch the raw file directly from GitHub — no pasting, no uploading
 | Two Ancient Classics index.html | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/two-ancient-classics/index.html` |
 | Hnefatafl Handoff | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/hnefatafl/handoff.md` |
 | Hnefatafl index.html | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/hnefatafl/index.html` |
+| scvd.app Landing Page Handoff | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/scvd-web/handoff.md` |
+| scvd.app index.html | `https://raw.githubusercontent.com/SCVD-App/scvd-context/main/scvd-web/index.html` |
 
 ---
 
@@ -120,15 +122,22 @@ scvd-context/
 │   ├── manifest.json
 │   ├── favicon.ico, icon-180/192/512.png, icon-source.svg
 │   └── archive/
-└── hnefatafl/                ← Ancient Games 04
+├── hnefatafl/                ← Ancient Games 04
+│   ├── handoff.md
+│   ├── index.html
+│   ├── manifest.json
+│   ├── favicon.ico, icon-180/192/512.png, icon-source.svg
+│   └── archive/
+└── scvd-web/                 ← the scvd.app portfolio landing page
     ├── handoff.md
     ├── index.html
-    ├── manifest.json
-    ├── favicon.ico, icon-180/192/512.png, icon-source.svg
+    ├── CNAME                 ← GitHub Pages custom-domain file, contains "scvd.app"
     └── archive/
 ```
 
 **Note on the three Ancient Games folders above:** `index.html`/`manifest.json`/icons were pulled directly from each app's live GitHub Pages repo. None of the three has a `worker.js` here yet — none of the Stripe workers (if built) live in the public Pages repos, so they couldn't be cloned automatically; paste them in manually from the Cloudflare dashboard if they exist. `jumpin-pin/handoff.md` and `two-ancient-classics/handoff.md` are placeholder "baseline capture" docs, not real session handoffs — no such document has ever been written for either app. Only `hnefatafl/handoff.md` is a genuine session handoff.
+
+**Note on `scvd-web/`:** unlike every other folder above, this one's live source is a completely separate repo (`C:\Dev\SCVD-WEB`, its own `.git`, deployed straight to GitHub Pages for the `scvd.app` custom domain). This folder is a read-only mirror for Claude's context, kept in sync manually the same way as the others — **never copy that repo's `.git` folder in here.** Two git repos nested inside each other (one repo's `.git` sitting inside a folder that's itself tracked by `scvd-context`'s own `.git`) makes GitHub Desktop treat the inner one as an embedded repo and silently mis-track its files, so they can look committed in the file browser while never actually reaching GitHub. Copy the files, not the folder.
 
 ---
 
