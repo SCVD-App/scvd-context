@@ -1,9 +1,11 @@
 # SCVD Apps — Master Timeline
 
-**Last Updated:** 16 August 2026  
+**Last Updated:** 24 August 2026  
 **Updated by:** Scott Emblen + Claude
 
-**This update:** Retired Safe Bet (no commercial angle, not Scott's world). Added the Ancient Games series as its own project line — three apps, four games, shipped in the time it used to take to get one concept to beta. Reprioritised: Chasin' Curves is next, then GottaGo.
+**This update:** Chasin' Curves' one real go-live blocker — the compliance day-cap counting model — just got smaller. NT's rolling-vs-anchored question is confirmed straight from its own guidelines (anchored to rego renewal, not rolling) and shipped as a dual-counter model that runs both counting methods side by side, selected automatically by the vehicle's registration state. TAS's day cap is confirmed too (104 days); only its window model, and the same question for NSW/ACT/SA/VIC, remains open — now a research/phone-call task, not a build. Also: GottaGo's original working prototype and business/partnership package, built in a pre-GitHub session and thought lost, were recovered and filed into `gottago/` for the first time. See `chasin-curves/handoff.md` (Session 16) and `gottago/handoff.md` for full detail.
+
+**Prior update (16 Aug 2026):** Retired Safe Bet (no commercial angle, not Scott's world). Added the Ancient Games series as its own project line — three apps, four games, shipped in the time it used to take to get one concept to beta. Reprioritised: Chasin' Curves is next, then GottaGo.
 
 ---
 
@@ -46,17 +48,17 @@
 ## Project Details
 
 ### 1. 🚗 Chasin' Curves
-- **Status:** BETA — **next project up**
+- **Status:** BETA — **next project up, one narrowing blocker from a defensible public launch**
 - **URL:** https://scvd-app.github.io/Chasin-Curves/ *(confirm URL)*
 - **Stack:** Vanilla React, Cloudflare Worker backend, GitHub Pages, Mapbox planned
-- **Open Actions:** Multi-user account isolation, community roads feature, zoomable map
-- **Beta tester:** Shane "Skeeny"
+- **Open Actions:** Confirm TAS's (and NSW/ACT/SA/VIC's) day-cap window model — the last piece of compliance hardening, now a research/phone-call task rather than a build; set Registration State + rego renewal date on Scott's five test vehicles; Murphy Report UI + Roads GPX extraction (post-launch, master-plan phase 3)
+- **Beta testers:** Shane "Skeeny"; Sandy & Dave (aunty + husband, 5-week/~7,000km caravan trip, GPS trail + daily share-card live test)
 - **Context file:** `chasin-curves/handoff.md`
 
 ### 2. 🗺️ GottaGo
-- **Status:** CONCEPT — **queued right after Chasin' Curves**
-- **Pitch:** Accessible facilities map. Camps Australia partnership strategy. Sequenced after app store presence.
-- **Open Actions:** Pursue Camps Australia partnership conversation
+- **Status:** PROTOTYPE BUILT, PRE-DEVELOPMENT — **queued right after Chasin' Curves.** A working browser prototype and full business/partnership package already exist from a pre-GitHub session; recovered and filed 23–24 Aug 2026 so they aren't lost track of again.
+- **Pitch:** Route-aware public toilet locator. Tagline "Never Be Caught Short." Camps Australia partnership strategy. Sequenced after Chasin' Curves' app store presence.
+- **Open Actions:** Architecture decision (solo build / technical co-founder / paid developer) — gates the technical track; admin & partnerships track (ABN, ASIC, trademark filing, patent conversation, Camps Australia letter) can run now in parallel, zero dev time
 - **Context file:** `gottago/handoff.md`
 
 ### 3. 🔧 TGM (Tame Grease Monkey)
