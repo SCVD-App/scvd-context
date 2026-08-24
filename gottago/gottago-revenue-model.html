@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GottaGo — Revenue & Partnership Model</title>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0A0F0E; --bg2:#111916; --bg3:#182320;
+  --teal:#00FFD1; --teal-dim:#00B894; --teal-ghost:rgba(0,255,209,0.08); --teal-glow:rgba(0,255,209,0.25);
+  --amber:#FFB830; --amber-dim:#C8972A; --amber-ghost:rgba(255,184,48,0.1);
+  --red:#FF4B6E; --red-ghost:rgba(255,75,110,0.1);
+  --green:#00E896; --green-ghost:rgba(0,232,150,0.1);
+  --purple:#A78BFA; --purple-ghost:rgba(167,139,250,0.1);
+  --gold:#C9A84C;
+  --text:#E8F5F2; --text-dim:#7BA89E; --text-ghost:rgba(232,245,242,0.35);
+  --card:rgba(20,35,30,0.9); --border:rgba(0,255,209,0.1); --border2:rgba(255,255,255,0.06);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px 60px;}
+.grain{position:fixed;inset:-50%;width:200%;height:200%;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:.4;pointer-events:none;z-index:0;animation:grain 8s steps(10) infinite;}
+@keyframes grain{0%,100%{transform:translate(0,0)}10%{transform:translate(-2%,-3%)}30%{transform:translate(3%,2%)}50%{transform:translate(-1%,4%)}70%{transform:translate(2%,-1%)}90%{transform:translate(-3%,1%)}}
+.content{position:relative;z-index:1;max-width:680px;margin:0 auto;}
+
+/* HEADER */
+.header{text-align:center;padding:20px 0 32px;}
+.header-logo{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:16px;}
+.logo-mark{width:44px;height:44px;background:var(--teal);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 24px var(--teal-glow);}
+.logo-name{font-family:'Clash Display',sans-serif;font-size:28px;font-weight:700;color:var(--text);}
+.logo-name span{color:var(--teal);}
+.header-title{font-family:'Clash Display',sans-serif;font-size:22px;font-weight:600;color:var(--text);letter-spacing:-.3px;margin-bottom:6px;}
+.header-sub{font-size:13px;color:var(--text-dim);line-height:1.6;}
+
+/* SECTION */
+.section{margin-bottom:20px;}
+.section-label{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:var(--text-dim);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.section-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-bottom:12px;backdrop-filter:blur(12px);}
+.card-title{font-family:'Clash Display',sans-serif;font-size:16px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.card-sub{font-size:12px;color:var(--text-dim);margin-bottom:14px;line-height:1.5;}
+
+/* SCENARIO TABS */
+.scenario-tabs{display:flex;gap:8px;margin-bottom:16px;background:rgba(0,0,0,.3);border-radius:14px;padding:4px;}
+.stab{flex:1;padding:9px 6px;border-radius:10px;text-align:center;cursor:pointer;transition:all .2s;font-size:12px;font-weight:600;color:var(--text-dim);}
+.stab.active{background:var(--bg3);color:var(--text);}
+.stab.conservative.active{border:1px solid rgba(0,232,150,.3);color:var(--green);}
+.stab.moderate.active{border:1px solid rgba(255,184,48,.3);color:var(--amber);}
+.stab.optimistic.active{border:1px solid rgba(0,255,209,.3);color:var(--teal);}
+
+/* METRICS ROW */
+.metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.metric{background:rgba(0,0,0,.25);border:1px solid var(--border2);border-radius:14px;padding:12px 10px;text-align:center;}
+.metric-val{font-family:'Clash Display',sans-serif;font-size:22px;font-weight:700;color:var(--text);line-height:1;}
+.metric-key{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);margin-top:4px;}
+
+/* YEAR TABLE */
+.year-table{width:100%;border-collapse:collapse;}
+.year-table th{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);padding:6px 8px;text-align:right;border-bottom:1px solid var(--border);}
+.year-table th:first-child{text-align:left;}
+.year-table td{padding:8px 8px;font-size:13px;text-align:right;border-bottom:1px solid var(--border2);transition:all .3s;}
+.year-table td:first-child{text-align:left;color:var(--text-dim);font-size:12px;}
+.year-table tr:last-child td{border-bottom:none;font-weight:600;color:var(--teal);}
+.year-table .highlight{color:var(--text);}
+.camps-share{color:var(--amber)!important;font-weight:600!important;}
+
+/* SUBSCRIPTION TIERS */
+.tiers-grid{display:flex;flex-direction:column;gap:10px;}
+.tier{border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;border:1px solid transparent;transition:all .25s;cursor:pointer;}
+.tier.selected{transform:scale(1.01);}
+.tier-free{background:rgba(0,0,0,.3);border-color:var(--border2);}
+.tier-plus{background:linear-gradient(135deg,rgba(0,184,148,.08),rgba(0,255,209,.04));border-color:rgba(0,255,209,.2);}
+.tier-plus.selected{border-color:var(--teal);box-shadow:0 0 20px rgba(0,255,209,.12);}
+.tier-pro{background:linear-gradient(135deg,rgba(201,168,76,.1),rgba(255,184,48,.04));border-color:rgba(201,168,76,.25);}
+.tier-pro.selected{border-color:var(--gold);box-shadow:0 0 20px rgba(201,168,76,.15);}
+.tier-fleet{background:linear-gradient(135deg,rgba(167,139,250,.1),rgba(167,139,250,.04));border-color:rgba(167,139,250,.25);}
+.tier-fleet.selected{border-color:var(--purple);box-shadow:0 0 20px rgba(167,139,250,.12);}
+.tier-icon{font-size:26px;flex-shrink:0;margin-top:2px;}
+.tier-info{flex:1;}
+.tier-name{font-family:'Clash Display',sans-serif;font-size:15px;font-weight:600;color:var(--text);}
+.tier-price{font-size:12px;color:var(--text-dim);margin-top:2px;}
+.tier-price strong{color:var(--text);font-size:15px;}
+.tier-features{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;}
+.tf{font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.06);color:var(--text-dim);}
+.tf.yes{background:rgba(0,255,209,.08);color:var(--teal-dim);}
+.tier-badge{flex-shrink:0;font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;align-self:flex-start;}
+.badge-free{background:rgba(255,255,255,.08);color:var(--text-dim);}
+.badge-best{background:rgba(0,255,209,.15);color:var(--teal);border:1px solid rgba(0,255,209,.3);}
+.badge-power{background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);}
+.badge-b2b{background:rgba(167,139,250,.15);color:var(--purple);border:1px solid rgba(167,139,250,.3);}
+
+/* CAMPS DEAL SECTION */
+.deal-card{background:linear-gradient(135deg,rgba(255,184,48,.08),rgba(255,184,48,.03));border:1px solid rgba(255,184,48,.25);border-radius:20px;padding:18px;margin-bottom:12px;}
+.deal-title{font-family:'Clash Display',sans-serif;font-size:16px;font-weight:600;color:var(--amber);margin-bottom:4px;}
+.deal-sub{font-size:12px;color:var(--text-dim);margin-bottom:14px;}
+.deal-options{display:flex;flex-direction:column;gap:8px;}
+.deal-opt{background:rgba(0,0,0,.3);border:1px solid rgba(255,184,48,.15);border-radius:14px;padding:12px 14px;cursor:pointer;transition:all .2s;}
+.deal-opt:active{background:rgba(255,184,48,.06);}
+.deal-opt.selected{border-color:rgba(255,184,48,.5);background:rgba(255,184,48,.06);}
+.deal-opt-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.deal-opt-name{font-size:13px;font-weight:600;color:var(--text);}
+.deal-opt-rec{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;}
+.rec-yes{background:rgba(0,232,150,.12);color:var(--green);}
+.rec-fair{background:rgba(255,184,48,.12);color:var(--amber);}
+.rec-no{background:rgba(255,75,110,.1);color:var(--red);}
+.deal-opt-desc{font-size:11px;color:var(--text-dim);line-height:1.5;}
+.deal-opt-numbers{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;}
+.deal-num{font-size:11px;padding:3px 9px;border-radius:10px;background:rgba(255,184,48,.08);color:var(--amber);}
+
+/* RESULT BOX */
+.result-box{background:rgba(0,255,209,.06);border:1px solid rgba(0,255,209,.2);border-radius:16px;padding:14px;margin-top:14px;}
+.result-box-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--teal);margin-bottom:8px;}
+.result-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(0,255,209,.08);font-size:13px;}
+.result-row:last-child{border-bottom:none;padding-top:10px;margin-top:4px;}
+.result-row .rr-label{color:var(--text-dim);}
+.result-row .rr-val{font-weight:600;color:var(--text);}
+.result-row.total .rr-label{color:var(--teal);font-weight:600;}
+.result-row.total .rr-val{color:var(--teal);font-family:'Clash Display',sans-serif;font-size:18px;}
+.camps-row .rr-val{color:var(--amber);}
+
+/* INSIGHT BOXES */
+.insight{background:rgba(0,0,0,.3);border-left:3px solid var(--teal);border-radius:0 12px 12px 0;padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text-dim);line-height:1.6;}
+.insight strong{color:var(--text);}
+.insight.warn{border-color:var(--amber);}
+.insight.warn strong{color:var(--amber);}
+.insight.good{border-color:var(--green);}
+.insight.good strong{color:var(--green);}
+
+/* SLIDER INPUT */
+.slider-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+.slider-label{font-size:11px;color:var(--text-dim);min-width:120px;}
+.slider-val{font-size:13px;font-weight:600;color:var(--text);min-width:70px;text-align:right;}
+input[type=range]{flex:1;-webkit-appearance:none;height:5px;border-radius:3px;background:rgba(255,255,255,.1);outline:none;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--teal);cursor:pointer;box-shadow:0 0 8px var(--teal-glow);}
+input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:3px;}
+
+/* CHART */
+.chart-wrap{position:relative;height:160px;margin:10px 0;}
+.chart-bars{display:flex;align-items:flex-end;gap:6px;height:100%;padding-top:20px;}
+.bar-group{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.bar{width:100%;border-radius:6px 6px 0 0;transition:height .6s cubic-bezier(.34,1.2,.64,1);position:relative;min-height:4px;}
+.bar-total{background:linear-gradient(180deg,var(--teal),var(--teal-dim));}
+.bar-camps{background:linear-gradient(180deg,var(--amber),var(--amber-dim));}
+.bar-label{font-size:9px;color:var(--text-dim);text-align:center;}
+.bar-val{font-size:9px;color:var(--text-dim);position:absolute;top:-16px;left:50%;transform:translateX(-50%);white-space:nowrap;}
+.chart-legend{display:flex;gap:14px;justify-content:center;margin-top:8px;}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-dim);}
+.legend-dot{width:8px;height:8px;border-radius:50%;}
+
+/* CONCLUSION */
+.conclusion{background:linear-gradient(135deg,rgba(0,255,209,.06),rgba(0,184,148,.03));border:1px solid rgba(0,255,209,.2);border-radius:20px;padding:20px;margin-top:20px;}
+.conclusion-title{font-family:'Clash Display',sans-serif;font-size:18px;font-weight:700;color:var(--teal);margin-bottom:12px;}
+.conclusion-body{font-size:13px;color:var(--text-dim);line-height:1.7;margin-bottom:14px;}
+.conclusion-body strong{color:var(--text);}
+.offer-box{background:rgba(0,0,0,.3);border:1px solid rgba(255,184,48,.3);border-radius:14px;padding:14px;}
+.offer-box-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--amber);margin-bottom:10px;}
+.offer-line{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;}
+.offer-line:last-child{border-bottom:none;}
+.offer-line .ol-label{color:var(--text-dim);}
+.offer-line .ol-val{color:var(--amber);font-weight:600;}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="content">
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">
+    <div class="logo-mark">🚻</div>
+    <div class="logo-name">Gotta<span>Go</span></div>
+  </div>
+  <div class="header-title">Revenue & Partnership Model</div>
+  <div class="header-sub">Built to inform the Camps Australia conversation.<br>Honest numbers. Conservative base case. Fair deal structure.</div>
+</div>
+
+<!-- SUBSCRIPTION TIERS -->
+<div class="section">
+  <div class="section-label">Subscription Model</div>
+  <div class="card">
+    <div class="card-title">How GottaGo Makes Money</div>
+    <div class="card-sub">Freemium model — free core app builds the user base, premium tiers generate sustainable revenue. Tap a tier to explore.</div>
+    <div class="tiers-grid">
+
+      <div class="tier tier-free" onclick="selectTier(0)">
+        <div class="tier-icon">🆓</div>
+        <div class="tier-info">
+          <div class="tier-name">Free</div>
+          <div class="tier-price"><strong>$0</strong> forever</div>
+          <div class="tier-features">
+            <span class="tf yes">Map view</span>
+            <span class="tf yes">Nearest loo</span>
+            <span class="tf yes">Basic ratings</span>
+            <span class="tf">No route planning</span>
+            <span class="tf">No Long Haul mode</span>
+            <span class="tf">No avatars</span>
+          </div>
+        </div>
+        <div class="tier-badge badge-free">FREE</div>
+      </div>
+
+      <div class="tier tier-plus selected" id="tier1" onclick="selectTier(1)">
+        <div class="tier-icon">⚡</div>
+        <div class="tier-info">
+          <div class="tier-name">GottaGo Plus</div>
+          <div class="tier-price"><strong>$4.99/mo</strong> or $39.99/yr · Save 33%</div>
+          <div class="tier-features">
+            <span class="tf yes">Everything free</span>
+            <span class="tf yes">Route planning</span>
+            <span class="tf yes">Long Haul mode</span>
+            <span class="tf yes">Gap alerts</span>
+            <span class="tf yes">2 avatars</span>
+            <span class="tf yes">Camps AU data</span>
+            <span class="tf yes">Offline mode</span>
+          </div>
+        </div>
+        <div class="tier-badge badge-best">BEST VALUE</div>
+      </div>
+
+      <div class="tier tier-pro" id="tier2" onclick="selectTier(2)">
+        <div class="tier-icon">🏛️</div>
+        <div class="tier-info">
+          <div class="tier-name">GottaGo Pro</div>
+          <div class="tier-price"><strong>$7.99/mo</strong> or $59.99/yr · Save 37%</div>
+          <div class="tier-features">
+            <span class="tf yes">Everything Plus</span>
+            <span class="tf yes">All 6 avatars</span>
+            <span class="tf yes">House of Lords ratings</span>
+            <span class="tf yes">Accessibility filters</span>
+            <span class="tf yes">Baby change filter</span>
+            <span class="tf yes">Priority updates</span>
+          </div>
+        </div>
+        <div class="tier-badge badge-power">POWER USER</div>
+      </div>
+
+      <div class="tier tier-fleet" id="tier3" onclick="selectTier(3)">
+        <div class="tier-icon">🚐</div>
+        <div class="tier-info">
+          <div class="tier-name">Fleet / Organisation</div>
+          <div class="tier-price"><strong>$199–$999/yr</strong> per organisation</div>
+          <div class="tier-features">
+            <span class="tf yes">All Pro features</span>
+            <span class="tf yes">Multi-user</span>
+            <span class="tf yes">White-label option</span>
+            <span class="tf yes">API access</span>
+            <span class="tf yes">Custom data layer</span>
+            <span class="tf yes">NRMA / RAA / aged care</span>
+          </div>
+        </div>
+        <div class="tier-badge badge-b2b">B2B</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ASSUMPTIONS SLIDERS -->
+<div class="section">
+  <div class="section-label">Your Assumptions</div>
+  <div class="card">
+    <div class="card-title">Adjust the Model</div>
+    <div class="card-sub">Drag to explore scenarios. All figures update live.</div>
+
+    <div class="slider-row">
+      <div class="slider-label">Year 1 Downloads</div>
+      <input type="range" id="s_downloads" min="1000" max="50000" step="500" value="10000" oninput="recalc()">
+      <div class="slider-val" id="v_downloads">10,000</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Free→Paid Conv. %</div>
+      <input type="range" id="s_conv" min="2" max="20" step="1" value="8" oninput="recalc()">
+      <div class="slider-val" id="v_conv">8%</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Plus vs Pro split</div>
+      <input type="range" id="s_split" min="50" max="90" step="5" value="70" oninput="recalc()">
+      <div class="slider-val" id="v_split">70% Plus</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Annual subs %</div>
+      <input type="range" id="s_annual" min="30" max="80" step="5" value="55" oninput="recalc()">
+      <div class="slider-val" id="v_annual">55% annual</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Year-on-year growth</div>
+      <input type="range" id="s_growth" min="20" max="150" step="10" value="80" oninput="recalc()">
+      <div class="slider-val" id="v_growth">80%/yr</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Platform fee (Apple/Google)</div>
+      <input type="range" id="s_platform" min="15" max="30" step="5" value="30" oninput="recalc()">
+      <div class="slider-val" id="v_platform">30%</div>
+    </div>
+  </div>
+</div>
+
+<!-- SCENARIO SELECTOR -->
+<div class="section">
+  <div class="section-label">Revenue Projections</div>
+  <div class="card">
+    <div class="scenario-tabs">
+      <div class="stab conservative active" id="tab_cons" onclick="setScenario('conservative')">🐢 Conservative</div>
+      <div class="stab moderate" id="tab_mod" onclick="setScenario('moderate')">📈 Moderate</div>
+      <div class="stab optimistic" id="tab_opt" onclick="setScenario('optimistic')">🚀 Optimistic</div>
+    </div>
+
+    <div class="metrics-row" id="metricsRow">
+      <div class="metric"><div class="metric-val" id="m_y1">—</div><div class="metric-key">Year 1 Revenue</div></div>
+      <div class="metric"><div class="metric-val" id="m_y3">—</div><div class="metric-key">Year 3 Revenue</div></div>
+      <div class="metric"><div class="metric-val" id="m_subs">—</div><div class="metric-key">Y3 Paid Subs</div></div>
+    </div>
+
+    <!-- CHART -->
+    <div class="chart-wrap">
+      <div class="chart-bars" id="chartBars">
+        <!-- populated by JS -->
+      </div>
+    </div>
+    <div class="chart-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--teal)"></div>Total Revenue</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Camps AU Share</div>
+    </div>
+
+    <table class="year-table" id="yearTable">
+      <thead>
+        <tr>
+          <th>Year</th>
+          <th>Downloads</th>
+          <th>Paid Subs</th>
+          <th>Gross Rev</th>
+          <th>Net Rev</th>
+          <th class="camps-share">Camps AU</th>
+        </tr>
+      </thead>
+      <tbody id="yearBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- CAMPS AUSTRALIA DEAL -->
+<div class="section">
+  <div class="section-label">Camps Australia Deal Structure</div>
+
+  <div class="deal-card">
+    <div class="deal-title">What are they worth to us?</div>
+    <div class="deal-sub">Their 15,500+ verified sites, 30 years of ground-truthing, and community trust are the data moat that would take us years to replicate. Here are three deal structures — with a recommendation.</div>
+    <div class="deal-options">
+
+      <div class="deal-opt" id="dopt0" onclick="selectDeal(0)">
+        <div class="deal-opt-head">
+          <div class="deal-opt-name">Option A — Annual Flat Licence</div>
+          <div class="deal-opt-rec rec-fair">FAIR</div>
+        </div>
+        <div class="deal-opt-desc">We pay Camps Australia a fixed annual fee for the right to use their data in the app. Simple, predictable for both sides. Good if our revenue underperforms — they still get paid.</div>
+        <div class="deal-opt-numbers">
+          <div class="deal-num">Year 1: $5,000–$8,000/yr</div>
+          <div class="deal-num">Year 2+: $10,000–$15,000/yr</div>
+          <div class="deal-num">Renegotiate at 10k users</div>
+        </div>
+      </div>
+
+      <div class="deal-opt selected" id="dopt1" onclick="selectDeal(1)">
+        <div class="deal-opt-head">
+          <div class="deal-opt-name">Option B — Revenue Share (Recommended)</div>
+          <div class="deal-opt-rec rec-yes">RECOMMENDED</div>
+        </div>
+        <div class="deal-opt-desc">Camps Australia receives a percentage of net revenue from every paid subscriber who uses the Long Haul / Camps AU data feature. Aligns incentives perfectly — they win when we win. Fairer than flat fee if we scale fast.</div>
+        <div class="deal-opt-numbers">
+          <div class="deal-num">10–15% of net revenue</div>
+          <div class="deal-num">Minimum guarantee: $3k/yr</div>
+          <div class="deal-num">Quarterly reporting + audit rights</div>
+        </div>
+      </div>
+
+      <div class="deal-opt" id="dopt2" onclick="selectDeal(2)">
+        <div class="deal-opt-head">
+          <div class="deal-opt-name">Option C — Hybrid (Flat + Share)</div>
+          <div class="deal-opt-rec rec-fair">ALSO FAIR</div>
+        </div>
+        <div class="deal-opt-desc">A lower flat annual fee providing security for Camps Australia, plus a smaller revenue share kicking in once we hit $50k annual revenue. Reduces their risk in the early stages while maintaining upside.</div>
+        <div class="deal-opt-numbers">
+          <div class="deal-num">$3,000/yr flat base</div>
+          <div class="deal-num">+ 8% rev share after $50k</div>
+          <div class="deal-num">Grows naturally with scale</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- LIVE DEAL CALCULATOR -->
+  <div class="card">
+    <div class="card-title">Live Deal Calculator</div>
+    <div class="card-sub">Based on your sliders and selected deal — what does Camps Australia actually receive?</div>
+    <div class="slider-row">
+      <div class="slider-label">Rev share %</div>
+      <input type="range" id="s_camps_pct" min="5" max="20" step="1" value="12" oninput="recalc()">
+      <div class="slider-val" id="v_camps_pct">12%</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Min guarantee/yr</div>
+      <input type="range" id="s_camps_min" min="1000" max="15000" step="500" value="3000" oninput="recalc()">
+      <div class="slider-val" id="v_camps_min">$3,000</div>
+    </div>
+
+    <div class="result-box">
+      <div class="result-box-title">Projected Camps Australia Income</div>
+      <div class="result-row"><span class="rr-label">Year 1 payment</span><span class="rr-val camps-share" id="r_c1">—</span></div>
+      <div class="result-row"><span class="rr-label">Year 2 payment</span><span class="rr-val camps-share" id="r_c2">—</span></div>
+      <div class="result-row"><span class="rr-label">Year 3 payment</span><span class="rr-val camps-share" id="r_c3">—</span></div>
+      <div class="result-row total camps-row"><span class="rr-label">3-year total</span><span class="rr-val" id="r_ctotal">—</span></div>
+    </div>
+
+    <div class="insight good" style="margin-top:12px;">
+      <strong>Their existing book:</strong> Camps Australia's annual publication retails around $50–60. If 200,000 app users buy one book, that's $10M+ in book revenue — we add to that, not compete with it.
+    </div>
+    <div class="insight">
+      <strong>The "Camps AU Verified" badge:</strong> Every facility we show from their data carries their brand. Every time a user taps that badge, it's an advertisement for the Camps Australia publication. We're their marketing channel.
+    </div>
+    <div class="insight warn">
+      <strong>Be honest about timing:</strong> Year 1 revenue will be small. The value to Camps Australia in Year 1 is brand exposure and market positioning, not just cash. Make sure the letter acknowledges that.
+    </div>
+  </div>
+</div>
+
+<!-- CONCLUSION / OFFER SUMMARY -->
+<div class="conclusion">
+  <div class="conclusion-title">What to Walk In With</div>
+  <div class="conclusion-body">
+    Based on <strong>conservative projections</strong>, Camps Australia can expect meaningful income from Year 2 onwards, growing significantly by Year 3. The <strong>revenue share model</strong> is the right structure — it removes risk for both sides and aligns incentives perfectly. They only earn more when GottaGo grows, which means they have skin in the game and a reason to support the partnership actively.
+    <br><br>
+    The non-cash value — <strong>brand exposure to a new digital audience</strong>, the "Camps AU Verified" badge on every relevant facility, and positioning as the trusted data partner of Australia's most innovative navigation app — is worth more in the long run than any Year 1 cheque.
+  </div>
+
+  <div class="offer-box">
+    <div class="offer-box-title">Proposed Opening Offer to Camps Australia</div>
+    <div class="offer-line"><span class="ol-label">Deal structure</span><span class="ol-val">Revenue share with minimum guarantee</span></div>
+    <div class="offer-line"><span class="ol-label">Revenue share</span><span class="ol-val" id="final_pct">12% of net revenue</span></div>
+    <div class="offer-line"><span class="ol-label">Annual minimum</span><span class="ol-val" id="final_min">$3,000/year</span></div>
+    <div class="offer-line"><span class="ol-label">Data attribution</span><span class="ol-val">"Camps AU Verified" badge on all their sites</span></div>
+    <div class="offer-line"><span class="ol-label">Review trigger</span><span class="ol-val">Renegotiate when GottaGo hits 25,000 users</span></div>
+    <div class="offer-line"><span class="ol-label">Term</span><span class="ol-val">2 years initial, rolling annual thereafter</span></div>
+    <div class="offer-line"><span class="ol-label">Reporting</span><span class="ol-val">Quarterly statements + audit rights</span></div>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<script>
+/* ══ DATA ══════════════════════════════════════════════════ */
+let scenario = 'conservative';
+let dealOpt = 1;
+
+const SCENARIO_MULTIPLIERS = {
+  conservative: { dlMult:1, growthMult:0.6 },
+  moderate: { dlMult:2, growthMult:1 },
+  optimistic: { dlMult:4, growthMult:1.6 }
+};
+
+/* ══ FORMAT ═════════════════════════════════════════════════ */
+function fmt(n) {
+  if (n >= 1000000) return '$' + (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000) return '$' + Math.round(n/1000) + 'k';
+  return '$' + Math.round(n);
+}
+function fmtNum(n) {
+  if (n >= 1000) return (n/1000).toFixed(1) + 'k';
+  return Math.round(n);
+}
+
+/* ══ SELECT TIER ════════════════════════════════════════════ */
+function selectTier(idx) {
+  [0,1,2,3].forEach(i => {
+    const el = document.getElementById('tier'+i);
+    if (el) el.classList.remove('selected');
+  });
+  document.querySelectorAll('.tier').forEach((el,i) => {
+    el.classList.toggle('selected', i === idx);
+  });
+}
+
+/* ══ SELECT SCENARIO ════════════════════════════════════════ */
+function setScenario(s) {
+  scenario = s;
+  ['conservative','moderate','optimistic'].forEach(sc => {
+    const t = document.getElementById('tab_'+sc.slice(0,4));
+    if (t) t.classList.toggle('active', sc === s);
+  });
+  recalc();
+}
+
+/* ══ SELECT DEAL ════════════════════════════════════════════ */
+function selectDeal(idx) {
+  dealOpt = idx;
+  [0,1,2].forEach(i => {
+    document.getElementById('dopt'+i).classList.toggle('selected', i === idx);
+  });
+  recalc();
+}
+
+/* ══ MAIN CALC ══════════════════════════════════════════════ */
+function recalc() {
+  const baseDL       = +document.getElementById('s_downloads').value;
+  const convPct      = +document.getElementById('s_conv').value / 100;
+  const splitPlus    = +document.getElementById('s_split').value / 100;
+  const annualPct    = +document.getElementById('s_annual').value / 100;
+  const yoyGrowth    = +document.getElementById('s_growth').value / 100;
+  const platformFee  = +document.getElementById('s_platform').value / 100;
+  const campsPct     = +document.getElementById('s_camps_pct').value / 100;
+  const campsMin     = +document.getElementById('s_camps_min').value;
+
+  // Update display values
+  document.getElementById('v_downloads').textContent = baseDL.toLocaleString();
+  document.getElementById('v_conv').textContent = (+document.getElementById('s_conv').value) + '%';
+  document.getElementById('v_split').textContent = (+document.getElementById('s_split').value) + '% Plus';
+  document.getElementById('v_annual').textContent = (+document.getElementById('s_annual').value) + '% annual';
+  document.getElementById('v_growth').textContent = (+document.getElementById('s_growth').value) + '%/yr';
+  document.getElementById('v_platform').textContent = (+document.getElementById('s_platform').value) + '%';
+  document.getElementById('v_camps_pct').textContent = (+document.getElementById('s_camps_pct').value) + '%';
+  document.getElementById('v_camps_min').textContent = '$' + (+document.getElementById('s_camps_min').value).toLocaleString();
+
+  const mult = SCENARIO_MULTIPLIERS[scenario];
+  const dlY1 = Math.round(baseDL * mult.dlMult);
+  const growthRate = yoyGrowth * mult.growthMult;
+
+  const PLUS_MONTHLY = 4.99;
+  const PLUS_ANNUAL  = 39.99;
+  const PRO_MONTHLY  = 7.99;
+  const PRO_ANNUAL   = 59.99;
+
+  function calcYear(downloads, prevPaidSubs=0) {
+    const paidSubs = Math.round(downloads * convPct);
+    const totalPaid = paidSubs + Math.round(prevPaidSubs * 0.75); // 75% retention
+    const plusSubs = Math.round(totalPaid * splitPlus);
+    const proSubs  = totalPaid - plusSubs;
+    const annPlus = Math.round(plusSubs * annualPct);
+    const monPlus = plusSubs - annPlus;
+    const annPro  = Math.round(proSubs * annualPct);
+    const monPro  = proSubs - annPro;
+    const gross = annPlus*PLUS_ANNUAL + monPlus*PLUS_MONTHLY*12
+                + annPro*PRO_ANNUAL  + monPro*PRO_MONTHLY*12;
+    const net = gross * (1 - platformFee);
+    return { downloads, paidSubs: totalPaid, gross: Math.round(gross), net: Math.round(net) };
+  }
+
+  const y = [];
+  let prevPaid = 0;
+  let dlCurrent = dlY1;
+  for (let i = 0; i < 5; i++) {
+    const yr = calcYear(dlCurrent, prevPaid);
+    y.push(yr);
+    prevPaid = yr.paidSubs;
+    dlCurrent = Math.round(dlCurrent * (1 + growthRate));
+  }
+
+  // Camps share
+  function campsShare(netRev) {
+    const share = netRev * campsPct;
+    return Math.max(share, campsMin);
+  }
+
+  // Update metrics
+  document.getElementById('m_y1').textContent = fmt(y[0].net);
+  document.getElementById('m_y3').textContent = fmt(y[2].net);
+  document.getElementById('m_subs').textContent = fmtNum(y[2].paidSubs);
+
+  // Update table
+  const tbody = document.getElementById('yearBody');
+  const years = ['Year 1','Year 2','Year 3','Year 4','Year 5'];
+  tbody.innerHTML = y.map((yr, i) => `
+    <tr>
+      <td>${years[i]}</td>
+      <td class="highlight">${fmtNum(yr.downloads)}</td>
+      <td class="highlight">${fmtNum(yr.paidSubs)}</td>
+      <td>${fmt(yr.gross)}</td>
+      <td class="highlight">${fmt(yr.net)}</td>
+      <td class="camps-share">${fmt(campsShare(yr.net))}</td>
+    </tr>
+  `).join('');
+
+  // Update Camps AU result boxes
+  const c1 = campsShare(y[0].net);
+  const c2 = campsShare(y[1].net);
+  const c3 = campsShare(y[2].net);
+  document.getElementById('r_c1').textContent = fmt(c1);
+  document.getElementById('r_c2').textContent = fmt(c2);
+  document.getElementById('r_c3').textContent = fmt(c3);
+  document.getElementById('r_ctotal').textContent = fmt(c1+c2+c3);
+
+  // Update offer summary
+  document.getElementById('final_pct').textContent = (+document.getElementById('s_camps_pct').value) + '% of net revenue';
+  document.getElementById('final_min').textContent = '$' + (+document.getElementById('s_camps_min').value).toLocaleString() + '/year';
+
+  // Chart
+  buildChart(y, campsShare);
+}
+
+function buildChart(y, campsShare) {
+  const bars = document.getElementById('chartBars');
+  const maxVal = Math.max(...y.map(yr => yr.net));
+  const years = ['Y1','Y2','Y3','Y4','Y5'];
+  bars.innerHTML = y.map((yr, i) => {
+    const totalH = Math.max(4, (yr.net / maxVal) * 120);
+    const campsH = Math.max(2, (campsShare(yr.net) / maxVal) * 120);
+    return `
+      <div class="bar-group">
+        <div style="position:relative;width:100%;display:flex;align-items:flex-end;height:130px;gap:2px;">
+          <div class="bar bar-total" style="height:${totalH}px;flex:1;">
+            <div class="bar-val">${fmt(yr.net)}</div>
+          </div>
+          <div class="bar bar-camps" style="height:${campsH}px;width:8px;flex-shrink:0;border-radius:4px 4px 0 0;"></div>
+        </div>
+        <div class="bar-label">${years[i]}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Initial calc
+recalc();
+selectTier(1);
+</script>
+</body>
+</html>

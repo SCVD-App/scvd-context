@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GottaGo — Revenue Model v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0F0E;--bg2:#111916;--bg3:#182320;
+  --teal:#00FFD1;--teal-dim:#00B894;--teal-ghost:rgba(0,255,209,0.08);--teal-glow:rgba(0,255,209,0.25);
+  --amber:#FFB830;--amber-dim:#C8972A;--amber-ghost:rgba(255,184,48,0.1);
+  --red:#FF4B6E;--red-ghost:rgba(255,75,110,0.1);
+  --green:#00E896;--green-ghost:rgba(0,232,150,0.1);
+  --purple:#A78BFA;--gold:#C9A84C;
+  --text:#E8F5F2;--text-dim:#7BA89E;
+  --card:rgba(20,35,30,0.92);--border:rgba(0,255,209,0.1);--border2:rgba(255,255,255,0.06);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px 60px;}
+.grain{position:fixed;inset:-50%;width:200%;height:200%;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:.4;pointer-events:none;z-index:0;animation:grain 8s steps(10) infinite;}
+@keyframes grain{0%,100%{transform:translate(0,0)}10%{transform:translate(-2%,-3%)}30%{transform:translate(3%,2%)}50%{transform:translate(-1%,4%)}70%{transform:translate(2%,-1%)}90%{transform:translate(-3%,1%)}}
+.content{position:relative;z-index:1;max-width:700px;margin:0 auto;}
+
+/* HEADER */
+.header{text-align:center;padding:16px 0 28px;}
+.header-logo{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px;}
+.logo-mark{width:44px;height:44px;background:var(--teal);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 24px var(--teal-glow);}
+.logo-name{font-family:'Clash Display',sans-serif;font-size:28px;font-weight:700;color:var(--text);}
+.logo-name span{color:var(--teal);}
+.header-title{font-family:'Clash Display',sans-serif;font-size:20px;font-weight:600;color:var(--text);margin-bottom:5px;}
+.header-sub{font-size:12px;color:var(--text-dim);line-height:1.6;}
+
+/* SECTION */
+.section{margin-bottom:18px;}
+.section-label{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:var(--text-dim);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.section-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* CARD */
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-bottom:12px;backdrop-filter:blur(12px);}
+.card-title{font-family:'Clash Display',sans-serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.card-sub{font-size:12px;color:var(--text-dim);line-height:1.5;margin-bottom:14px;}
+
+/* DEAL ANATOMY */
+.deal-anatomy{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+.da-row{display:flex;gap:12px;align-items:flex-start;background:rgba(0,0,0,.25);border-radius:14px;padding:12px;}
+.da-icon{font-size:24px;flex-shrink:0;}
+.da-info{flex:1;}
+.da-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;}
+.da-desc{font-size:11px;color:var(--text-dim);line-height:1.5;}
+.da-tag{display:inline-block;margin-top:5px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;}
+.tag-free{background:var(--green-ghost);color:var(--green);}
+.tag-half{background:var(--amber-ghost);color:var(--amber);}
+.tag-share{background:var(--teal-ghost);color:var(--teal-dim);}
+.tag-brand{background:var(--purple-ghost);color:var(--purple);}
+
+/* SLIDERS */
+.slider-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.slider-label{font-size:11px;color:var(--text-dim);min-width:140px;}
+.slider-val{font-size:13px;font-weight:600;color:var(--text);min-width:64px;text-align:right;}
+input[type=range]{flex:1;-webkit-appearance:none;height:5px;border-radius:3px;background:rgba(255,255,255,.1);outline:none;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--teal);cursor:pointer;box-shadow:0 0 8px var(--teal-glow);}
+
+/* FUNNEL */
+.funnel{display:flex;flex-direction:column;gap:3px;margin:14px 0;}
+.funnel-step{border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;transition:all .3s;}
+.funnel-step .fs-label{font-size:12px;color:var(--text-dim);}
+.funnel-step .fs-val{font-family:'Clash Display',sans-serif;font-size:18px;font-weight:700;color:var(--text);}
+.funnel-step .fs-sub{font-size:10px;color:var(--text-dim);margin-top:2px;}
+.fs-total{background:rgba(0,255,209,.06);border:1px solid rgba(0,255,209,.15);}
+.fs-free{background:rgba(0,232,150,.06);border:1px solid rgba(0,232,150,.15);}
+.fs-half{background:rgba(255,184,48,.06);border:1px solid rgba(255,184,48,.15);}
+.fs-organic{background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.15);}
+.fs-paid-y2{background:rgba(0,255,209,.1);border:1px solid rgba(0,255,209,.3);}
+.funnel-arrow{text-align:center;font-size:12px;color:var(--text-ghost);}
+
+/* YEAR TABLE */
+.year-table{width:100%;border-collapse:collapse;}
+.year-table th{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);padding:6px 6px;text-align:right;border-bottom:1px solid var(--border);}
+.year-table th:first-child{text-align:left;}
+.year-table td{padding:7px 6px;font-size:12px;text-align:right;border-bottom:1px solid var(--border2);transition:all .4s;}
+.year-table td:first-child{text-align:left;color:var(--text-dim);font-size:11px;}
+.year-table .hl{color:var(--text);font-weight:500;}
+.year-table .teal{color:var(--teal);font-weight:600;}
+.year-table .amber{color:var(--amber);font-weight:600;}
+.year-table .green{color:var(--green);font-weight:500;}
+.year-table tr.total-row td{border-top:1px solid var(--border);border-bottom:none;font-weight:700;}
+
+/* CHART */
+.chart-outer{position:relative;margin:14px 0 6px;}
+.chart-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:8px;}
+.chart-area{display:flex;align-items:flex-end;gap:5px;height:180px;}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.bar-stack{width:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:1px;position:relative;}
+.b-organic{background:var(--purple);border-radius:4px 4px 0 0;transition:height .8s cubic-bezier(.34,1.2,.64,1);}
+.b-half{background:var(--amber);transition:height .8s cubic-bezier(.34,1.2,.64,1);}
+.b-free-conv{background:var(--teal);transition:height .8s cubic-bezier(.34,1.2,.64,1);}
+.b-camps{background:var(--green);border-radius:0;transition:height .8s cubic-bezier(.34,1.2,.64,1);}
+.bar-year{font-size:9px;color:var(--text-dim);margin-top:4px;}
+.bar-total-val{font-size:9px;color:var(--text-dim);position:absolute;top:-16px;left:50%;transform:translateX(-50%);white-space:nowrap;}
+.chart-legend{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:8px;}
+.leg-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-dim);}
+.leg-dot{width:8px;height:8px;border-radius:2px;}
+
+/* RESULT BOXES */
+.result-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px;}
+.result-box{background:rgba(0,0,0,.3);border-radius:14px;padding:12px;border:1px solid var(--border2);}
+.result-box.camps{border-color:rgba(255,184,48,.25);background:rgba(255,184,48,.04);}
+.result-box.gottago{border-color:rgba(0,255,209,.2);background:rgba(0,255,209,.04);}
+.rb-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:6px;}
+.rb-val{font-family:'Clash Display',sans-serif;font-size:22px;font-weight:700;color:var(--text);}
+.rb-sub{font-size:10px;color:var(--text-dim);margin-top:3px;}
+
+/* BIG STAT */
+.big-stat-row{display:flex;gap:8px;margin:12px 0;}
+.big-stat{flex:1;background:rgba(0,0,0,.3);border:1px solid var(--border2);border-radius:14px;padding:12px;text-align:center;}
+.big-stat.highlight{border-color:rgba(0,255,209,.3);background:rgba(0,255,209,.05);}
+.bs-val{font-family:'Clash Display',sans-serif;font-size:26px;font-weight:700;color:var(--text);line-height:1;}
+.bs-key{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);margin-top:4px;}
+
+/* INSIGHT */
+.insight{border-left:3px solid var(--teal);border-radius:0 12px 12px 0;padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text-dim);line-height:1.6;background:rgba(0,0,0,.2);}
+.insight strong{color:var(--text);}
+.insight.amber{border-color:var(--amber);}
+.insight.amber strong{color:var(--amber);}
+.insight.green{border-color:var(--green);}
+.insight.green strong{color:var(--green);}
+.insight.red{border-color:var(--red);}
+.insight.red strong{color:var(--red);}
+
+/* OFFER BOX */
+.offer-box{background:linear-gradient(135deg,rgba(255,184,48,.08),rgba(255,184,48,.03));border:1px solid rgba(255,184,48,.3);border-radius:18px;padding:18px;margin-top:14px;}
+.offer-title{font-family:'Clash Display',sans-serif;font-size:16px;font-weight:600;color:var(--amber);margin-bottom:12px;}
+.offer-line{display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;gap:12px;}
+.offer-line:last-child{border-bottom:none;}
+.ol-label{color:var(--text-dim);flex-shrink:0;}
+.ol-val{color:var(--amber);font-weight:600;text-align:right;}
+
+/* TOGGLE */
+.toggle-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border2);}
+.toggle-row:last-child{border-bottom:none;}
+.tgl-left .tgl-label{font-size:13px;font-weight:500;color:var(--text);}
+.tgl-left .tgl-sub{font-size:11px;color:var(--text-dim);}
+.tgl{width:46px;height:26px;background:rgba(255,255,255,.1);border-radius:13px;position:relative;cursor:pointer;transition:background .3s;flex-shrink:0;}
+.tgl.on{background:var(--teal-dim);}
+.tgl::after{content:'';position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;left:3px;transition:transform .3s cubic-bezier(.34,1.4,.64,1);box-shadow:0 2px 6px rgba(0,0,0,.3);}
+.tgl.on::after{transform:translateX(20px);}
+
+/* SENSITIVITY */
+.sensitivity-table{width:100%;border-collapse:collapse;margin-top:10px;}
+.sensitivity-table th{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);padding:5px 8px;text-align:center;border-bottom:1px solid var(--border);}
+.sensitivity-table th:first-child{text-align:left;}
+.sensitivity-table td{padding:6px 8px;font-size:12px;text-align:center;border-bottom:1px solid var(--border2);}
+.sensitivity-table td:first-child{text-align:left;color:var(--text-dim);}
+.cell-low{color:var(--text-dim);}
+.cell-mid{color:var(--amber);font-weight:600;}
+.cell-high{color:var(--teal);font-weight:600;}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="content">
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">
+    <div class="logo-mark">🚻</div>
+    <div class="logo-name">Gotta<span>Go</span></div>
+  </div>
+  <div class="header-title">The Camps Australia Distribution Deal</div>
+  <div class="header-sub">What happens when 200,000 verified road-trippers become your launch channel.</div>
+</div>
+
+<!-- DEAL ANATOMY -->
+<div class="section">
+  <div class="section-label">The Full Offer to Camps Australia</div>
+  <div class="card">
+    <div class="card-title">Four Things in One Deal</div>
+    <div class="card-sub">This isn't just a data licence. It's a partnership where both sides win from day one.</div>
+    <div class="deal-anatomy">
+      <div class="da-row">
+        <div class="da-icon">🎁</div>
+        <div class="da-info">
+          <div class="da-title">Free 12-Month Pro for Premium Members</div>
+          <div class="da-desc">Every existing Camps Australia premium member gets a free year of GottaGo Pro. Zero cost to them, instant value-add to their Camps membership. Camps AU looks like heroes to their community.</div>
+          <span class="da-tag tag-free">Free for members</span>
+        </div>
+      </div>
+      <div class="da-row">
+        <div class="da-icon">🏷️</div>
+        <div class="da-info">
+          <div class="da-title">50% Off Link for All Subscribers</div>
+          <div class="da-desc">Every Camps Australia subscriber — app users, book buyers, newsletter list — gets a personalised 50% discount link. Tracked referral, 12-month discounted subscription. Low barrier entry.</div>
+          <span class="da-tag tag-half">50% off Year 1</span>
+        </div>
+      </div>
+      <div class="da-row">
+        <div class="da-icon">💰</div>
+        <div class="da-info">
+          <div class="da-title">Revenue Share on All Conversions</div>
+          <div class="da-desc">Camps Australia receives a percentage of net revenue from every paid GottaGo subscription — whether it came from their referral or organic discovery. Their data, their community, they share the upside.</div>
+          <span class="da-tag tag-share">12% net revenue share</span>
+        </div>
+      </div>
+      <div class="da-row">
+        <div class="da-icon">🏕️</div>
+        <div class="da-info">
+          <div class="da-title">"Camps AU Verified" Badge on Every Site</div>
+          <div class="da-desc">All 15,500+ of their verified facilities carry the Camps Australia badge inside GottaGo. Every tap is brand exposure. We become their digital marketing channel to a new audience who may not yet own the book.</div>
+          <span class="da-tag tag-brand">Ongoing brand exposure</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ASSUMPTION SLIDERS -->
+<div class="section">
+  <div class="section-label">Model Assumptions</div>
+  <div class="card">
+    <div class="card-title">Camps Australia Subscriber Capture</div>
+    <div class="card-sub">Drag to see how different capture rates change everything. These are the numbers to stress-test.</div>
+
+    <div class="slider-row">
+      <div class="slider-label">Camps AU subscriber base</div>
+      <input type="range" id="s_campsBase" min="100000" max="300000" step="10000" value="200000" oninput="recalc()">
+      <div class="slider-val" id="v_campsBase">200k</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Premium members (free Pro)</div>
+      <input type="range" id="s_premium" min="5" max="40" step="5" value="20" oninput="recalc()">
+      <div class="slider-val" id="v_premium">20%</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">50% link claim rate</div>
+      <input type="range" id="s_claimRate" min="5" max="40" step="5" value="20" oninput="recalc()">
+      <div class="slider-val" id="v_claimRate">20%</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Free→Paid convert (after yr 1)</div>
+      <input type="range" id="s_freeConv" min="20" max="70" step="5" value="40" oninput="recalc()">
+      <div class="slider-val" id="v_freeConv">40%</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Half-price→Full convert</div>
+      <input type="range" id="s_halfConv" min="40" max="85" step="5" value="65" oninput="recalc()">
+      <div class="slider-val" id="v_halfConv">65%</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Organic downloads/yr (non-Camps)</div>
+      <input type="range" id="s_organic" min="2000" max="30000" step="1000" value="8000" oninput="recalc()">
+      <div class="slider-val" id="v_organic">8,000</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Organic free→paid conv %</div>
+      <input type="range" id="s_orgConv" min="3" max="20" step="1" value="8" oninput="recalc()">
+      <div class="slider-val" id="v_orgConv">8%</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Avg revenue per paid sub/yr</div>
+      <input type="range" id="s_arpu" min="25" max="60" step="5" value="42" oninput="recalc()">
+      <div class="slider-val" id="v_arpu">$42</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Platform fee (Apple/Google)</div>
+      <input type="range" id="s_platform" min="15" max="30" step="5" value="30" oninput="recalc()">
+      <div class="slider-val" id="v_platform">30%</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Camps AU revenue share %</div>
+      <input type="range" id="s_campsPct" min="8" max="20" step="1" value="12" oninput="recalc()">
+      <div class="slider-val" id="v_campsPct">12%</div>
+    </div>
+  </div>
+</div>
+
+<!-- YEAR 1 FUNNEL -->
+<div class="section">
+  <div class="section-label">Year 1 User Funnel</div>
+  <div class="card">
+    <div class="card-title">Where Users Come From</div>
+    <div class="card-sub">Three distinct channels, all activated in the first 30 days of launch.</div>
+    <div class="funnel">
+      <div class="funnel-step fs-total">
+        <div><div class="fs-label">🏕️ Camps AU Premium Members → Free Pro Year</div><div class="fs-sub">Zero friction, instant activation</div></div>
+        <div><div class="fs-val" id="f_premium">—</div></div>
+      </div>
+      <div class="funnel-step fs-half">
+        <div><div class="fs-label">🏷️ Camps AU Subscribers → 50% Off Link</div><div class="fs-sub">Tracked referral, discounted Year 1</div></div>
+        <div><div class="fs-val" id="f_half">—</div></div>
+      </div>
+      <div class="funnel-step fs-organic">
+        <div><div class="fs-label">🌱 Organic Downloads (word of mouth)</div><div class="fs-sub">App Store, press, social, grey nomad forums</div></div>
+        <div><div class="fs-val" id="f_organic">—</div></div>
+      </div>
+      <div class="funnel-arrow">↓ converts to paid from Year 2 ↓</div>
+      <div class="funnel-step fs-paid-y2">
+        <div><div class="fs-label">💳 Estimated Paying Subscribers entering Year 2</div><div class="fs-sub">Free converts + 50% converts + organic paid</div></div>
+        <div><div class="fs-val teal" id="f_paidY2">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- YEAR BY YEAR TABLE -->
+<div class="section">
+  <div class="section-label">5-Year Projections</div>
+  <div class="card">
+    <div class="card-title">The Compounding Effect</div>
+    <div class="card-sub">Year 1 builds the base. Year 2 is when the Camps AU free users start paying. Year 3+ is where it compounds hard.</div>
+
+    <!-- CHART -->
+    <div class="chart-outer">
+      <div class="chart-title">Annual Net Revenue — GottaGo vs Camps AU Share</div>
+      <div class="chart-area" id="chartArea">
+        <!-- JS generated -->
+      </div>
+      <div class="chart-legend">
+        <div class="leg-item"><div class="leg-dot" style="background:var(--teal)"></div>Free→Paid converts</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--amber)"></div>50% link converts</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--purple)"></div>Organic paid</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Camps AU share</div>
+      </div>
+    </div>
+
+    <table class="year-table" id="yearTable">
+      <thead>
+        <tr>
+          <th>Year</th>
+          <th>Total Users</th>
+          <th>Paid Subs</th>
+          <th>Gross Rev</th>
+          <th>Net Rev</th>
+          <th style="color:var(--amber)">Camps AU</th>
+          <th style="color:var(--teal)">GottaGo Net</th>
+        </tr>
+      </thead>
+      <tbody id="yearBody"></tbody>
+    </table>
+
+    <div class="big-stat-row" id="bigStats">
+      <!-- JS generated -->
+    </div>
+  </div>
+</div>
+
+<!-- CAMPS AUSTRALIA VALUE -->
+<div class="section">
+  <div class="section-label">What's In It For Camps Australia</div>
+  <div class="card">
+    <div class="card-title">The Full Picture for Their Team</div>
+    <div class="card-sub">Cash is only part of the story. Here's everything they get.</div>
+
+    <div class="result-grid" id="campsResultGrid">
+      <!-- JS generated -->
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="insight green">
+        <strong>Member value-add that costs them nothing.</strong> Offering free GottaGo Pro to premium members makes Camps AU membership more valuable without any development cost or operational overhead. Pure goodwill, delivered instantly.
+      </div>
+      <div class="insight">
+        <strong>A new book-buyer pipeline.</strong> GottaGo users who trust the "Camps AU Verified" badge in the app are pre-sold on the Camps Australia publication. We drive book sales they wouldn't otherwise get from a younger, digital-first audience.
+      </div>
+      <div class="insight amber">
+        <strong>WikiCamps timing is perfect.</strong> WikiCamps was recently bought by a caravan park chain and is losing community trust — users are actively switching to Camps Australia right now. GottaGo + Camps AU is the natural home for that displaced community.
+      </div>
+      <div class="insight">
+        <strong>No exclusivity required from us.</strong> We're not asking Camps AU to be exclusive. We just want their blessing, their data, and their subscriber list. They can still license data to others. Low risk, high upside.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SENSITIVITY TABLE -->
+<div class="section">
+  <div class="section-label">Sensitivity Analysis</div>
+  <div class="card">
+    <div class="card-title">Year 3 Net Revenue — Capture Rate Scenarios</div>
+    <div class="card-sub">How sensitive is the outcome to the % of Camps AU subscribers we actually convert?</div>
+    <table class="sensitivity-table" id="sensTable">
+      <!-- JS generated -->
+    </table>
+  </div>
+</div>
+
+<!-- PROPOSED OFFER -->
+<div class="section">
+  <div class="section-label">The Proposed Deal</div>
+  <div class="card">
+    <div class="card-title">What to Walk In With</div>
+    <div class="card-sub">Clear, simple, and genuinely fair to both sides. Built to be said yes to.</div>
+
+    <div class="offer-box">
+      <div class="offer-title">GottaGo × Camps Australia — Proposed Terms</div>
+      <div class="offer-line"><span class="ol-label">Data licence</span><span class="ol-val">Use of 15,500+ verified Camps AU sites within GottaGo navigation layer</span></div>
+      <div class="offer-line"><span class="ol-label">Premium member gift</span><span class="ol-val">Free 12-month GottaGo Pro for all current Camps AU premium members</span></div>
+      <div class="offer-line"><span class="ol-label">Subscriber offer</span><span class="ol-val">Tracked 50% off link distributed to full Camps AU subscriber list — valid 12 months</span></div>
+      <div class="offer-line"><span class="ol-label">Revenue share</span><span class="ol-val" id="offer_pct">12% of net revenue — all subscriptions, all channels</span></div>
+      <div class="offer-line"><span class="ol-label">Minimum guarantee</span><span class="ol-val">$3,000/yr — you get paid even if we disappoint</span></div>
+      <div class="offer-line"><span class="ol-label">Attribution</span><span class="ol-val">"Camps AU Verified" badge on every relevant facility in app</span></div>
+      <div class="offer-line"><span class="ol-label">Reporting</span><span class="ol-val">Quarterly statements, full audit rights, transparent dashboard</span></div>
+      <div class="offer-line"><span class="ol-label">Review trigger</span><span class="ol-val">Renegotiate terms when GottaGo reaches 25,000 active users</span></div>
+      <div class="offer-line"><span class="ol-label">Initial term</span><span class="ol-val">2 years, rolling annual thereafter — either party exits with 90 days notice</span></div>
+    </div>
+
+    <div class="insight" style="margin-top:14px;">
+      <strong>The ask from them:</strong> A single email to their subscriber list, access to their verified facility data via API or flat file, and permission to use the "Camps AU Verified" mark. That's it. Everything else is on us to build and operate.
+    </div>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<script>
+let data = {};
+
+function fmt(n,decimals=0){
+  if(n>=1000000) return '$'+(n/1000000).toFixed(decimals||1)+'M';
+  if(n>=1000) return '$'+Math.round(n/1000)+'k';
+  return '$'+Math.round(n);
+}
+function fmtN(n){
+  if(n>=1000000) return (n/1000000).toFixed(1)+'M';
+  if(n>=1000) return (n/1000).toFixed(1)+'k';
+  return Math.round(n);
+}
+
+function recalc(){
+  const campsBase  = +document.getElementById('s_campsBase').value;
+  const premiumPct = +document.getElementById('s_premium').value/100;
+  const claimRate  = +document.getElementById('s_claimRate').value/100;
+  const freeConv   = +document.getElementById('s_freeConv').value/100;
+  const halfConv   = +document.getElementById('s_halfConv').value/100;
+  const organicDL  = +document.getElementById('s_organic').value;
+  const orgConvPct = +document.getElementById('s_orgConv').value/100;
+  const arpu       = +document.getElementById('s_arpu').value;
+  const platFee    = +document.getElementById('s_platform').value/100;
+  const campsPct   = +document.getElementById('s_campsPct').value/100;
+
+  // Update labels
+  document.getElementById('v_campsBase').textContent = fmtN(campsBase);
+  document.getElementById('v_premium').textContent = (+document.getElementById('s_premium').value)+'%';
+  document.getElementById('v_claimRate').textContent = (+document.getElementById('s_claimRate').value)+'%';
+  document.getElementById('v_freeConv').textContent = (+document.getElementById('s_freeConv').value)+'%';
+  document.getElementById('v_halfConv').textContent = (+document.getElementById('s_halfConv').value)+'%';
+  document.getElementById('v_organic').textContent = organicDL.toLocaleString();
+  document.getElementById('v_orgConv').textContent = (+document.getElementById('s_orgConv').value)+'%';
+  document.getElementById('v_arpu').textContent = '$'+arpu;
+  document.getElementById('v_platform').textContent = (+document.getElementById('s_platform').value)+'%';
+  document.getElementById('v_campsPct').textContent = (+document.getElementById('s_campsPct').value)+'%';
+
+  // Y1 Sources
+  const premiumUsers   = Math.round(campsBase * premiumPct);   // free Pro
+  const halfUsers      = Math.round(campsBase * claimRate);    // 50% off
+  const organicPaidY1  = Math.round(organicDL * orgConvPct);  // organic paid Y1
+
+  // Funnel display
+  document.getElementById('f_premium').textContent = fmtN(premiumUsers);
+  document.getElementById('f_half').textContent = fmtN(halfUsers);
+  document.getElementById('f_organic').textContent = fmtN(organicDL);
+
+  // Y2 paid entry — free converts + half converts + organic growth
+  const freeConvY2   = Math.round(premiumUsers * freeConv);
+  const halfConvY2   = Math.round(halfUsers * halfConv);
+  const orgY2DL      = Math.round(organicDL * 1.8);
+  const orgPaidY2    = Math.round(orgY2DL * orgConvPct);
+  const paidEntryY2  = freeConvY2 + halfConvY2 + orgPaidY2;
+  document.getElementById('f_paidY2').textContent = fmtN(paidEntryY2);
+
+  // Half-price ARPU (50% discounted year 1)
+  const arpuHalf = arpu * 0.5;
+  const arpuFull = arpu;
+
+  // Year by year model
+  // Year 1: premium=free (no revenue), half=discounted revenue, organic=paid
+  // Year 2+: free converts to full, half converts to full, organic grows, annual churn 15%
+  const CHURN = 0.15;
+  const ORG_GROWTH = 1.8;
+
+  let years = [];
+  let runningPaid = 0;
+  let orgDownloads = organicDL;
+
+  for(let y=1; y<=5; y++){
+    let gross=0, paid=0, totalUsers=0;
+
+    if(y===1){
+      // Premium: free (0 revenue this year)
+      // Half: discounted
+      const halfRev = halfUsers * arpuHalf;
+      // Organic paid
+      const orgPaid = Math.round(orgDownloads * orgConvPct);
+      const orgRev = orgPaid * arpuFull;
+      gross = halfRev + orgRev;
+      paid = halfUsers + orgPaid; // paying users in Y1
+      totalUsers = premiumUsers + halfUsers + orgDownloads;
+      runningPaid = freeConvY2 + halfConvY2 + orgPaid;
+    } else {
+      // Organic growth
+      orgDownloads = Math.round(orgDownloads * ORG_GROWTH);
+      const newOrgPaid = Math.round(orgDownloads * orgConvPct);
+      // Retain previous paid with churn
+      const retained = Math.round(runningPaid * (1 - CHURN));
+      paid = retained + newOrgPaid;
+      gross = paid * arpuFull;
+      totalUsers = premiumUsers + halfUsers + orgDownloads * y;
+      runningPaid = paid;
+    }
+
+    const net = gross * (1 - platFee);
+    const campsPayment = Math.max(net * campsPct, 3000);
+    const gottagoNet = net - campsPayment;
+    years.push({ y, totalUsers, paid, gross: Math.round(gross), net: Math.round(net), camps: Math.round(campsPayment), gottago: Math.round(gottagoNet) });
+  }
+
+  data.years = years;
+  data.premiumUsers = premiumUsers;
+  data.halfUsers = halfUsers;
+  data.arpu = arpu;
+  data.campsPct = campsPct;
+
+  // Update offer pct
+  document.getElementById('offer_pct').textContent = (+document.getElementById('s_campsPct').value)+'% of net revenue — all subscriptions, all channels';
+
+  renderTable(years);
+  renderChart(years);
+  renderBigStats(years);
+  renderCampsValue(years, premiumUsers, halfUsers, campsPct, arpu);
+  renderSensitivity(campsBase, premiumPct, orgConvPct, arpu, platFee, campsPct, orgDownloads/Math.pow(ORG_GROWTH,4), CHURN, ORG_GROWTH, arpuHalf, arpuFull, claimRate, halfConv, freeConv);
+}
+
+function renderTable(years){
+  const YLABELS = ['Year 1\n(Launch)','Year 2\n(Converts)','Year 3','Year 4','Year 5'];
+  document.getElementById('yearBody').innerHTML = years.map((yr,i) => `
+    <tr>
+      <td style="white-space:pre;">${YLABELS[i]}</td>
+      <td class="hl">${fmtN(yr.totalUsers)}</td>
+      <td class="hl">${fmtN(yr.paid)}</td>
+      <td>${fmt(yr.gross)}</td>
+      <td class="hl">${fmt(yr.net)}</td>
+      <td class="amber">${fmt(yr.camps)}</td>
+      <td class="teal">${fmt(yr.gottago)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderChart(years){
+  const maxVal = Math.max(...years.map(y=>y.net));
+  const H = 160;
+  const CAMP_COLOR = '#00E896';
+  document.getElementById('chartArea').innerHTML = years.map((yr,i) => {
+    const totalH = Math.max(4, (yr.net/maxVal)*H);
+    const campsH = Math.max(2, (yr.camps/maxVal)*H);
+    // Rough segment heights
+    // organic segment = ~30% of bar, half=~30%, free=rest
+    const segs = [
+      {h: Math.max(2,totalH*0.25), color:'var(--purple)'},
+      {h: Math.max(2,totalH*0.3), color:'var(--amber)'},
+      {h: Math.max(2,totalH*0.45), color:'var(--teal)'},
+    ];
+    const segHtml = i===0
+      ? `<div style="height:${totalH}px;background:rgba(0,255,209,.3);border-radius:4px 4px 0 0;flex:1;"></div>`
+      : segs.map((s,j) => `<div style="height:${s.h}px;background:${s.color};${j===0?'border-radius:4px 4px 0 0;':''}width:100%;"></div>`).reverse().join('');
+
+    return `
+      <div class="bar-col">
+        <div class="bar-stack" style="height:${H+20}px;display:flex;flex-direction:column;justify-content:flex-end;width:100%;position:relative;">
+          <div class="bar-total-val">${fmt(yr.net)}</div>
+          <div style="display:flex;align-items:flex-end;gap:2px;width:100%;">
+            <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:${totalH}px;">${segHtml}</div>
+            <div style="width:8px;height:${campsH}px;background:${CAMP_COLOR};border-radius:3px 3px 0 0;flex-shrink:0;" title="Camps AU"></div>
+          </div>
+        </div>
+        <div class="bar-year">Y${yr.y}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderBigStats(years){
+  const y3 = years[2];
+  const y5 = years[4];
+  const totalCamps = years.reduce((s,y)=>s+y.camps,0);
+  document.getElementById('bigStats').innerHTML = `
+    <div class="big-stat highlight"><div class="bs-val teal">${fmtN(y3.paid)}</div><div class="bs-key">Year 3 Paid Subs</div></div>
+    <div class="big-stat highlight"><div class="bs-val teal">${fmt(y5.net)}</div><div class="bs-key">Year 5 Net Revenue</div></div>
+    <div class="big-stat"><div class="bs-val amber">${fmt(totalCamps)}</div><div class="bs-key">5yr Camps AU Total</div></div>
+  `;
+}
+
+function renderCampsValue(years, premUsers, halfUsers, campsPct, arpu){
+  const y1=years[0], y3=years[2];
+  const totalCamps3 = years.slice(0,3).reduce((s,y)=>s+y.camps,0);
+  const freeVal = Math.round(premUsers * arpu); // value of free subs given
+  document.getElementById('campsResultGrid').innerHTML = `
+    <div class="result-box camps"><div class="rb-label">Year 1 Cash</div><div class="rb-val" style="color:var(--amber)">${fmt(y1.camps)}</div><div class="rb-sub">Guaranteed minimum</div></div>
+    <div class="result-box camps"><div class="rb-label">Year 3 Cash</div><div class="rb-val" style="color:var(--amber)">${fmt(y3.camps)}</div><div class="rb-sub">Rev share (no cap)</div></div>
+    <div class="result-box gottago"><div class="rb-label">3yr Camps AU Total</div><div class="rb-val" style="color:var(--teal)">${fmt(totalCamps3)}</div><div class="rb-sub">Cash payments</div></div>
+    <div class="result-box gottago"><div class="rb-label">Free Pro gifted to members</div><div class="rb-val" style="color:var(--green)">${fmt(freeVal)}</div><div class="rb-sub">Retail value of free subs</div></div>
+  `;
+}
+
+function renderSensitivity(campsBase,premPct,orgConv,arpu,platFee,campsPct,orgDLBase,churn,orgGrowth,arpuHalf,arpuFull,claimRate,halfConv,freeConv){
+  // Vary capture rate from 10% to 40% across both premium + claim
+  const captures = [0.10, 0.15, 0.20, 0.25, 0.30, 0.40];
+  const capLabels = ['10%','15%','20% ← Base','25%','30%','40%'];
+
+  function calcY3Net(capPct){
+    const prem = Math.round(campsBase * capPct);
+    const half = Math.round(campsBase * capPct * 0.8);
+    const orgDL = Math.round(orgDLBase * Math.pow(orgGrowth, 2));
+    const retained = Math.round((Math.round(prem*freeConv)+Math.round(half*halfConv)+Math.round(orgDLBase*orgConv))*(1-churn));
+    const newOrg = Math.round(orgDL * orgConv);
+    const paid = retained + newOrg;
+    const gross = paid * arpuFull;
+    return Math.round(gross * (1-platFee));
+  }
+
+  const orgScenarios = [
+    { label:'Low organic (4k/yr)', mult:0.5 },
+    { label:'Base organic (8k/yr)', mult:1 },
+    { label:'High organic (20k/yr)', mult:2.5 },
+  ];
+
+  document.getElementById('sensTable').innerHTML = `
+    <thead>
+      <tr>
+        <th>Capture rate</th>
+        ${orgScenarios.map(o=>`<th>${o.label}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>
+      ${captures.map((cap,i) => `
+        <tr>
+          <td>${capLabels[i]}</td>
+          ${orgScenarios.map((o,j) => {
+            const net = calcY3Net(cap);
+            const camps = Math.max(net*campsPct, 3000);
+            const gt = net - camps;
+            const cls = j===0?'cell-low':j===1?'cell-mid':'cell-high';
+            return `<td class="${cls}">${fmt(gt)}<br><span style="font-size:10px;color:var(--amber)">${fmt(camps)} CA</span></td>`;
+          }).join('')}
+        </tr>
+      `).join('')}
+    </tbody>
+  `;
+}
+
+// Init
+recalc();
+</script>
+</body>
+</html>
