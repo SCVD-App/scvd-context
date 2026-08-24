@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GottaGo — Feature Demo v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --earth:#090D0C; --earth2:#111916; --earth3:#182320;
+  --teal:#00FFD1; --teal-dim:#00B894; --teal-glow:rgba(0,255,209,0.3); --teal-ghost:rgba(0,255,209,0.08);
+  --amber:#FFB830; --amber-dim:#E07B00; --amber-ghost:rgba(255,184,48,0.1);
+  --red:#FF3B5C; --red-glow:rgba(255,59,92,0.4); --red-ghost:rgba(255,59,92,0.1);
+  --green:#00E896; --green-nav:#00C851; --green-glow:rgba(0,200,81,0.4);
+  --gold:#C9A84C; --purple:#A78BFA;
+  --text:#E8F5F2; --text-dim:#7BA89E; --text-ghost:rgba(232,245,242,0.35);
+  --card:rgba(20,32,28,0.96); --border:rgba(0,255,209,0.12); --border2:rgba(255,255,255,0.07);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+html,body{width:100%;height:100%;overflow:hidden;}
+body{font-family:'Outfit',sans-serif;background:var(--earth);color:var(--text);position:relative;}
+.phone{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden;background:var(--earth);}
+
+/* NAV FLASH */
+.nav-flash{position:fixed;inset:0;pointer-events:none;z-index:1000;opacity:0;}
+.nav-flash.port{background:radial-gradient(ellipse 65% 100% at 0% 50%,rgba(255,59,92,0.6) 0%,rgba(255,59,92,0.28) 30%,transparent 68%);}
+.nav-flash.starboard{background:radial-gradient(ellipse 65% 100% at 100% 50%,rgba(0,200,81,0.6) 0%,rgba(0,200,81,0.28) 30%,transparent 68%);}
+
+#mapBg{position:absolute;inset:0;width:100%;height:100%;z-index:0;}
+
+/* TOPBAR */
+.topbar{position:relative;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:48px 18px 12px;background:linear-gradient(180deg,rgba(9,13,12,.98) 0%,transparent 100%);flex-shrink:0;}
+.logo-wrap{display:flex;align-items:center;gap:10px;}
+.logo-mark{width:38px;height:38px;background:var(--teal);border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 0 20px var(--teal-glow);animation:breathe 3s ease-in-out infinite;}
+@keyframes breathe{0%,100%{box-shadow:0 0 20px var(--teal-glow);}50%{box-shadow:0 0 40px rgba(0,255,209,.6),0 0 70px rgba(0,255,209,.2);}}
+.logo-name{font-family:'Clash Display',sans-serif;font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.5px;}
+.logo-name span{color:var(--teal);}
+.logo-sub{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.8px;margin-top:2px;}
+.demo-badge{background:rgba(255,184,48,.15);border:1px solid rgba(255,184,48,.3);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;color:var(--amber);letter-spacing:.5px;}
+
+/* MAP PINS */
+.map-pins{position:absolute;inset:0;z-index:10;pointer-events:none;}
+.pin{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;pointer-events:auto;cursor:pointer;}
+.pin-bubble{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px 10px;display:flex;align-items:center;gap:6px;backdrop-filter:blur(12px);box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:nowrap;}
+.pin-bubble.locked{border-color:var(--teal);box-shadow:0 0 20px var(--teal-glow),0 4px 20px rgba(0,0,0,.5);background:rgba(0,255,209,.1);}
+.pin-bubble.dim{opacity:.35;filter:grayscale(0.5);}
+.pin-bubble.scanned{animation:pin-found .5s cubic-bezier(.34,1.56,.64,1) both;}
+@keyframes pin-found{0%{transform:scale(.5);opacity:0;}100%{transform:scale(1);opacity:1;}}
+.pin-icon{font-size:16px;} .pin-dist{font-size:11px;font-weight:700;color:var(--teal);}
+.pin-dist.amber{color:var(--amber);} .pin-dist.green{color:var(--green);}
+.pin-name{font-size:10px;color:var(--text-dim);}
+.pin-pulse-ring{position:absolute;width:100%;height:100%;border-radius:12px;border:2px solid var(--teal);animation:ring-pulse 1.8s ease-out infinite;}
+@keyframes ring-pulse{0%{transform:scale(1);opacity:.6;}100%{transform:scale(1.6);opacity:0;}}
+
+/* LOCK CROSSHAIR */
+.lock-crosshair{position:absolute;width:60px;height:60px;transform:translate(-50%,-50%) scale(0);opacity:0;transition:all .4s cubic-bezier(.34,1.56,.64,1);z-index:15;pointer-events:none;}
+.lock-crosshair.visible{transform:translate(-50%,-50%) scale(1);opacity:1;}
+.lc-ring{position:absolute;inset:0;border-radius:50%;border:2px solid var(--teal);animation:lc-spin 2s linear infinite;}
+@keyframes lc-spin{to{transform:rotate(360deg);}}
+.lc-ring::before,.lc-ring::after{content:'';position:absolute;width:8px;height:2px;background:var(--teal);top:50%;left:-8px;transform:translateY(-50%);box-shadow:66px 0 0 var(--teal);}
+.lc-ring::after{width:2px;height:8px;top:-8px;left:50%;transform:translateX(-50%);box-shadow:0 66px 0 var(--teal);}
+.lc-dot{position:absolute;width:8px;height:8px;background:var(--teal);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);box-shadow:0 0 12px var(--teal-glow);}
+
+/* BOTTOM SHEET */
+.bottom-sheet{position:absolute;bottom:0;left:0;right:0;z-index:20;padding:0 0 24px;background:linear-gradient(0deg,rgba(9,13,12,.99) 0%,rgba(9,13,12,0) 100%);}
+
+/* SONAR SECTION */
+.sonar-section{margin:0 16px 12px;display:flex;gap:12px;align-items:center;}
+.sonar-btn{position:relative;width:72px;height:72px;flex-shrink:0;cursor:pointer;}
+.sonar-btn-core{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 35% 35%,#00FFD1,#007A6E);display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 0 24px var(--teal-glow),0 4px 16px rgba(0,0,0,.4);transition:transform .15s,box-shadow .15s;z-index:2;}
+.sonar-btn:active .sonar-btn-core{transform:scale(.92);}
+.sonar-btn.scanning .sonar-btn-core{animation:sonar-core-pulse .8s ease-in-out infinite;}
+@keyframes sonar-core-pulse{0%,100%{box-shadow:0 0 40px rgba(0,255,209,.8),0 4px 16px rgba(0,0,0,.4);}50%{box-shadow:0 0 60px rgba(0,255,209,1),0 0 100px rgba(0,255,209,.3),0 4px 16px rgba(0,0,0,.4);}}
+.sonar-ring{position:absolute;inset:0;border-radius:50%;border:2px solid var(--teal);opacity:0;transform:scale(1);}
+.sonar-btn.scanning .sonar-ring:nth-child(1){animation:sonar-expand var(--speed,1.2s) ease-out infinite 0s;}
+.sonar-btn.scanning .sonar-ring:nth-child(2){animation:sonar-expand var(--speed,1.2s) ease-out infinite calc(var(--speed,1.2s) * 0.33);}
+.sonar-btn.scanning .sonar-ring:nth-child(3){animation:sonar-expand var(--speed,1.2s) ease-out infinite calc(var(--speed,1.2s) * 0.66);}
+@keyframes sonar-expand{0%{transform:scale(1);opacity:.8;}100%{transform:scale(3.5);opacity:0;}}
+
+.sonar-info{flex:1;}
+.sonar-title{font-family:'Clash Display',sans-serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:3px;}
+.sonar-status{font-size:12px;color:var(--text-dim);line-height:1.4;transition:color .3s;}
+.sonar-status.active{color:var(--teal);}
+.sonar-status.locked{color:var(--amber);font-weight:600;}
+.sonar-status.emergency{color:var(--red);font-weight:700;}
+
+/* URGENCY DOTS */
+.urgency-row{display:flex;gap:6px;margin-top:8px;align-items:center;}
+.urgency-dot{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);cursor:pointer;transition:all .25s;flex-shrink:0;}
+.urgency-dot.u1.active{background:var(--green);border-color:var(--green);box-shadow:0 0 8px rgba(0,232,150,.7);}
+.urgency-dot.u2.active{background:#a3e030;border-color:#a3e030;box-shadow:0 0 8px rgba(163,224,48,.7);}
+.urgency-dot.u3.active{background:var(--amber);border-color:var(--amber);box-shadow:0 0 8px rgba(255,184,48,.7);}
+.urgency-dot.u4.active{background:#e87020;border-color:#e87020;box-shadow:0 0 8px rgba(232,112,32,.7);}
+.urgency-dot.u5.active{background:var(--red);border-color:var(--red);box-shadow:0 0 10px rgba(255,59,92,.9);animation:dot-panic .4s ease-in-out infinite alternate;}
+@keyframes dot-panic{0%{transform:scale(1);}100%{transform:scale(1.3);box-shadow:0 0 16px rgba(255,59,92,1);}}
+.urgency-label-text{font-size:10px;color:var(--text-dim);margin-left:4px;transition:color .3s;}
+
+/* ALGORITHM BADGE */
+.algo-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:10px;font-weight:600;
+  padding:3px 9px;border-radius:20px;
+  margin-top:6px;
+  transition:all .3s;
+}
+
+/* RESULTS AREA */
+.results-area{
+  margin:0 16px 12px;
+  transition:all .4s;
+}
+
+/* QUALITY LIST (urgency 1-3) */
+.quality-list{
+  display:flex;flex-direction:column;gap:8px;
+}
+
+.ql-card{
+  background:var(--card);
+  border:1px solid var(--border2);
+  border-radius:16px;
+  padding:12px 14px;
+  display:flex;gap:10px;align-items:center;
+  backdrop-filter:blur(16px);
+  cursor:pointer;
+  transition:all .25s;
+  transform:translateY(20px);
+  opacity:0;
+  position:relative;
+  overflow:hidden;
+}
+.ql-card.visible{transform:translateY(0);opacity:1;}
+.ql-card.best{border-color:var(--teal);}
+.ql-card.best::before{content:'BEST';position:absolute;top:0;right:0;background:var(--teal);color:var(--earth);font-size:8px;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:0 16px 0 8px;}
+
+.ql-icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;}
+.ql-icon.type-public{background:var(--teal-ghost);}
+.ql-icon.type-servo{background:var(--amber-ghost);}
+.ql-icon.type-cafe{background:rgba(167,139,250,.1);}
+.ql-icon.type-camp{background:rgba(0,232,150,.1);}
+
+.ql-info{flex:1;min-width:0;}
+.ql-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ql-lords{font-size:10px;color:var(--gold);margin-top:2px;}
+.ql-pills{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;}
+.pill{font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;}
+.pill-green{background:rgba(0,232,150,.12);color:var(--green);}
+.pill-teal{background:var(--teal-ghost);color:var(--teal-dim);}
+.pill-amber{background:var(--amber-ghost);color:var(--amber);}
+.pill-purple{background:rgba(167,139,250,.12);color:var(--purple);}
+
+.ql-right{text-align:right;flex-shrink:0;}
+.ql-dist{font-family:'Clash Display',sans-serif;font-size:16px;font-weight:700;color:var(--text);line-height:1;}
+.ql-unit{font-size:10px;color:var(--text-dim);}
+.ql-time{font-size:10px;color:var(--text-dim);margin-top:2px;}
+.ql-stars{font-size:11px;color:var(--amber);margin-top:3px;}
+.ql-go{margin-top:6px;background:rgba(0,255,209,.12);border:1px solid var(--border);color:var(--teal);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;display:block;width:100%;text-align:center;}
+
+/* EMERGENCY CARD (urgency 5) */
+.emergency-card{
+  background:linear-gradient(135deg,rgba(255,59,92,.12),rgba(255,59,92,.05));
+  border:2px solid var(--red);
+  border-radius:20px;
+  padding:18px;
+  backdrop-filter:blur(20px);
+  transform:translateY(30px);
+  opacity:0;
+  transition:all .4s cubic-bezier(.34,1.2,.64,1);
+  position:relative;
+  overflow:hidden;
+  box-shadow:0 0 30px rgba(255,59,92,.2);
+}
+.emergency-card.visible{transform:translateY(0);opacity:1;}
+.emergency-card::before{content:'🚨 NEAREST OPEN LOO';position:absolute;top:0;left:0;right:0;background:var(--red);color:white;font-size:10px;font-weight:700;letter-spacing:1.5px;padding:5px;text-align:center;}
+.ec-content{margin-top:24px;display:flex;gap:14px;align-items:center;}
+.ec-icon{width:54px;height:54px;background:rgba(255,59,92,.15);border:1px solid rgba(255,59,92,.3);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;}
+.ec-info{flex:1;min-width:0;}
+.ec-name{font-family:'Clash Display',sans-serif;font-size:17px;font-weight:700;color:var(--text);}
+.ec-address{font-size:11px;color:var(--text-dim);margin-top:3px;}
+.ec-open{font-size:12px;font-weight:600;color:var(--green);margin-top:5px;display:flex;align-items:center;gap:5px;}
+.ec-right{text-align:right;flex-shrink:0;}
+.ec-dist{font-family:'Clash Display',sans-serif;font-size:28px;font-weight:700;color:white;line-height:1;}
+.ec-unit{font-size:11px;color:rgba(255,255,255,.6);}
+.ec-time{font-size:12px;color:rgba(255,255,255,.6);margin-top:3px;}
+.ec-go-btn{
+  margin-top:14px;
+  background:var(--red);
+  color:white;
+  border:none;
+  border-radius:14px;
+  padding:16px;
+  font-family:'Clash Display',sans-serif;
+  font-size:20px;font-weight:700;
+  cursor:pointer;
+  width:100%;
+  text-align:center;
+  box-shadow:0 6px 24px rgba(255,59,92,.4);
+  animation:ec-pulse 1s ease-in-out infinite;
+  letter-spacing:.5px;
+}
+@keyframes ec-pulse{0%,100%{box-shadow:0 6px 24px rgba(255,59,92,.4);}50%{box-shadow:0 6px 40px rgba(255,59,92,.7),0 0 60px rgba(255,59,92,.2);}}
+.ec-go-btn:active{transform:scale(.97);}
+
+/* URGENCY 4 CARD */
+.urgent-card{
+  background:linear-gradient(135deg,rgba(232,112,32,.1),rgba(255,184,48,.05));
+  border:1px solid rgba(232,112,32,.4);
+  border-radius:18px;
+  padding:14px 16px;
+  backdrop-filter:blur(20px);
+  transform:translateY(20px);
+  opacity:0;
+  transition:all .4s cubic-bezier(.34,1.2,.64,1);
+  position:relative;
+  overflow:hidden;
+}
+.urgent-card.visible{transform:translateY(0);opacity:1;}
+.urgent-card::before{content:'⚡ NEAREST OPEN';position:absolute;top:0;right:0;background:rgba(232,112,32,.9);color:white;font-size:8px;font-weight:700;letter-spacing:1px;padding:4px 10px;border-radius:0 18px 0 8px;}
+.uc-main{display:flex;gap:12px;align-items:center;margin-bottom:10px;}
+.uc-icon{width:46px;height:46px;background:rgba(232,112,32,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.uc-info{flex:1;min-width:0;}
+.uc-name{font-size:14px;font-weight:600;color:var(--text);}
+.uc-address{font-size:11px;color:var(--text-dim);margin-top:2px;}
+.uc-right{text-align:right;flex-shrink:0;}
+.uc-dist{font-family:'Clash Display',sans-serif;font-size:20px;font-weight:700;color:white;}
+.uc-unit{font-size:10px;color:var(--text-dim);}
+.uc-time{font-size:11px;color:var(--text-dim);margin-top:2px;}
+.uc-go{background:linear-gradient(135deg,#e87020,var(--amber));color:var(--earth);border:none;border-radius:12px;padding:12px;font-family:'Clash Display',sans-serif;font-size:16px;font-weight:700;cursor:pointer;width:100%;text-align:center;box-shadow:0 4px 16px rgba(232,112,32,.35);}
+
+/* NAV SECTION */
+.nav-section{margin:0 16px 0;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:12px 14px;backdrop-filter:blur(20px);}
+.nav-section-title{font-family:'Clash Display',sans-serif;font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.nav-title-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.nav-controls{display:flex;gap:10px;margin-bottom:10px;}
+.nav-btn{flex:1;padding:10px 8px;border-radius:12px;border:2px solid transparent;cursor:pointer;font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;transition:all .25s;display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(255,255,255,.04);}
+.nav-btn.port{border-color:rgba(255,59,92,.3);color:var(--red);}
+.nav-btn.port.active{background:rgba(255,59,92,.12);border-color:var(--red);box-shadow:0 0 20px rgba(255,59,92,.2);}
+.nav-btn.starboard{border-color:rgba(0,200,81,.3);color:var(--green-nav);}
+.nav-btn.starboard.active{background:rgba(0,200,81,.12);border-color:var(--green-nav);box-shadow:0 0 20px rgba(0,200,81,.2);}
+.nb-icon{font-size:20px;} .nb-label{font-size:10px;letter-spacing:.5px;} .nb-turn{font-size:9px;opacity:.7;}
+.proximity-row{display:flex;align-items:center;gap:10px;}
+.prox-label{font-size:10px;color:var(--text-dim);white-space:nowrap;flex-shrink:0;}
+.prox-track{flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px;cursor:pointer;position:relative;overflow:visible;}
+.prox-fill{height:100%;border-radius:3px;width:20%;background:linear-gradient(90deg,var(--green-nav),var(--amber),var(--red));transition:width .1s;position:relative;}
+.prox-fill::after{content:'';position:absolute;right:-7px;top:50%;transform:translateY(-50%);width:16px;height:16px;background:white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+.prox-dist-label{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;flex-shrink:0;min-width:42px;text-align:right;}
+
+/* BOTTOM NAV */
+.bottom-nav{display:flex;margin:10px 16px 0;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:8px 6px;backdrop-filter:blur(20px);gap:2px;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border-radius:13px;cursor:pointer;opacity:.4;transition:all .2s;}
+.nav-item.active{opacity:1;background:var(--teal-ghost);border:1px solid var(--border);}
+.nav-item.active .ni-label{color:var(--teal);}
+.ni-icon{font-size:18px;} .ni-label{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);}
+
+/* SCAN SVG */
+.scan-sweep{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:8;opacity:0;}
+.scan-sweep.active{opacity:1;}
+
+/* GRAIN */
+.grain{position:fixed;inset:-50%;width:200%;height:200%;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:.5;pointer-events:none;z-index:2;animation:grain 8s steps(10) infinite;}
+@keyframes grain{0%,100%{transform:translate(0,0)}10%{transform:translate(-2%,-3%)}30%{transform:translate(3%,2%)}50%{transform:translate(-1%,4%)}70%{transform:translate(2%,-1%)}90%{transform:translate(-3%,1%)}}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="nav-flash port" id="portFlash"></div>
+<div class="nav-flash starboard" id="starboardFlash"></div>
+
+<div class="phone">
+  <canvas id="mapBg" style="position:absolute;inset:0;width:100%;height:100%;z-index:0;"></canvas>
+
+  <svg class="scan-sweep" id="scanSvg" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice">
+    <circle id="sc1" cx="200" cy="400" r="0" fill="none" stroke="#00FFD1" stroke-width="1.5" opacity="0"/>
+    <circle id="sc2" cx="200" cy="400" r="0" fill="none" stroke="#00FFD1" stroke-width="1" opacity="0"/>
+    <circle id="sc3" cx="200" cy="400" r="0" fill="none" stroke="#00FFD1" stroke-width=".5" opacity="0"/>
+    <line id="sweepLine" x1="200" y1="400" x2="200" y2="80" stroke="#00FFD1" stroke-width="1.5" opacity="0" style="transform-origin:200px 400px;"/>
+  </svg>
+
+  <div class="map-pins" id="mapPins"></div>
+  <div class="lock-crosshair" id="lockCross" style="left:42%;top:36%;">
+    <div class="lc-ring"></div><div class="lc-dot"></div>
+  </div>
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo-wrap">
+      <div class="logo-mark">🚻</div>
+      <div>
+        <div class="logo-name">Gotta<span>Go</span></div>
+        <div class="logo-sub">Feature Demo v2</div>
+      </div>
+    </div>
+    <div class="demo-badge">⚡ DEMO</div>
+  </div>
+
+  <!-- BOTTOM SHEET -->
+  <div class="bottom-sheet">
+
+    <!-- SONAR + URGENCY -->
+    <div class="sonar-section">
+      <div class="sonar-btn" id="sonarBtn" onclick="activateSonar()">
+        <div class="sonar-ring"></div>
+        <div class="sonar-ring"></div>
+        <div class="sonar-ring"></div>
+        <div class="sonar-btn-core">📡</div>
+      </div>
+      <div class="sonar-info">
+        <div class="sonar-title">GottaGo Sonar</div>
+        <div class="sonar-status" id="sonarStatus">Tap to scan — urgency sets the filter</div>
+        <div class="urgency-row">
+          <div class="urgency-dot u1" id="ud1" onclick="setUrgency(1)"></div>
+          <div class="urgency-dot u2" id="ud2" onclick="setUrgency(2)"></div>
+          <div class="urgency-dot u3" id="ud3" onclick="setUrgency(3)"></div>
+          <div class="urgency-dot u4" id="ud4" onclick="setUrgency(4)"></div>
+          <div class="urgency-dot u5" id="ud5" onclick="setUrgency(5)"></div>
+          <div class="urgency-label-text" id="urgLbl">😎 All good</div>
+        </div>
+        <div class="algo-badge" id="algoBadge">⭐⭐⭐⭐⭐ Showing highest-rated</div>
+      </div>
+    </div>
+
+    <!-- RESULTS AREA -->
+    <div class="results-area" id="resultsArea" style="display:none;"></div>
+
+    <!-- NAV LIGHTS -->
+    <div class="nav-section">
+      <div class="nav-section-title">
+        <div class="nav-title-dot" style="background:var(--red);box-shadow:0 0 8px var(--red-glow);"></div>
+        Port / Starboard Turn Alerts
+        <div class="nav-title-dot" style="background:var(--green-nav);box-shadow:0 0 8px var(--green-glow);"></div>
+      </div>
+      <div class="nav-controls">
+        <div class="nav-btn port" id="portBtn" onclick="activateNav('port')">
+          <div class="nb-icon">🔴</div>
+          <div class="nb-label">PORT</div>
+          <div class="nb-turn">← Left turn</div>
+        </div>
+        <div class="nav-btn starboard" id="starboardBtn" onclick="activateNav('starboard')">
+          <div class="nb-icon">🟢</div>
+          <div class="nb-label">STARBOARD</div>
+          <div class="nb-turn">Right turn →</div>
+        </div>
+      </div>
+      <div class="proximity-row">
+        <div class="prox-label">Turn in</div>
+        <div class="prox-track" id="proxTrack">
+          <div class="prox-fill" id="proxFill"></div>
+        </div>
+        <div class="prox-dist-label" id="proxLabel">500m</div>
+      </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <div class="bottom-nav">
+      <div class="nav-item active"><span class="ni-icon">🗺️</span><span class="ni-label">Map</span></div>
+      <div class="nav-item"><span class="ni-icon">🧭</span><span class="ni-label">Route</span></div>
+      <div class="nav-item"><span class="ni-icon">🔍</span><span class="ni-label">Nearby</span></div>
+      <div class="nav-item"><span class="ni-icon">🎙️</span><span class="ni-label">Avatar</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══ DATA ══════════════════════════════════════════════════════════ */
+const FACILITIES = [
+  { id:0, left:'42%', top:'36%', icon:'🚻', type:'public',  name:'Woombye Park Toilets',      address:'Woombye Recreation Reserve', dist:1.2, time:'~2 min',  stars:4, lords:'Throne Room 👑',    open:true,  free:true,  accessible:true,  nearest:true  },
+  { id:1, left:'67%', top:'50%', icon:'⛽', type:'servo',   name:'Caltex Eudlo',               address:'Eudlo Station Rd, Eudlo',    dist:3.8, time:'~5 min',  stars:3, lords:'The Loo 🚻',         open:true,  free:true,  accessible:false, nearest:false },
+  { id:2, left:'26%', top:'58%', icon:'🏕️', type:'camp',   name:'Eudlo Creek Rest Area',      address:'Bruce Hwy, Eudlo QLD',       dist:5.1, time:'~7 min',  stars:4, lords:'Throne Room 👑',    open:true,  free:true,  accessible:true,  nearest:false },
+  { id:3, left:'55%', top:'28%', icon:'☕', type:'cafe',   name:'Mapleton Coffee Roasters',   address:'Obi Obi Rd, Mapleton',       dist:12.1,time:'~16 min', stars:5, lords:'House of Lords 🏛️', open:true,  free:false, accessible:true,  nearest:false },
+  { id:4, left:'18%', top:'42%', icon:'🛒', type:'council',name:'Nambour Shopping Centre',    address:'Currie St, Nambour',         dist:8.4, time:'~11 min', stars:4, lords:'House of Lords 🏛️', open:true,  free:true,  accessible:true,  nearest:false },
+];
+
+/* Urgency filter logic */
+const URGENCY_CONFIG = [
+  { label:'😎 All good',       color:'var(--green)',  speed:2.0, minStars:5, maxResults:4, badge:'⭐⭐⭐⭐⭐ Highest-rated only',    badgeBg:'rgba(0,232,150,.12)',  badgeColor:'var(--green)',  scanMsg:'Scanning for 5-star facilities...' },
+  { label:'🤔 Getting there',  color:'#a3e030',       speed:1.4, minStars:4, maxResults:4, badge:'⭐⭐⭐⭐ 4 stars and above',       badgeBg:'rgba(163,224,48,.12)', badgeColor:'#a3e030',       scanMsg:'Filtering to 4+ star facilities...' },
+  { label:'😬 Fairly urgent',  color:'var(--amber)',  speed:0.9, minStars:3, maxResults:3, badge:'⭐⭐⭐ 3 stars and above',        badgeBg:'rgba(255,184,48,.12)', badgeColor:'var(--amber)',  scanMsg:'Scanning — 3+ star facilities...' },
+  { label:'😰 Pretty urgent!', color:'#e87020',       speed:0.5, minStars:1, maxResults:2, badge:'⚡ Any open facility, nearest first', badgeBg:'rgba(232,112,32,.12)', badgeColor:'#e87020',    scanMsg:'Any open facility — sorting by distance...' },
+  { label:'🚨 FIND ONE NOW',   color:'var(--red)',    speed:0.2, minStars:0, maxResults:1, badge:'🚨 NEAREST OPEN — no filter',  badgeBg:'rgba(255,59,92,.12)',  badgeColor:'var(--red)',    scanMsg:'EMERGENCY — finding nearest open loo...' },
+];
+
+let urgency = 1;
+let sonarActive = false;
+let sonarTimer = null;
+let sweepAnimId = null;
+
+/* ══ URGENCY ════════════════════════════════════════════════════════ */
+function setUrgency(level) {
+  urgency = level;
+  const cfg = URGENCY_CONFIG[level-1];
+  for (let i=1;i<=5;i++) {
+    document.getElementById(`ud${i}`).classList.toggle('active', i <= level);
+  }
+  const lbl = document.getElementById('urgLbl');
+  lbl.textContent = cfg.label;
+  lbl.style.color = cfg.color;
+
+  const badge = document.getElementById('algoBadge');
+  badge.textContent = cfg.badge;
+  badge.style.background = cfg.badgeBg;
+  badge.style.color = cfg.badgeColor;
+  badge.style.border = `1px solid ${cfg.badgeColor.replace('var(','').replace(')','') === cfg.badgeColor ? cfg.badgeColor + '55' : cfg.badgeColor}`;
+
+  // Update sonar speed if scanning
+  const btn = document.getElementById('sonarBtn');
+  if (btn.classList.contains('scanning')) {
+    btn.style.setProperty('--speed', cfg.speed + 's');
+  }
+
+  // Clear results
+  hideResults();
+}
+
+setUrgency(1);
+
+/* ══ FILTERED RESULTS LOGIC ═════════════════════════════════════════ */
+function getFilteredFacilities() {
+  const cfg = URGENCY_CONFIG[urgency-1];
+  let filtered = FACILITIES.filter(f => f.open && f.stars >= cfg.minStars);
+  // Sort: urgency 4-5 = by distance, else by stars desc then distance
+  if (urgency >= 4) {
+    filtered.sort((a,b) => a.dist - b.dist);
+  } else {
+    filtered.sort((a,b) => b.stars - a.stars || a.dist - b.dist);
+  }
+  return filtered.slice(0, cfg.maxResults);
+}
+
+/* ══ RESULTS RENDERING ══════════════════════════════════════════════ */
+function showResults() {
+  const area = document.getElementById('resultsArea');
+  area.style.display = 'block';
+  const facilities = getFilteredFacilities();
+
+  if (urgency === 5) {
+    // EMERGENCY — single card, full red
+    const f = facilities[0];
+    area.innerHTML = `
+      <div class="emergency-card" id="ec">
+        <div class="ec-content">
+          <div class="ec-icon">${f.icon}</div>
+          <div class="ec-info">
+            <div class="ec-name">${f.name}</div>
+            <div class="ec-address">${f.address}</div>
+            <div class="ec-open">✅ Open now · ${f.free ? 'Free' : 'Paid'}</div>
+          </div>
+          <div class="ec-right">
+            <div class="ec-dist">${f.dist}<span class="ec-unit"> km</span></div>
+            <div class="ec-time">${f.time}</div>
+          </div>
+        </div>
+        <button class="ec-go-btn">🚨 GO NOW — ${f.dist} km</button>
+      </div>`;
+    setTimeout(() => document.getElementById('ec').classList.add('visible'), 50);
+
+  } else if (urgency === 4) {
+    // URGENT — compact, orange, nearest shown prominently
+    const f = facilities[0];
+    const others = facilities.slice(1);
+    area.innerHTML = `
+      <div class="urgent-card" id="uc">
+        <div class="uc-main">
+          <div class="uc-icon">${f.icon}</div>
+          <div class="uc-info">
+            <div class="uc-name">${f.name}</div>
+            <div class="uc-address">${f.address}</div>
+          </div>
+          <div class="uc-right">
+            <div class="uc-dist">${f.dist}<span class="uc-unit"> km</span></div>
+            <div class="uc-time">${f.time}</div>
+          </div>
+        </div>
+        <button class="uc-go">⚡ Go — ${f.dist} km away</button>
+        ${others.length ? `<div style="font-size:10px;color:var(--text-dim);margin-top:8px;text-align:center;">Also open: ${others.map(o=>`${o.icon} ${o.name} (${o.dist}km)`).join(' · ')}</div>` : ''}
+      </div>`;
+    setTimeout(() => document.getElementById('uc').classList.add('visible'), 50);
+
+  } else {
+    // QUALITY LIST — sorted by stars, show rating, lords scale
+    const starStr = (n) => '★'.repeat(n) + '☆'.repeat(5-n);
+    area.innerHTML = `<div class="quality-list">${facilities.map((f,i) => `
+      <div class="ql-card ${i===0?'best':''}" id="qlc${i}" style="transition-delay:${i*0.12}s">
+        <div class="ql-icon type-${f.type}">${f.icon}</div>
+        <div class="ql-info">
+          <div class="ql-name">${f.name}</div>
+          <div class="ql-lords">${f.lords}</div>
+          <div class="ql-pills">
+            <span class="pill pill-green">${f.open?'Open':'Closed'}</span>
+            ${f.free?'<span class="pill pill-teal">Free</span>':'<span class="pill pill-amber">Paid</span>'}
+            ${f.accessible?'<span class="pill pill-purple">♿</span>':''}
+          </div>
+        </div>
+        <div class="ql-right">
+          <div class="ql-dist">${f.dist}<span class="ql-unit"> km</span></div>
+          <div class="ql-time">${f.time}</div>
+          <div class="ql-stars">${starStr(f.stars)}</div>
+          <button class="ql-go">▶ Go</button>
+        </div>
+      </div>`).join('')}</div>`;
+    facilities.forEach((_,i) => {
+      setTimeout(() => document.getElementById(`qlc${i}`)?.classList.add('visible'), 80 + i*130);
+    });
+  }
+}
+
+function hideResults() {
+  const area = document.getElementById('resultsArea');
+  area.style.display = 'none';
+  area.innerHTML = '';
+  buildPins(false);
+  document.getElementById('lockCross').classList.remove('visible');
+}
+
+/* ══ MAP ════════════════════════════════════════════════════════════ */
+const canvas = document.getElementById('mapBg');
+const ctx = canvas.getContext('2d');
+let W, H, t=0;
+function resizeCanvas() { W=canvas.width=canvas.offsetWidth; H=canvas.height=canvas.offsetHeight; }
+const ROADS = [
+  {pts:[[0,.44],[.28,.40],[.55,.50],[.82,.34],[1,.28]],w:3.5,color:'rgba(0,255,209,.18)',route:true},
+  {pts:[[0,.68],[.22,.64],[.50,.54],[.76,.60],[1,.56]],w:2,color:'rgba(0,255,209,.10)'},
+  {pts:[[.30,0],[.31,.42],[.29,1]],w:2,color:'rgba(0,255,209,.08)'},
+  {pts:[[.62,0],[.60,.50],[.63,1]],w:1.5,color:'rgba(0,255,209,.06)'},
+];
+function drawRoad(r) {
+  const pts=r.pts.map(([x,y])=>[x*W,y*H]);
+  ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1;i<pts.length;i++){const mx=(pts[i-1][0]+pts[i][0])/2,my=(pts[i-1][1]+pts[i][1])/2;ctx.quadraticCurveTo(pts[i-1][0],pts[i-1][1],mx,my);}
+  ctx.strokeStyle=r.color; ctx.lineWidth=r.w; ctx.stroke();
+  if(r.route){
+    const pos=((t*.004)%1);
+    const g=ctx.createLinearGradient(0,0,W,0);
+    g.addColorStop(Math.max(0,pos-.12),'rgba(0,255,209,0)');
+    g.addColorStop(pos,'rgba(0,255,209,.7)');
+    g.addColorStop(Math.min(1,pos+.12),'rgba(0,255,209,0)');
+    ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+    for(let i=1;i<pts.length;i++){const mx=(pts[i-1][0]+pts[i][0])/2,my=(pts[i-1][1]+pts[i][1])/2;ctx.quadraticCurveTo(pts[i-1][0],pts[i-1][1],mx,my);}
+    ctx.strokeStyle=g; ctx.lineWidth=5; ctx.stroke();
+  }
+}
+let carPos=0;
+function getRoutePoint(tp) {
+  const pts=ROADS[0].pts.map(([x,y])=>[x*W,y*H]);
+  const seg=Math.min(Math.floor(tp*(pts.length-1)),pts.length-2);
+  const frac=tp*(pts.length-1)-seg;
+  const p0=pts[seg],p1=pts[seg+1];
+  return [p0[0]+(p1[0]-p0[0])*frac, p0[1]+(p1[1]-p0[1])*frac];
+}
+function frame() {
+  ctx.clearRect(0,0,W,H);
+  const bg=ctx.createRadialGradient(W*.4,H*.4,0,W*.4,H*.4,W*.9);
+  bg.addColorStop(0,'#0F1C19'); bg.addColorStop(.6,'#0A1210'); bg.addColorStop(1,'#060D0B');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(0,255,209,.03)';
+  for(let x=0;x<W;x+=32) for(let y=0;y<H;y+=32){ctx.beginPath();ctx.arc(x,y,.7,0,Math.PI*2);ctx.fill();}
+  ROADS.forEach(drawRoad);
+  [[W*.15,H*.3,'rgba(0,255,209,'],[W*.75,H*.55,'rgba(255,184,48,'],[W*.5,H*.2,'rgba(0,232,150,']].forEach(([ox,oy,col])=>{
+    const p=Math.sin(t*.018+ox)*.5+.5;
+    const g=ctx.createRadialGradient(ox,oy,0,ox,oy,80+p*30);
+    g.addColorStop(0,col+(0.05+p*.04)+')'); g.addColorStop(1,col+'0)');
+    ctx.fillStyle=g; ctx.fillRect(ox-120,oy-120,240,240);
+  });
+  carPos=(carPos+.0008)%.95;
+  const[cx,cy]=getRoutePoint(carPos);
+  ctx.beginPath(); ctx.arc(cx,cy,7,0,Math.PI*2); ctx.fillStyle='rgba(255,184,48,.25)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2);
+  const cg=ctx.createRadialGradient(cx-1,cy-1,0,cx,cy,5);
+  cg.addColorStop(0,'#FFE080'); cg.addColorStop(1,'#FFB830');
+  ctx.fillStyle=cg; ctx.fill();
+  t++; requestAnimationFrame(frame);
+}
+
+/* ══ MAP PINS ═══════════════════════════════════════════════════════ */
+function buildPins(visible=false) {
+  const filtered = visible ? getFilteredFacilities().map(f=>f.id) : [];
+  document.getElementById('mapPins').innerHTML = FACILITIES.map(f => {
+    const show = visible;
+    const isFiltered = filtered.includes(f.id);
+    const isNearest = filtered[0] === f.id;
+    const distColor = f.id===0?'teal': f.type==='servo'?'amber':'green';
+    if (!show) return '';
+    return `<div class="pin" style="left:${f.left};top:${f.top};">
+      ${isNearest?'<div class="pin-pulse-ring"></div>':''}
+      <div class="pin-bubble scanned ${isNearest?'locked':''} ${!isFiltered?'dim':''}" style="animation-delay:${f.id*.15}s">
+        <span class="pin-icon">${f.icon}</span>
+        <span class="pin-dist ${distColor}">${f.dist}km</span>
+        <span class="pin-name">${isFiltered ? (isNearest ? '★ '+f.name : f.name) : f.name + ' (filtered)'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+buildPins(false);
+
+/* ══ SONAR ══════════════════════════════════════════════════════════ */
+function activateSonar() {
+  if (sonarActive) { resetSonar(); return; }
+  sonarActive = true;
+  const btn = document.getElementById('sonarBtn');
+  const status = document.getElementById('sonarStatus');
+  const cfg = URGENCY_CONFIG[urgency-1];
+
+  btn.classList.add('scanning');
+  btn.style.setProperty('--speed', cfg.speed + 's');
+  status.textContent = cfg.scanMsg;
+  status.className = 'sonar-status active';
+  hideResults();
+
+  // Sweep animation
+  const sl = document.getElementById('sweepLine');
+  const [c1,c2,c3] = ['sc1','sc2','sc3'].map(id=>document.getElementById(id));
+  const svg = document.getElementById('scanSvg');
+  svg.classList.add('active');
+  sl.style.opacity = '0.6';
+
+  let angle = 0;
+  let ringsFired = false;
+  function sweepLoop() {
+    angle += urgency >= 5 ? 6 : urgency >= 4 ? 4 : 3;
+    sl.style.transform = `rotate(${angle}deg)`;
+    sl.style.transformOrigin = `${W/2}px ${H/2}px`;
+    if (!ringsFired && angle > 60) {
+      ringsFired = true;
+      const maxR = Math.max(W,H)*.75;
+      [c1,c2,c3].forEach((el,i) => {
+        setTimeout(() => expandRing(el, 0, maxR, W/2, H/2), i*200);
+      });
+    }
+    if (sonarActive) sweepAnimId = requestAnimationFrame(sweepLoop);
+  }
+
+  function expandRing(el, r, maxR, cx, cy) {
+    if (!sonarActive) { el.setAttribute('r',0); el.style.opacity=0; return; }
+    r += maxR * 0.015;
+    el.setAttribute('cx',cx); el.setAttribute('cy',cy);
+    el.setAttribute('r', r);
+    el.style.opacity = Math.max(0, 0.55 - r/maxR);
+    if (r < maxR) requestAnimationFrame(() => expandRing(el, r, maxR, cx, cy));
+    else { el.style.opacity=0; el.setAttribute('r',0); }
+  }
+
+  sweepAnimId = requestAnimationFrame(sweepLoop);
+
+  // Resolve
+  const delay = urgency >= 5 ? 1800 : urgency >= 4 ? 2200 : 2800;
+  sonarTimer = setTimeout(() => {
+    cancelAnimationFrame(sweepAnimId);
+    sl.style.opacity = '0';
+    svg.classList.remove('active');
+    [c1,c2,c3].forEach(el => { el.style.opacity=0; el.setAttribute('r',0); });
+
+    buildPins(true);
+
+    // Lock crosshair on nearest
+    if (urgency !== 3 || getFilteredFacilities().length > 0) {
+      document.getElementById('lockCross').classList.add('visible');
+    }
+
+    showResults();
+
+    const lockedFac = getFilteredFacilities()[0];
+    if (urgency === 5) {
+      status.textContent = `🚨 LOCKED — ${lockedFac?.name} · ${lockedFac?.dist}km`;
+      status.className = 'sonar-status emergency';
+    } else if (urgency === 4) {
+      status.textContent = `⚡ Nearest open: ${lockedFac?.name} · ${lockedFac?.dist}km`;
+      status.className = 'sonar-status locked';
+    } else {
+      const cfg2 = URGENCY_CONFIG[urgency-1];
+      status.textContent = `Found ${getFilteredFacilities().length} facilities (${cfg2.minStars}★+), best first`;
+      status.className = 'sonar-status active';
+    }
+
+    btn.classList.remove('scanning');
+    sonarActive = false;
+  }, delay);
+}
+
+function resetSonar() {
+  sonarActive = false;
+  if (sonarTimer) clearTimeout(sonarTimer);
+  if (sweepAnimId) cancelAnimationFrame(sweepAnimId);
+  document.getElementById('sonarBtn').classList.remove('scanning');
+  document.getElementById('sonarStatus').textContent = 'Tap to scan — urgency sets the filter';
+  document.getElementById('sonarStatus').className = 'sonar-status';
+  document.getElementById('scanSvg').classList.remove('active');
+  ['sweepLine','sc1','sc2','sc3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.style.opacity=0; if(el.tagName==='circle')el.setAttribute('r',0); }
+  });
+  hideResults();
+}
+
+/* ══ PORT / STARBOARD ════════════════════════════════════════════════ */
+let navMode=null, navFlashId=null, proximity=0.2;
+const portFlash=document.getElementById('portFlash');
+const starboardFlash=document.getElementById('starboardFlash');
+
+function activateNav(mode) {
+  if (navMode===mode) {
+    navMode=null;
+    document.getElementById('portBtn').classList.remove('active');
+    document.getElementById('starboardBtn').classList.remove('active');
+    stopNavFlash(); return;
+  }
+  navMode=mode;
+  document.getElementById('portBtn').classList.toggle('active',mode==='port');
+  document.getElementById('starboardBtn').classList.toggle('active',mode==='starboard');
+  startNavFlash();
+}
+
+function startNavFlash() {
+  stopNavFlash();
+  if (!navMode) return;
+  const flash = navMode==='port' ? portFlash : starboardFlash;
+  const other = navMode==='port' ? starboardFlash : portFlash;
+  other.style.opacity=0;
+  let on=false, last=0;
+  function loop(ts) {
+    if (!navMode) return;
+    const interval = 1200 - proximity*1080;
+    if (ts-last >= interval) {
+      on=!on;
+      flash.style.opacity=on?1:0;
+      flash.style.transition=on?'opacity 0.04s ease-in':`opacity ${interval*.35}ms ease-out`;
+      last=ts;
+    }
+    navFlashId=requestAnimationFrame(loop);
+  }
+  navFlashId=requestAnimationFrame(loop);
+}
+
+function stopNavFlash() {
+  if (navFlashId) cancelAnimationFrame(navFlashId);
+  portFlash.style.opacity=0; starboardFlash.style.opacity=0; navFlashId=null;
+}
+
+/* ══ PROXIMITY ══════════════════════════════════════════════════════ */
+const proxTrack=document.getElementById('proxTrack');
+let proxDrag=false;
+function setProximity(pct) {
+  proximity=Math.max(0,Math.min(1,pct));
+  document.getElementById('proxFill').style.width=(proximity*100)+'%';
+  const m=Math.round(500-proximity*480);
+  const lbl=document.getElementById('proxLabel');
+  lbl.textContent=m+'m';
+  lbl.style.color=proximity>.8?'var(--red)':proximity>.5?'var(--amber)':'var(--text)';
+}
+proxTrack.addEventListener('mousedown',e=>{proxDrag=true;handlePD(e);});
+proxTrack.addEventListener('touchstart',e=>{proxDrag=true;handlePD(e.touches[0]);},{passive:true});
+window.addEventListener('mousemove',e=>{if(proxDrag)handlePD(e);});
+window.addEventListener('touchmove',e=>{if(proxDrag)handlePD(e.touches[0]);},{passive:true});
+window.addEventListener('mouseup',()=>proxDrag=false);
+window.addEventListener('touchend',()=>proxDrag=false);
+proxTrack.addEventListener('click',e=>handlePD(e));
+function handlePD(e){const r=proxTrack.getBoundingClientRect();setProximity((e.clientX-r.left)/r.width);}
+
+/* ══ INIT ═══════════════════════════════════════════════════════════ */
+window.addEventListener('load',()=>{
+  resizeCanvas();
+  window.addEventListener('resize',resizeCanvas);
+  frame();
+  setProximity(0.2);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>GottaGo</title>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--earth:#0A0E0D;--earth2:#111816;--earth3:#182320;--earth4:#1F2E2A;--teal:#00FFD1;--teal-dim:#00B894;--teal-ghost:rgba(0,255,209,0.08);--teal-glow:rgba(0,255,209,0.25);--amber:#FFB830;--amber-dim:#E07B00;--amber-ghost:rgba(255,184,48,0.1);--red:#FF4B6E;--red-ghost:rgba(255,75,110,0.12);--green:#00E896;--text:#E8F5F2;--text-dim:#7BA89E;--text-ghost:rgba(232,245,242,0.4);--gold:#C9A84C;--purple:#A78BFA;--card:rgba(24,35,32,0.92);--card2:rgba(31,46,42,0.95);--border:rgba(0,255,209,0.12);--border2:rgba(255,255,255,0.06)}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Outfit',sans-serif;background:var(--earth);color:var(--text);min-height:100vh;overflow:hidden;position:relative}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden}
+.screen.active{display:flex}
+#mapCanvas,#routeCanvas{position:absolute;inset:0;z-index:0;width:100%;height:100%}
+.grain{position:fixed;inset:-50%;width:200%;height:200%;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:.5;pointer-events:none;z-index:1;animation:grain 8s steps(10) infinite}
+@keyframes grain{0%,100%{transform:translate(0,0)}10%{transform:translate(-2%,-3%)}30%{transform:translate(3%,2%)}50%{transform:translate(-1%,4%)}70%{transform:translate(2%,-1%)}90%{transform:translate(-3%,1%)}}
+.topbar{position:relative;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:52px 18px 14px;background:linear-gradient(180deg,rgba(10,14,13,.97) 0%,rgba(10,14,13,0) 100%)}
+.logo-wrap{display:flex;align-items:center;gap:10px}
+.logo-mark{width:40px;height:40px;background:var(--teal);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 24px var(--teal-glow),0 0 48px rgba(0,255,209,.1);animation:breathe 3s ease-in-out infinite}
+@keyframes breathe{0%,100%{box-shadow:0 0 24px var(--teal-glow),0 0 48px rgba(0,255,209,.1)}50%{box-shadow:0 0 36px rgba(0,255,209,.5),0 0 72px rgba(0,255,209,.2)}}
+.logo-name{font-family:'Clash Display',sans-serif;font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.5px;line-height:1}
+.logo-name span{color:var(--teal)}
+.logo-tagline{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.8px;margin-top:2px}
+.topbar-right{display:flex;gap:10px;align-items:center}
+.icon-btn{width:38px;height:38px;background:var(--card);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;backdrop-filter:blur(12px);transition:all .2s}
+.icon-btn:active{transform:scale(.92)}
+.bottom-sheet{position:absolute;bottom:0;left:0;right:0;z-index:20;background:linear-gradient(0deg,rgba(10,14,13,.99) 0%,rgba(10,14,13,0) 100%);padding:0 0 30px}
+.urgency-pill{margin:0 16px 14px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:10px 16px;display:flex;align-items:center;gap:12px;backdrop-filter:blur(16px);cursor:pointer;transition:all .3s}
+.urgency-pill.urgent{border-color:rgba(255,75,110,.5);background:rgba(255,75,110,.08);animation:upulse 1s ease-in-out infinite}
+@keyframes upulse{0%,100%{box-shadow:0 0 0 0 rgba(255,75,110,0)}50%{box-shadow:0 0 0 8px rgba(255,75,110,.15)}}
+.urgency-icon{font-size:22px;flex-shrink:0}
+.urgency-mid{flex:1}
+.urgency-status{font-size:13px;font-weight:600;color:var(--text);line-height:1}
+.urgency-nearest{font-size:11px;color:var(--text-dim);margin-top:3px}
+.urgency-slider-wrap{width:90px;position:relative}
+.urgency-track-mini{height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:visible;position:relative;cursor:pointer}
+.urgency-fill-mini{height:100%;border-radius:3px;transition:width .2s ease;position:relative}
+.urgency-fill-mini::after{content:'';position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:14px;height:14px;background:white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.nearest-card{margin:0 16px 12px;background:var(--card2);border:1px solid var(--border);border-radius:20px;padding:14px 16px;display:flex;gap:12px;align-items:center;backdrop-filter:blur(20px);cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.nearest-card::before{content:'NEAREST';position:absolute;top:0;right:0;background:var(--teal);color:var(--earth);font-size:8px;font-weight:700;letter-spacing:1.2px;padding:4px 10px;border-radius:0 20px 0 10px}
+.nearest-card:active{transform:scale(.98)}
+.nc-icon{width:46px;height:46px;background:var(--teal-ghost);border:1px solid var(--border);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.nc-info{flex:1;min-width:0}
+.nc-name{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nc-address{font-size:11px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nc-pills{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.pill{font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px}
+.pill-green{background:rgba(0,232,150,.12);color:var(--green)}
+.pill-teal{background:var(--teal-ghost);color:var(--teal-dim)}
+.pill-amber{background:var(--amber-ghost);color:var(--amber)}
+.pill-red{background:var(--red-ghost);color:var(--red)}
+.pill-purple{background:rgba(167,139,250,.12);color:var(--purple)}
+.nc-right{text-align:right;flex-shrink:0}
+.nc-dist{font-family:'Clash Display',sans-serif;font-size:18px;font-weight:700;color:var(--text);line-height:1}
+.nc-unit{font-size:10px;color:var(--text-dim)}
+.nc-time{font-size:11px;color:var(--text-dim);margin-top:3px}
+.nc-rating{font-size:11px;color:var(--amber);margin-top:4px}
+.go-btn{margin-top:8px;background:var(--teal);color:var(--earth);border:none;border-radius:10px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s;display:block;width:100%;text-align:center}
+.go-btn:active{transform:scale(.95)}
+.bottom-nav{display:flex;margin:0 16px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:8px 6px;backdrop-filter:blur(20px);gap:2px}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 4px;border-radius:14px;cursor:pointer;transition:all .2s;opacity:.45}
+.nav-item.active{opacity:1;background:var(--teal-ghost);border:1px solid var(--border)}
+.nav-item.active .nav-label{color:var(--teal)}
+.nav-icon{font-size:19px}
+.nav-label{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim)}
+.modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(6,10,9,.85);backdrop-filter:blur(8px);display:none;align-items:flex-end}
+.modal-overlay.open{display:flex}
+.modal-sheet{width:100%;background:var(--earth2);border-radius:28px 28px 0 0;border:1px solid var(--border);border-bottom:none;max-height:92vh;overflow-y:auto;animation:sheetup .35s cubic-bezier(.34,1.2,.64,1) both}
+@keyframes sheetup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sheet-handle{width:40px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:14px auto 20px}
+.sheet-title{font-family:'Clash Display',sans-serif;font-size:24px;font-weight:700;color:var(--text);padding:0 20px 6px;letter-spacing:-.5px}
+.sheet-sub{font-size:13px;color:var(--text-dim);padding:0 20px 20px}
+.mode-selector{display:flex;gap:10px;padding:0 20px 20px}
+.mode-card{flex:1;background:var(--card);border:2px solid var(--border2);border-radius:18px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .25s;position:relative;overflow:hidden}
+.mode-card.selected{border-color:var(--teal);background:var(--teal-ghost)}
+.mode-card.selected .mode-name{color:var(--teal)}
+.mode-card .mode-emoji{font-size:28px;display:block;margin-bottom:8px}
+.mode-card .mode-name{font-family:'Clash Display',sans-serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px}
+.mode-card .mode-desc{font-size:11px;color:var(--text-dim);line-height:1.4}
+.mode-card.haul.selected{border-color:var(--amber);background:var(--amber-ghost)}
+.mode-card.haul.selected .mode-name{color:var(--amber)}
+.mode-glow-q{position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(0,255,209,.08) 0%,transparent 70%)}
+.mode-glow-h{position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(255,184,48,.08) 0%,transparent 70%)}
+.field-group{padding:0 20px 16px}
+.field-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-dim);margin-bottom:8px}
+.field-input{width:100%;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:13px 16px;font-size:14px;font-weight:500;color:var(--text);font-family:'Outfit',sans-serif;outline:none;transition:border-color .2s}
+.field-input:focus{border-color:var(--teal-dim)}
+.field-input::placeholder{color:var(--text-ghost)}
+.field-row{display:flex;gap:10px}
+.field-half{flex:1}
+.haul-options{padding:0 20px 16px;display:none}
+.haul-options.visible{display:block}
+.toggle-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border2)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-left{display:flex;flex-direction:column;gap:2px}
+.toggle-label{font-size:13px;font-weight:500;color:var(--text)}
+.toggle-sub{font-size:11px;color:var(--text-dim)}
+.toggle{width:46px;height:26px;background:rgba(255,255,255,.1);border-radius:13px;position:relative;cursor:pointer;transition:background .3s;flex-shrink:0}
+.toggle.on{background:var(--teal-dim)}
+.toggle::after{content:'';position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;left:3px;transition:transform .3s cubic-bezier(.34,1.4,.64,1);box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.toggle.on::after{transform:translateX(20px)}
+.haul-note{background:var(--amber-ghost);border:1px solid rgba(255,184,48,.2);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;gap:10px}
+.haul-note-icon{font-size:20px;flex-shrink:0}
+.haul-note-text{font-size:12px;color:var(--amber);line-height:1.5}
+.avatar-section{padding:0 20px 20px}
+.avatar-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.avatar-card{background:var(--card);border:2px solid var(--border2);border-radius:16px;padding:12px 8px;text-align:center;cursor:pointer;transition:all .2s}
+.avatar-card.selected{border-color:var(--teal);background:var(--teal-ghost)}
+.av-flag{font-size:24px;display:block;margin-bottom:6px}
+.av-name{font-size:12px;font-weight:600;color:var(--text)}
+.av-style{font-size:10px;color:var(--text-dim);margin-top:2px}
+.avatar-preview{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-top:10px;font-size:13px;color:var(--teal-dim);font-style:italic;line-height:1.5;min-height:52px;transition:all .3s}
+.big-go-btn{margin:0 20px 28px;background:linear-gradient(135deg,var(--teal-dim),var(--teal));color:var(--earth);border:none;border-radius:18px;padding:18px;font-family:'Clash Display',sans-serif;font-size:18px;font-weight:700;cursor:pointer;width:calc(100% - 40px);letter-spacing:.5px;box-shadow:0 8px 32px rgba(0,184,148,.3);transition:all .2s;display:flex;align-items:center;justify-content:center;gap:10px}
+.big-go-btn.haul-mode{background:linear-gradient(135deg,var(--amber-dim),var(--amber));box-shadow:0 8px 32px rgba(255,184,48,.25)}
+.big-go-btn:active{transform:scale(.97)}
+.facility-item{display:flex;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .15s;align-items:flex-start}
+.facility-item:active{background:var(--teal-ghost)}
+.fi-icon{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0}
+.fi-icon.type-public{background:var(--teal-ghost)}
+.fi-icon.type-servo{background:var(--amber-ghost)}
+.fi-icon.type-cafe{background:rgba(167,139,250,.1)}
+.fi-icon.type-camp{background:rgba(0,232,150,.1)}
+.fi-icon.type-council{background:rgba(100,180,255,.1)}
+.fi-info{flex:1;min-width:0}
+.fi-name{font-size:14px;font-weight:600;color:var(--text)}
+.fi-address{font-size:11px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fi-pills{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.fi-right{text-align:right;flex-shrink:0}
+.fi-dist{font-family:'Clash Display',sans-serif;font-size:16px;font-weight:700;color:var(--text)}
+.fi-unit{font-size:10px;color:var(--text-dim)}
+.fi-time{font-size:11px;color:var(--text-dim);margin-top:2px}
+.fi-rating{font-size:11px;color:var(--amber);margin-top:3px}
+.gap-banner{margin:0 16px 12px;background:linear-gradient(135deg,rgba(255,184,48,.12),rgba(255,75,110,.08));border:1px solid rgba(255,184,48,.3);border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;animation:bannerin .5s ease both;cursor:pointer}
+@keyframes bannerin{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+.gb-icon{font-size:24px;flex-shrink:0}
+.gb-title{font-size:13px;font-weight:600;color:var(--amber)}
+.gb-sub{font-size:11px;color:var(--text-dim);margin-top:2px}
+.route-bar{margin:0 16px 12px;background:var(--card2);border:1px solid var(--border);border-radius:16px;padding:12px 16px;backdrop-filter:blur(20px)}
+.route-bar-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.route-dest{font-size:13px;font-weight:600;color:var(--text)}
+.route-dest span{color:var(--teal-dim)}
+.route-cancel{font-size:11px;color:var(--text-dim);background:rgba(255,255,255,.07);padding:4px 10px;border-radius:10px;cursor:pointer}
+.route-progress{height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-bottom:8px}
+.route-progress-fill{height:100%;background:linear-gradient(90deg,var(--teal-dim),var(--teal));border-radius:3px;width:32%;box-shadow:0 0 8px var(--teal-glow)}
+.route-stats{display:flex;gap:12px}
+.rs-item{display:flex;flex-direction:column}
+.rs-val{font-size:14px;font-weight:700;color:var(--text);line-height:1}
+.rs-key{font-size:10px;color:var(--text-dim);margin-top:2px;text-transform:uppercase;letter-spacing:.8px}
+.detail-header{padding:20px 20px 16px;display:flex;gap:14px;align-items:flex-start}
+.detail-icon{width:56px;height:56px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0}
+.detail-icon.type-public{background:var(--teal-ghost);border:1px solid var(--border)}
+.detail-icon.type-servo{background:var(--amber-ghost);border:1px solid rgba(255,184,48,.15)}
+.detail-icon.type-camp{background:rgba(0,232,150,.1);border:1px solid rgba(0,232,150,.2)}
+.detail-icon.type-cafe{background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.2)}
+.detail-icon.type-council{background:rgba(100,180,255,.1);border:1px solid rgba(100,180,255,.2)}
+.detail-name{font-family:'Clash Display',sans-serif;font-size:20px;font-weight:700;color:var(--text);letter-spacing:-.3px}
+.detail-address{font-size:12px;color:var(--text-dim);margin-top:4px}
+.detail-rating-row{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap}
+.lords-badge{background:linear-gradient(135deg,rgba(201,168,76,.2),rgba(201,168,76,.05));border:1px solid rgba(201,168,76,.3);border-radius:10px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--gold);display:flex;align-items:center;gap:5px}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 20px 16px}
+.detail-stat{background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:12px 14px}
+.ds-val{font-size:18px;font-weight:700;color:var(--text)}
+.ds-key{font-size:11px;color:var(--text-dim);margin-top:3px;text-transform:uppercase;letter-spacing:.8px}
+.detail-features{padding:0 20px 16px}
+.features-title{font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.features-grid{display:flex;flex-wrap:wrap;gap:8px}
+.feature-chip{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:7px 12px;font-size:12px;color:var(--text)}
+.camps-badge{margin:0 20px 16px;background:linear-gradient(135deg,rgba(0,232,150,.08),rgba(0,255,209,.04));border:1px solid rgba(0,232,150,.2);border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center}
+.cb-icon{font-size:20px}
+.cb-text{font-size:12px;color:var(--green);line-height:1.5}
+.cb-text strong{color:var(--text)}
+.report-btn{margin:0 20px 12px;background:rgba(255,255,255,.05);border:1px solid var(--border2);border-radius:14px;padding:14px;font-family:'Outfit',sans-serif;font-size:14px;font-weight:500;color:var(--text-dim);cursor:pointer;width:calc(100% - 40px);text-align:center;transition:all .2s}
+.scanning-overlay{position:fixed;inset:0;z-index:200;background:rgba(10,14,13,.97);display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px}
+.scanning-overlay.show{display:flex}
+.scan-rings{position:relative;width:120px;height:120px;display:flex;align-items:center;justify-content:center}
+.scan-ring{position:absolute;border-radius:50%;border:2px solid var(--teal);animation:scanexpand 2s ease-out infinite}
+.scan-ring:nth-child(1){width:40px;height:40px;animation-delay:0s}
+.scan-ring:nth-child(2){width:70px;height:70px;animation-delay:.4s}
+.scan-ring:nth-child(3){width:100px;height:100px;animation-delay:.8s}
+@keyframes scanexpand{0%{opacity:1;transform:scale(.8)}100%{opacity:0;transform:scale(1.3)}}
+.scan-center{width:40px;height:40px;background:var(--teal);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;z-index:1;box-shadow:0 0 30px var(--teal-glow)}
+.scan-title{font-family:'Clash Display',sans-serif;font-size:22px;font-weight:700;color:var(--text)}
+.scan-sub{font-size:13px;color:var(--text-dim);text-align:center;padding:0 40px;line-height:1.6}
+.scan-progress{width:200px;height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+.scan-fill{height:100%;background:var(--teal);border-radius:2px;width:0%;transition:width .1s linear;box-shadow:0 0 8px var(--teal-glow)}
+.scan-items{display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text-dim)}
+.scan-item{display:flex;align-items:center;gap:8px;transition:color .3s}
+.scan-item.done{color:var(--teal)}
+.si-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.15);flex-shrink:0;transition:background .3s}
+.scan-item.done .si-dot{background:var(--teal);box-shadow:0 0 6px var(--teal-glow)}
+.map-pin-label{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10;transition:transform .2s}
+.map-pin-label:active{transform:translate(-50%,-50%) scale(.9)}
+.map-pin-bubble{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:6px 10px;display:flex;align-items:center;gap:6px;white-space:nowrap;backdrop-filter:blur(12px);box-shadow:0 4px 20px rgba(0,0,0,.4)}
+.mpb-icon{font-size:16px}
+.mpb-dist{font-size:11px;font-weight:700;color:var(--teal)}
+.mpb-name{font-size:10px;color:var(--text-dim)}
+.pin-pulse{position:absolute;width:100%;height:100%;border-radius:12px;border:2px solid var(--teal);animation:pinpulse 2s ease-out infinite}
+@keyframes pinpulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.4);opacity:0}}
+.section-div{padding:4px 20px 10px;display:flex;justify-content:space-between;align-items:center}
+.section-div-title{font-family:'Clash Display',sans-serif;font-size:16px;font-weight:600;color:var(--text)}
+.section-div-count{font-size:11px;color:var(--teal);background:var(--teal-ghost);padding:3px 9px;border-radius:20px}
+.scroll-area{overflow-y:auto;flex:1}
+.scroll-area::-webkit-scrollbar{display:none}
+.avatar-full-card{margin:0 20px 12px;background:var(--card);border:2px solid var(--border2);border-radius:18px;padding:16px;display:flex;gap:14px;align-items:flex-start;cursor:pointer;transition:all .2s}
+.avatar-full-card.active-av{border-color:var(--teal);background:var(--teal-ghost)}
+.avatar-full-card:active{transform:scale(.98)}
+.afc-flag{font-size:36px;flex-shrink:0}
+.afc-info{flex:1}
+.afc-name{font-family:'Clash Display',sans-serif;font-size:16px;font-weight:600;color:var(--text)}
+.afc-style{font-size:11px;color:var(--text-dim);margin-top:2px}
+.afc-sample{font-size:12px;color:var(--teal-dim);font-style:italic;margin-top:8px;line-height:1.5}
+.afc-active-badge{font-size:10px;font-weight:700;background:var(--teal);color:var(--earth);padding:3px 8px;border-radius:8px;flex-shrink:0;align-self:center}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<!-- SCREEN: MAP -->
+<div class="screen active" id="screen-map">
+  <canvas id="mapCanvas"></canvas>
+  <div class="topbar">
+    <div class="logo-wrap">
+      <div class="logo-mark">🚻</div>
+      <div>
+        <div class="logo-name">Gotta<span>Go</span></div>
+        <div class="logo-tagline">Never be caught short</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="icon-btn" onclick="openModal('avatar-modal')">🎙️</div>
+      <div class="icon-btn" onclick="openModal('list-modal')">☰</div>
+    </div>
+  </div>
+
+  <div id="map-pins" style="position:absolute;inset:0;z-index:10;pointer-events:none;">
+    <div class="map-pin-label" style="left:42%;top:36%;pointer-events:auto;" onclick="openFacilityDetail(0)">
+      <div class="pin-pulse"></div>
+      <div class="map-pin-bubble"><span class="mpb-icon">🚻</span><span class="mpb-dist">1.2km</span><span class="mpb-name">Park WC</span></div>
+    </div>
+    <div class="map-pin-label" style="left:66%;top:50%;pointer-events:auto;" onclick="openFacilityDetail(1)">
+      <div class="map-pin-bubble" style="border-color:rgba(255,184,48,.3);"><span class="mpb-icon">⛽</span><span class="mpb-dist" style="color:var(--amber)">3.8km</span><span class="mpb-name">Caltex</span></div>
+    </div>
+    <div class="map-pin-label" style="left:27%;top:60%;pointer-events:auto;" onclick="openFacilityDetail(2)">
+      <div class="map-pin-bubble" style="border-color:rgba(0,232,150,.3);opacity:.8;"><span class="mpb-icon">🏕️</span><span class="mpb-dist" style="color:var(--green)">5.1km</span><span class="mpb-name">Camp</span></div>
+    </div>
+  </div>
+
+  <div class="bottom-sheet">
+    <div class="urgency-pill" id="urgencyPill" onclick="cycleUrgency()">
+      <div class="urgency-icon" id="urgencyIcon">😎</div>
+      <div class="urgency-mid">
+        <div class="urgency-status" id="urgencyStatus">All good — cruising</div>
+        <div class="urgency-nearest" id="urgencyNearest">Nearest: 1.2 km · Woombye Park WC</div>
+      </div>
+      <div class="urgency-slider-wrap">
+        <div class="urgency-track-mini" id="urgencyTrack">
+          <div class="urgency-fill-mini" id="urgencyFill" style="width:15%;background:var(--green);"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:8px;color:var(--text-ghost);"><span>😎</span><span>😰</span><span>🚨</span></div>
+      </div>
+    </div>
+    <div class="nearest-card" onclick="openFacilityDetail(0)">
+      <div class="nc-icon">🚻</div>
+      <div class="nc-info">
+        <div class="nc-name">Woombye Park Public Toilets</div>
+        <div class="nc-address">Woombye Recreation Reserve, QLD</div>
+        <div class="nc-pills">
+          <span class="pill pill-green">Open 24hr</span>
+          <span class="pill pill-teal">Free</span>
+          <span class="pill pill-purple">♿</span>
+        </div>
+      </div>
+      <div class="nc-right">
+        <div class="nc-dist">1.2<span class="nc-unit"> km</span></div>
+        <div class="nc-time">~2 min</div>
+        <div class="nc-rating">★★★★☆</div>
+        <button class="go-btn">▶ Go</button>
+      </div>
+    </div>
+    <div class="bottom-nav">
+      <div class="nav-item active" onclick="setNav(this)"><span class="nav-icon">🗺️</span><span class="nav-label">Map</span></div>
+      <div class="nav-item" onclick="openModal('route-modal');setNav(this)"><span class="nav-icon">🧭</span><span class="nav-label">Route</span></div>
+      <div class="nav-item" onclick="openModal('list-modal');setNav(this)"><span class="nav-icon">🔍</span><span class="nav-label">Nearby</span></div>
+      <div class="nav-item" onclick="openModal('avatar-modal');setNav(this)"><span class="nav-icon">🎙️</span><span class="nav-label">Avatar</span></div>
+      <div class="nav-item" onclick="setNav(this)"><span class="nav-icon">⭐</span><span class="nav-label">Saved</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: ACTIVE ROUTE -->
+<div class="screen" id="screen-route">
+  <canvas id="routeCanvas"></canvas>
+  <div class="topbar">
+    <div class="logo-wrap">
+      <div class="logo-mark">🚻</div>
+      <div>
+        <div class="logo-name">Gotta<span>Go</span></div>
+        <div class="logo-tagline">Route active</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="icon-btn" onclick="openModal('avatar-modal')">🎙️</div>
+    </div>
+  </div>
+  <div style="position:absolute;inset:0;z-index:10;pointer-events:none;">
+    <div class="map-pin-label" style="left:35%;top:38%;pointer-events:auto;" onclick="openFacilityDetail(0)">
+      <div class="pin-pulse"></div>
+      <div class="map-pin-bubble"><span class="mpb-icon">🚻</span><span class="mpb-dist">1.2km</span></div>
+    </div>
+    <div class="map-pin-label" style="left:58%;top:48%;pointer-events:auto;" onclick="openFacilityDetail(1)">
+      <div class="map-pin-bubble" style="border-color:rgba(255,184,48,.3);"><span class="mpb-icon">⛽</span><span class="mpb-dist" style="color:var(--amber)">8.4km</span></div>
+    </div>
+    <div class="map-pin-label" style="left:73%;top:30%;pointer-events:auto;" onclick="openFacilityDetail(3)">
+      <div class="map-pin-bubble" style="border-color:rgba(0,232,150,.3);"><span class="mpb-icon">🏕️</span><span class="mpb-dist" style="color:var(--green)">22km</span></div>
+    </div>
+    <div style="position:absolute;left:61%;top:18%;pointer-events:none;">
+      <div style="background:rgba(255,184,48,.12);border:1px dashed rgba(255,184,48,.4);border-radius:10px;padding:5px 10px;font-size:10px;color:var(--amber);white-space:nowrap;">⚠️ 34km gap</div>
+    </div>
+  </div>
+  <div class="bottom-sheet">
+    <div class="gap-banner" onclick="openModal('list-modal')">
+      <div class="gb-icon">⚠️</div>
+      <div class="gb-text">
+        <div class="gb-title">34 km ahead with no facilities</div>
+        <div class="gb-sub">Stop at Nambour SC (8.4 km) before the highway stretch</div>
+      </div>
+    </div>
+    <div class="route-bar">
+      <div class="route-bar-top">
+        <div class="route-dest">To: <span id="routeDestLabel">Gympie, QLD</span></div>
+        <div class="route-cancel" onclick="endRoute()">✕ End</div>
+      </div>
+      <div class="route-progress"><div class="route-progress-fill"></div></div>
+      <div class="route-stats">
+        <div class="rs-item"><div class="rs-val">1h 42m</div><div class="rs-key">remaining</div></div>
+        <div class="rs-item"><div class="rs-val">89 km</div><div class="rs-key">to go</div></div>
+        <div class="rs-item"><div class="rs-val">8</div><div class="rs-key">loos ahead</div></div>
+        <div class="rs-item"><div class="rs-val">1 ⚠️</div><div class="rs-key">gap alert</div></div>
+      </div>
+    </div>
+    <div class="urgency-pill" id="urgencyPill2" onclick="cycleUrgency()" style="margin-bottom:12px;">
+      <div class="urgency-icon" id="urgencyIcon2">😎</div>
+      <div class="urgency-mid">
+        <div class="urgency-status" id="urgencyStatus2">All good — cruising</div>
+        <div class="urgency-nearest">Next loo: 1.2 km · Park WC</div>
+      </div>
+      <div class="urgency-slider-wrap">
+        <div class="urgency-track-mini">
+          <div class="urgency-fill-mini" id="urgencyFill2" style="width:15%;background:var(--green);"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:8px;color:var(--text-ghost);"><span>😎</span><span>😰</span><span>🚨</span></div>
+      </div>
+    </div>
+    <div class="bottom-nav">
+      <div class="nav-item" onclick="openModal('list-modal')"><span class="nav-icon">🔍</span><span class="nav-label">Nearby</span></div>
+      <div class="nav-item active"><span class="nav-icon">🧭</span><span class="nav-label">Route</span></div>
+      <div class="nav-item" onclick="openModal('avatar-modal')"><span class="nav-icon">🎙️</span><span class="nav-label">Avatar</span></div>
+      <div class="nav-item" onclick="endRoute()"><span class="nav-icon">⏹️</span><span class="nav-label">End</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ROUTE PLANNER -->
+<div class="modal-overlay" id="route-modal">
+  <div class="modal-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Plan Your Route</div>
+    <div class="sheet-sub">Quick Dash or Long Haul — your call</div>
+    <div class="mode-selector">
+      <div class="mode-card quick selected" onclick="selectMode('quick',this)">
+        <div class="mode-glow-q"></div>
+        <span class="mode-emoji">⚡</span>
+        <div class="mode-name">Quick Dash</div>
+        <div class="mode-desc">Short trip, no fuss. Plot the loos and go.</div>
+      </div>
+      <div class="mode-card haul" onclick="selectMode('haul',this)">
+        <div class="mode-glow-h"></div>
+        <span class="mode-emoji">🛻</span>
+        <div class="mode-name">Long Haul</div>
+        <div class="mode-desc">Full planning with gap warnings &amp; requirements.</div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="field-label">From</div>
+      <input class="field-input" id="fromField" value="📍 Using GPS location">
+    </div>
+    <div class="field-group">
+      <div class="field-label">To</div>
+      <input class="field-input" id="toField" placeholder="🏁 Where are you headed?">
+    </div>
+    <div id="quick-options">
+      <div class="field-group">
+        <div class="field-label">Max detour to a facility</div>
+        <div class="field-row">
+          <div class="field-half"><input class="field-input" value="5 km"></div>
+          <div class="field-half"><input class="field-input" value="Open now only"></div>
+        </div>
+      </div>
+    </div>
+    <div class="haul-options" id="haul-options">
+      <div class="haul-note">
+        <div class="haul-note-icon">⚠️</div>
+        <div class="haul-note-text">Long Haul mode analyses your full route and warns you before gaps over 20 km — before you're in trouble.</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Vehicle &amp; Trip Type</div>
+        <div class="field-row">
+          <div class="field-half"><input class="field-input" value="Day trip"></div>
+          <div class="field-half"><input class="field-input" value="Towing caravan"></div>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Requirements</div>
+        <div class="toggle-row">
+          <div class="toggle-left"><div class="toggle-label">♿ Accessible only</div><div class="toggle-sub">DDA-compliant facilities</div></div>
+          <div class="toggle" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-left"><div class="toggle-label">👶 Baby change rooms</div><div class="toggle-sub">Essential for young families</div></div>
+          <div class="toggle" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-left"><div class="toggle-label">🚿 Showers</div><div class="toggle-sub">Multi-day or overnight trips</div></div>
+          <div class="toggle" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-left"><div class="toggle-label">🏕️ Camps Australia sites</div><div class="toggle-sub">Verified rest stops &amp; camp grounds</div></div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-left"><div class="toggle-label">⚠️ Gap alerts &gt; 20 km</div><div class="toggle-sub">Warn me before dead zones</div></div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+    </div>
+    <div class="avatar-section">
+      <div class="field-label" style="margin-bottom:10px;">Voice Avatar</div>
+      <div class="avatar-grid" id="route-avatar-grid"></div>
+      <div class="avatar-preview" id="route-avatar-preview">"Mate, there's a dunny at the servo ahead — she's not flash but she'll do the job!"</div>
+    </div>
+    <button class="big-go-btn" id="goBtn" onclick="startRoute()"><span>⚡</span> Find My Loos</button>
+  </div>
+</div>
+
+<!-- MODAL: NEARBY LIST -->
+<div class="modal-overlay" id="list-modal">
+  <div class="modal-sheet">
+    <div class="sheet-handle"></div>
+    <div class="section-div">
+      <div class="section-div-title">Nearby Facilities</div>
+      <div class="section-div-count">6 found</div>
+    </div>
+    <div class="scroll-area" style="max-height:72vh;"><div id="facility-list"></div></div>
+  </div>
+</div>
+
+<!-- MODAL: FACILITY DETAIL -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal-sheet">
+    <div class="sheet-handle"></div>
+    <div id="detail-content"></div>
+  </div>
+</div>
+
+<!-- MODAL: AVATAR -->
+<div class="modal-overlay" id="avatar-modal">
+  <div class="modal-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Choose Your Voice</div>
+    <div class="sheet-sub">Your guide for the road ahead</div>
+    <div class="scroll-area" style="max-height:76vh;padding-bottom:20px;"><div id="avatar-full-list"></div></div>
+  </div>
+</div>
+
+<!-- SCANNING OVERLAY -->
+<div class="scanning-overlay" id="scanOverlay">
+  <div class="scan-rings">
+    <div class="scan-ring"></div><div class="scan-ring"></div><div class="scan-ring"></div>
+    <div class="scan-center">🚻</div>
+  </div>
+  <div class="scan-title">Scanning Route</div>
+  <div class="scan-sub">Plotting loos, checking gaps, loading Camps Australia data...</div>
+  <div class="scan-progress"><div class="scan-fill" id="scanFill"></div></div>
+  <div class="scan-items">
+    <div class="scan-item" id="si1"><div class="si-dot"></div>Calculating route</div>
+    <div class="scan-item" id="si2"><div class="si-dot"></div>Loading facility database</div>
+    <div class="scan-item" id="si3"><div class="si-dot"></div>Checking Camps Australia data</div>
+    <div class="scan-item" id="si4"><div class="si-dot"></div>Analysing gap warnings</div>
+    <div class="scan-item" id="si5"><div class="si-dot"></div>Plotting loo overlay</div>
+  </div>
+</div>
+
+<script>
+const AVATARS=[
+  {flag:'🇦🇺',name:'Bazza',style:'Aussie Larrikin',sample:'"Mate, there\'s a dunny at the servo ahead — she\'s not flash but she\'ll do the job!"'},
+  {flag:'🇬🇧',name:'Reginald',style:'Posh British',sample:'"One suggests you spend a penny at the facilities ahead. Turn left in 400 metres, post-haste."'},
+  {flag:'🏴󠁧󠁢󠁳󠁣󠁴󠁿',name:'Morag',style:'Scottish Granny',sample:'"Och, the House of Lords is 800 metres ahead, hen — absolutely free, tae!"'},
+  {flag:'🇮🇪',name:'Seamus',style:'Irish Warmth',sample:'"Jaysus, pub on the left has grand facilities — answer the call of nature!"'},
+  {flag:'👵',name:'Gran',style:'Everyone\'s Nan',sample:'"Love, you should\'ve gone before we left. Nice clean one at the shopping centre."'},
+  {flag:'⚓',name:'Randy',style:'US Navy Trucker',sample:'"Breaker breaker — comfort station off the port bow, quarter mile. Copy?"'},
+];
+const FACILITIES=[
+  {name:'Woombye Park Public Toilets',address:'Woombye Recreation Reserve, QLD',icon:'🚻',type:'public',dist:1.2,time:'~2 min',rating:'★★★★☆',open:true,free:true,accessible:true,baby:false,shower:false,lords:'Throne Room 👑',campsAustralia:false,features:['Open 24 hours','Accessible','Hand dryers','Well lit']},
+  {name:'Caltex Eudlo',address:'1 Eudlo Station Rd, Eudlo QLD',icon:'⛽',type:'servo',dist:3.8,time:'~5 min',rating:'★★★☆☆',open:true,free:true,accessible:false,baby:false,shower:false,lords:'The Loo 🚻',campsAustralia:false,features:['Open 6am–10pm','Fuel available','Convenience store']},
+  {name:'Eudlo Creek Rest Area',address:'Bruce Hwy, Eudlo QLD',icon:'🏕️',type:'camp',dist:5.1,time:'~7 min',rating:'★★★★☆',open:true,free:true,accessible:true,baby:false,shower:false,lords:'Throne Room 👑',campsAustralia:true,features:['Camps Australia verified','24hr access','Picnic tables','Accessible']},
+  {name:'Nambour Shopping Centre',address:'Currie St, Nambour QLD',icon:'🛒',type:'council',dist:8.4,time:'~11 min',rating:'★★★★☆',open:true,free:true,accessible:true,baby:true,shower:false,lords:'House of Lords 🏛️',campsAustralia:false,features:['Open 9am–5:30pm','Baby change room','Accessible','Parent room']},
+  {name:'Mapleton Coffee Roasters',address:'12 Obi Obi Rd, Mapleton QLD',icon:'☕',type:'cafe',dist:12.1,time:'~16 min',rating:'★★★★★',open:true,free:false,accessible:true,baby:false,shower:false,lords:'House of Lords 🏛️',campsAustralia:false,features:['Customers only','Open 7am–3pm','Exceptional cleanliness']},
+  {name:'Kenilworth Truck Stop',address:'Elizabeth St, Kenilworth QLD',icon:'🚛',type:'servo',dist:31.2,time:'~34 min',rating:'★★★☆☆',open:true,free:true,accessible:false,baby:false,shower:true,lords:'The Loo 🚻',campsAustralia:true,features:['Camps Australia verified','Open 24hr','Shower available','Truck parking']},
+];
+const URGENCY_STATES=[
+  {icon:'😎',label:'All good — cruising',color:'var(--green)',pct:15,urgent:false},
+  {icon:'🤔',label:'Getting there...',color:'#a3e030',pct:35,urgent:false},
+  {icon:'😬',label:'Starting to feel it',color:'var(--amber)',pct:55,urgent:false},
+  {icon:'😰',label:'Pretty urgent!',color:'#e88a23',pct:75,urgent:false},
+  {icon:'🚨',label:'FIND ONE NOW',color:'var(--red)',pct:95,urgent:true},
+];
+let currentAvatar=0,urgencyLevel=0,currentMode='quick';
+
+// MAP
+function initMap(id){
+  const c=document.getElementById(id);if(!c)return;
+  const ctx=c.getContext('2d');let w,h,t=0;
+  function resize(){w=c.width=c.offsetWidth;h=c.height=c.offsetHeight}
+  function frame(){
+    ctx.clearRect(0,0,w,h);
+    const bg=ctx.createRadialGradient(w*.4,h*.4,0,w*.4,h*.4,w*.8);
+    bg.addColorStop(0,'#0F1C19');bg.addColorStop(.5,'#0A1210');bg.addColorStop(1,'#060D0B');
+    ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='rgba(0,255,209,0.035)';
+    for(let x=0;x<w;x+=30)for(let y=0;y<h;y+=30){ctx.beginPath();ctx.arc(x,y,.8,0,Math.PI*2);ctx.fill()}
+    const roads=[
+      [{x:0,y:h*.44},{x:w*.28,y:h*.4},{x:w*.55,y:h*.5},{x:w*.82,y:h*.34},{x:w,y:h*.28}],
+      [{x:0,y:h*.68},{x:w*.22,y:h*.64},{x:w*.5,y:h*.54},{x:w*.76,y:h*.6},{x:w,y:h*.56}],
+      [{x:w*.3,y:0},{x:w*.31,y:h*.42},{x:w*.29,y:h}],
+      [{x:w*.62,y:0},{x:w*.6,y:h*.5},{x:w*.63,y:h}],
+    ];
+    roads.forEach((pts,ri)=>{
+      ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+      for(let i=1;i<pts.length;i++){const xc=(pts[i-1].x+pts[i].x)/2,yc=(pts[i-1].y+pts[i].y)/2;ctx.quadraticCurveTo(pts[i-1].x,pts[i-1].y,xc,yc)}
+      ctx.strokeStyle=ri<2?'rgba(0,255,209,0.15)':'rgba(0,255,209,0.08)';ctx.lineWidth=ri<2?3:2;ctx.stroke();
+      if(ri===0){
+        const g=ctx.createLinearGradient(0,0,w,0),p=((t*.003)%1);
+        g.addColorStop(Math.max(0,p-.12),'rgba(0,255,209,0)');g.addColorStop(p,'rgba(0,255,209,0.55)');g.addColorStop(Math.min(1,p+.12),'rgba(0,255,209,0)');
+        ctx.strokeStyle=g;ctx.lineWidth=4;ctx.stroke();
+      }
+    });
+    // Ambient orbs
+    [[w*.2,h*.3,'rgba(0,255,209,'],[w*.7,h*.6,'rgba(255,184,48,'],[w*.5,h*.2,'rgba(0,232,150,']].forEach(([ox,oy,col])=>{
+      const pulse=Math.sin(t*.02+ox)*.5+.5;
+      const g2=ctx.createRadialGradient(ox,oy,0,ox,oy,60+pulse*20);
+      g2.addColorStop(0,col+(0.06+pulse*.04)+')');g2.addColorStop(1,col+'0)');
+      ctx.fillStyle=g2;ctx.fillRect(ox-100,oy-100,200,200);
+    });
+    t++;requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize',resize);resize();frame();
+}
+
+// URGENCY
+function cycleUrgency(){urgencyLevel=(urgencyLevel+1)%5;updateUrgency()}
+function updateUrgency(){
+  const s=URGENCY_STATES[urgencyLevel];
+  ['urgencyFill','urgencyFill2'].forEach(id=>{const e=document.getElementById(id);if(e){e.style.width=s.pct+'%';e.style.background=s.color}});
+  ['urgencyIcon','urgencyIcon2'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=s.icon});
+  ['urgencyStatus','urgencyStatus2'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=s.label});
+  ['urgencyPill','urgencyPill2'].forEach(id=>{const e=document.getElementById(id);if(e)e.className='urgency-pill'+(s.urgent?' urgent':'')});
+}
+
+// MODALS
+function openModal(id){document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('open'));document.getElementById(id).classList.add('open')}
+function closeAllModals(){document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('open'))}
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)closeAllModals()}));
+
+// MODE
+function selectMode(mode,el){
+  currentMode=mode;
+  document.querySelectorAll('.mode-card').forEach(c=>c.classList.remove('selected'));el.classList.add('selected');
+  const haul=document.getElementById('haul-options'),btn=document.getElementById('goBtn');
+  if(mode==='haul'){haul.classList.add('visible');btn.classList.add('haul-mode');btn.innerHTML='<span>🛻</span> Plan Long Haul Route'}
+  else{haul.classList.remove('visible');btn.classList.remove('haul-mode');btn.innerHTML='<span>⚡</span> Find My Loos'}
+}
+
+// FACILITY LIST
+function buildFacilityList(){
+  document.getElementById('facility-list').innerHTML=FACILITIES.map((f,i)=>`
+    <div class="facility-item" onclick="openFacilityDetail(${i})">
+      <div class="fi-icon type-${f.type}">${f.icon}</div>
+      <div class="fi-info">
+        <div class="fi-name">${f.name}</div>
+        <div class="fi-address">${f.address}</div>
+        <div class="fi-pills">
+          <span class="pill ${f.open?'pill-green':'pill-red'}">${f.open?'Open':'Closed'}</span>
+          ${f.free?'<span class="pill pill-teal">Free</span>':'<span class="pill pill-amber">Paid</span>'}
+          ${f.accessible?'<span class="pill pill-purple">♿</span>':''}
+          ${f.baby?'<span class="pill pill-amber">👶</span>':''}
+          ${f.shower?'<span class="pill pill-teal">🚿</span>':''}
+          ${f.campsAustralia?'<span class="pill pill-green">🏕️ Camps AU</span>':''}
+        </div>
+      </div>
+      <div class="fi-right">
+        <div class="fi-dist">${f.dist}<span class="fi-unit"> km</span></div>
+        <div class="fi-time">${f.time}</div>
+        <div class="fi-rating">${f.rating}</div>
+      </div>
+    </div>`).join('')
+}
+
+// FACILITY DETAIL
+function openFacilityDetail(idx){
+  const f=FACILITIES[idx];
+  document.getElementById('detail-content').innerHTML=`
+    <div class="detail-header">
+      <div class="detail-icon type-${f.type}">${f.icon}</div>
+      <div>
+        <div class="detail-name">${f.name}</div>
+        <div class="detail-address">${f.address}</div>
+        <div class="detail-rating-row">
+          <div class="lords-badge">🏛️ ${f.lords}</div>
+          <span style="font-size:14px;color:var(--amber)">${f.rating}</span>
+        </div>
+      </div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-stat"><div class="ds-val">${f.dist} km</div><div class="ds-key">Distance</div></div>
+      <div class="detail-stat"><div class="ds-val">${f.time}</div><div class="ds-key">Drive time</div></div>
+      <div class="detail-stat"><div class="ds-val">${f.free?'Free':'Paid'}</div><div class="ds-key">Cost</div></div>
+      <div class="detail-stat"><div class="ds-val">${f.open?'✅ Open':'❌ Closed'}</div><div class="ds-key">Status</div></div>
+    </div>
+    <div class="detail-features">
+      <div class="features-title">Features</div>
+      <div class="features-grid">${f.features.map(ft=>`<div class="feature-chip"><span>✓</span>${ft}</div>`).join('')}</div>
+    </div>
+    ${f.campsAustralia?`<div class="camps-badge"><div class="cb-icon">🏕️</div><div class="cb-text"><strong>Camps Australia Verified</strong><br>Data sourced from Camps Australia — the nation's most trusted roadside facility guide.</div></div>`:''}
+    <button class="big-go-btn" style="margin:0 20px 12px;width:calc(100% - 40px);" onclick="closeAllModals()">▶ Navigate Here</button>
+    <button class="report-btn" onclick="closeAllModals()">📝 Report an Update</button>
+    <div style="height:8px;"></div>`;
+  openModal('detail-modal');
+}
+
+// AVATARS
+function buildAvatarList(){
+  document.getElementById('avatar-full-list').innerHTML=AVATARS.map((av,i)=>`
+    <div class="avatar-full-card ${i===currentAvatar?'active-av':''}" onclick="selectAvatar(${i})">
+      <div class="afc-flag">${av.flag}</div>
+      <div class="afc-info">
+        <div class="afc-name">${av.name}</div>
+        <div class="afc-style">${av.style}</div>
+        <div class="afc-sample">${av.sample}</div>
+      </div>
+      ${i===currentAvatar?'<div class="afc-active-badge">ACTIVE</div>':''}
+    </div>`).join('')
+}
+function buildRouteAvatarGrid(){
+  const g=document.getElementById('route-avatar-grid');if(!g)return;
+  g.innerHTML=AVATARS.map((av,i)=>`
+    <div class="avatar-card ${i===currentAvatar?'selected':''}" onclick="selectAvatar(${i})">
+      <span class="av-flag">${av.flag}</span>
+      <div class="av-name">${av.name}</div>
+      <div class="av-style">${av.style}</div>
+    </div>`).join('')
+}
+function selectAvatar(idx){
+  currentAvatar=idx;
+  buildAvatarList();buildRouteAvatarGrid();
+  const p=document.getElementById('route-avatar-preview');
+  if(p)p.textContent=AVATARS[idx].sample;
+}
+
+// ROUTE
+function startRoute(){
+  const dest=document.getElementById('toField').value;
+  if(!dest||!dest.trim()){
+    document.getElementById('toField').style.borderColor='var(--red)';
+    document.getElementById('toField').placeholder='⚠️ Enter a destination first!';
+    setTimeout(()=>{document.getElementById('toField').style.borderColor=''},2000);return;
+  }
+  const label=document.getElementById('routeDestLabel');
+  if(label)label.textContent=dest;
+  closeAllModals();
+  const overlay=document.getElementById('scanOverlay');overlay.classList.add('show');
+  const fill=document.getElementById('scanFill');
+  const items=['si1','si2','si3','si4','si5'];
+  let pct=0;
+  const iv=setInterval(()=>{
+    pct+=1.8;fill.style.width=Math.min(pct,100)+'%';
+    const done=Math.floor(pct/20);
+    items.forEach((id,idx)=>{if(idx<done)document.getElementById(id).classList.add('done')});
+    if(pct>=100){clearInterval(iv);setTimeout(()=>{overlay.classList.remove('show');switchScreen('screen-route')},500)}
+  },55);
+}
+function endRoute(){switchScreen('screen-map')}
+
+// SCREEN
+function switchScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(id==='screen-route')initMap('routeCanvas');
+}
+function setNav(el){document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));el.classList.add('active')}
+
+// SLIDER DRAG
+window.addEventListener('load',()=>{
+  initMap('mapCanvas');buildFacilityList();buildAvatarList();buildRouteAvatarGrid();updateUrgency();
+  const track=document.getElementById('urgencyTrack');
+  if(!track)return;
+  let drag=false;
+  function handle(e,t){const r=t.getBoundingClientRect();const pct=Math.max(0,Math.min(100,((e.clientX-r.left)/r.width)*100));urgencyLevel=Math.min(4,Math.floor(pct/20));updateUrgency()}
+  track.addEventListener('mousedown',e=>{drag=true;handle(e,track)});
+  track.addEventListener('touchstart',e=>{drag=true;handle(e.touches[0],track)},{passive:true});
+  window.addEventListener('mousemove',e=>{if(drag)handle(e,track)});
+  window.addEventListener('touchmove',e=>{if(drag)handle(e.touches[0],track)},{passive:true});
+  window.addEventListener('mouseup',()=>drag=false);window.addEventListener('touchend',()=>drag=false);
+  track.addEventListener('click',e=>handle(e,track));
+});
+</script>
+</body>
+</html>

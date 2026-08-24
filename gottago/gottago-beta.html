@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GottaGo BETA</title>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- Leaflet — free open source maps, no API key needed -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  --bg:#090D0C;--bg2:#111916;--bg3:#182320;
+  --teal:#00FFD1;--teal-dim:#00B894;--teal-glow:rgba(0,255,209,0.3);--teal-ghost:rgba(0,255,209,0.08);
+  --amber:#FFB830;--amber-dim:#C8972A;--amber-ghost:rgba(255,184,48,0.1);
+  --red:#FF3B5C;--red-glow:rgba(255,59,92,0.4);--red-ghost:rgba(255,59,92,0.1);
+  --green:#00C851;--green-glow:rgba(0,200,81,0.4);--green-ghost:rgba(0,200,81,0.1);
+  --purple:#A78BFA;--gold:#C9A84C;
+  --text:#E8F5F2;--text-dim:#7BA89E;--text-ghost:rgba(232,245,242,0.3);
+  --card:rgba(18,30,26,0.96);--border:rgba(0,255,209,0.1);--border2:rgba(255,255,255,0.06);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);}
+body{font-family:'Outfit',sans-serif;color:var(--text);position:relative;}
+
+/* ── PORT/STARBOARD FLASHES ── */
+.nav-flash{position:fixed;inset:0;z-index:1000;pointer-events:none;opacity:0;transition:opacity 0.04s;}
+.nav-flash.port{background:radial-gradient(ellipse 70% 100% at 0% 50%,rgba(255,59,92,0.65) 0%,rgba(255,59,92,0.3) 30%,transparent 65%);}
+.nav-flash.starboard{background:radial-gradient(ellipse 70% 100% at 100% 50%,rgba(0,200,81,0.65) 0%,rgba(0,200,81,0.3) 30%,transparent 65%);}
+
+/* ── MAP ── */
+#mapEl{position:fixed;inset:0;z-index:0;background:#0A1412;}
+
+/* ── GRAIN ── */
+.grain{position:fixed;inset:-50%;width:200%;height:200%;opacity:.35;pointer-events:none;z-index:2;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+  animation:grain 6s steps(8) infinite;}
+@keyframes grain{0%,100%{transform:translate(0,0)}25%{transform:translate(-2%,2%)}50%{transform:translate(2%,-1%)}75%{transform:translate(-1%,3%)}}
+
+/* ── TOPBAR ── */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:20;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:48px 16px 12px;
+  background:linear-gradient(180deg,rgba(9,13,12,.98) 0%,transparent 100%);}
+.logo-wrap{display:flex;align-items:center;gap:9px;}
+.logo-mark{width:36px;height:36px;background:var(--teal);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 20px var(--teal-glow);animation:breathe 3s ease-in-out infinite;}
+@keyframes breathe{0%,100%{box-shadow:0 0 20px var(--teal-glow)}50%{box-shadow:0 0 40px rgba(0,255,209,.6)}}
+.logo-name{font-family:'Clash Display',sans-serif;font-size:20px;font-weight:700;letter-spacing:-.3px;}
+.logo-name span{color:var(--teal);}
+.logo-sub{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:1px;}
+.beta-badge{background:rgba(255,75,110,.15);border:1px solid rgba(255,75,110,.35);color:var(--red);font-size:10px;font-weight:700;padding:5px 10px;border-radius:20px;letter-spacing:.5px;}
+
+/* ── GPS STATUS BAR ── */
+.gps-bar{position:fixed;top:108px;left:16px;right:16px;z-index:20;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:10px 14px;display:flex;align-items:center;gap:10px;
+  backdrop-filter:blur(16px);}
+.gps-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:background .3s;}
+.gps-dot.acquiring{background:var(--amber);animation:blink .8s ease-in-out infinite;}
+.gps-dot.locked{background:var(--teal);box-shadow:0 0 8px var(--teal-glow);}
+.gps-dot.error{background:var(--red);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.gps-text{flex:1;font-size:12px;color:var(--text-dim);}
+.gps-text strong{color:var(--text);}
+.gps-acc{font-size:10px;color:var(--text-dim);}
+
+/* ── BOTTOM SHEET ── */
+.bottom-sheet{position:fixed;bottom:0;left:0;right:0;z-index:20;
+  padding:0 0 28px;
+  background:linear-gradient(0deg,rgba(9,13,12,.99) 0%,rgba(9,13,12,0) 100%);}
+
+/* ── SONAR SECTION ── */
+.sonar-row{margin:0 16px 12px;display:flex;gap:12px;align-items:center;}
+.sonar-btn{position:relative;width:68px;height:68px;flex-shrink:0;cursor:pointer;}
+.sonar-core{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#00FFD1,#007A6E);
+  display:flex;align-items:center;justify-content:center;font-size:26px;
+  box-shadow:0 0 20px var(--teal-glow),0 4px 16px rgba(0,0,0,.4);
+  transition:transform .15s;z-index:2;}
+.sonar-btn:active .sonar-core{transform:scale(.91);}
+.sonar-ring{position:absolute;inset:0;border-radius:50%;border:2px solid var(--teal);opacity:0;}
+.sonar-btn.scanning .sonar-ring:nth-child(1){animation:sonar var(--spd,1.2s) ease-out infinite 0s;}
+.sonar-btn.scanning .sonar-ring:nth-child(2){animation:sonar var(--spd,1.2s) ease-out infinite calc(var(--spd,1.2s)*.33);}
+.sonar-btn.scanning .sonar-ring:nth-child(3){animation:sonar var(--spd,1.2s) ease-out infinite calc(var(--spd,1.2s)*.66);}
+.sonar-btn.scanning .sonar-core{animation:score-pulse .8s ease-in-out infinite;}
+@keyframes sonar{0%{transform:scale(1);opacity:.8}100%{transform:scale(3.5);opacity:0}}
+@keyframes score-pulse{0%,100%{box-shadow:0 0 40px rgba(0,255,209,.8),0 4px 16px rgba(0,0,0,.4)}50%{box-shadow:0 0 70px rgba(0,255,209,1),0 0 120px rgba(0,255,209,.3)}}
+
+.sonar-info{flex:1;}
+.sonar-title{font-family:'Clash Display',sans-serif;font-size:14px;font-weight:600;color:var(--text);margin-bottom:3px;}
+.sonar-status{font-size:11px;color:var(--text-dim);line-height:1.4;transition:color .3s;}
+.sonar-status.active{color:var(--teal);}
+.sonar-status.locked{color:var(--amber);font-weight:600;}
+.sonar-status.emergency{color:var(--red);font-weight:700;}
+
+/* URGENCY DOTS */
+.urg-row{display:flex;gap:5px;margin-top:7px;align-items:center;}
+.udot{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);cursor:pointer;transition:all .25s;flex-shrink:0;}
+.udot.u1.on{background:var(--green);border-color:var(--green);box-shadow:0 0 8px var(--green-glow);}
+.udot.u2.on{background:#a3e030;border-color:#a3e030;}
+.udot.u3.on{background:var(--amber);border-color:var(--amber);box-shadow:0 0 8px var(--amber-ghost);}
+.udot.u4.on{background:#e87020;border-color:#e87020;}
+.udot.u5.on{background:var(--red);border-color:var(--red);box-shadow:0 0 10px var(--red-glow);animation:panic .4s ease-in-out infinite alternate;}
+@keyframes panic{0%{transform:scale(1)}100%{transform:scale(1.3);box-shadow:0 0 16px var(--red)}}
+.urg-lbl{font-size:10px;color:var(--text-dim);margin-left:4px;transition:color .3s;}
+.algo-tag{display:inline-block;margin-top:5px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;border:1px solid transparent;}
+
+/* ── RESULT CARDS ── */
+.results-wrap{margin:0 16px 12px;}
+
+/* Quality list (urgency 1-3) */
+.ql{display:flex;flex-direction:column;gap:7px;}
+.ql-card{background:var(--card);border:1px solid var(--border2);border-radius:15px;padding:11px 13px;
+  display:flex;gap:10px;align-items:center;cursor:pointer;transition:all .25s;
+  transform:translateY(16px);opacity:0;position:relative;overflow:hidden;}
+.ql-card.vis{transform:translateY(0);opacity:1;}
+.ql-card.best{border-color:var(--teal);}
+.ql-card.best::before{content:'BEST';position:absolute;top:0;right:0;background:var(--teal);color:var(--bg);font-size:8px;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:0 15px 0 8px;}
+.ql-card:active{transform:scale(.98);}
+.ql-icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.ql-icon.park{background:var(--teal-ghost);}
+.ql-icon.shop{background:rgba(52,152,219,.1);}
+.ql-icon.sport{background:rgba(167,139,250,.1);}
+.ql-icon.other{background:rgba(255,255,255,.06);}
+.ql-info{flex:1;min-width:0;}
+.ql-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ql-addr{font-size:10px;color:var(--text-dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ql-pills{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap;}
+.pill{font-size:9px;font-weight:600;padding:2px 6px;border-radius:8px;}
+.pill-g{background:var(--green-ghost);color:var(--green);}
+.pill-t{background:var(--teal-ghost);color:var(--teal-dim);}
+.pill-a{background:var(--amber-ghost);color:var(--amber);}
+.pill-r{background:var(--red-ghost);color:var(--red);}
+.pill-p{background:rgba(167,139,250,.1);color:var(--purple);}
+.ql-right{text-align:right;flex-shrink:0;}
+.ql-dist{font-family:'Clash Display',sans-serif;font-size:16px;font-weight:700;color:var(--text);line-height:1;}
+.ql-unit{font-size:9px;color:var(--text-dim);}
+.ql-time{font-size:10px;color:var(--text-dim);margin-top:2px;}
+.ql-stars{font-size:10px;color:var(--amber);margin-top:3px;}
+.ql-go{margin-top:5px;background:rgba(0,255,209,.1);border:1px solid var(--border);color:var(--teal);border-radius:7px;padding:4px 9px;font-size:10px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;display:block;width:100%;text-align:center;}
+
+/* Urgent card (urgency 4) */
+.urgent-card{background:linear-gradient(135deg,rgba(232,112,32,.1),rgba(255,184,48,.05));
+  border:1px solid rgba(232,112,32,.4);border-radius:17px;padding:13px 14px;
+  transform:translateY(16px);opacity:0;transition:all .4s cubic-bezier(.34,1.2,.64,1);}
+.urgent-card.vis{transform:translateY(0);opacity:1;}
+.urgent-card::before{content:'⚡ NEAREST OPEN';position:absolute;top:0;right:0;background:rgba(232,112,32,.9);color:white;font-size:8px;font-weight:700;letter-spacing:1px;padding:4px 10px;border-radius:0 17px 0 8px;}
+.urgent-card{position:relative;overflow:hidden;}
+.uc-row{display:flex;gap:10px;align-items:center;margin-bottom:8px;}
+.uc-icon{width:42px;height:42px;background:rgba(232,112,32,.15);border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.uc-name{font-size:13px;font-weight:600;color:var(--text);}
+.uc-addr{font-size:10px;color:var(--text-dim);margin-top:2px;}
+.uc-dist{font-family:'Clash Display',sans-serif;font-size:20px;font-weight:700;color:white;line-height:1;}
+.uc-go{background:linear-gradient(135deg,#e87020,var(--amber));color:var(--bg);border:none;border-radius:11px;padding:11px;font-family:'Clash Display',sans-serif;font-size:15px;font-weight:700;cursor:pointer;width:100%;text-align:center;}
+
+/* Emergency card (urgency 5) */
+.emergency-card{background:linear-gradient(135deg,rgba(255,59,92,.14),rgba(255,59,92,.05));
+  border:2px solid var(--red);border-radius:18px;padding:14px;
+  transform:translateY(20px);opacity:0;transition:all .4s cubic-bezier(.34,1.2,.64,1);
+  box-shadow:0 0 30px rgba(255,59,92,.15);}
+.emergency-card.vis{transform:translateY(0);opacity:1;}
+.ec-label{background:var(--red);color:white;font-size:9px;font-weight:700;letter-spacing:1.5px;padding:4px;text-align:center;margin:-14px -14px 12px;border-radius:16px 16px 0 0;}
+.ec-row{display:flex;gap:12px;align-items:center;margin-bottom:12px;}
+.ec-icon{width:50px;height:50px;background:rgba(255,59,92,.15);border:1px solid rgba(255,59,92,.3);border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;}
+.ec-name{font-family:'Clash Display',sans-serif;font-size:16px;font-weight:700;color:var(--text);}
+.ec-addr{font-size:10px;color:var(--text-dim);margin-top:3px;}
+.ec-open{font-size:11px;font-weight:600;color:var(--green);margin-top:4px;}
+.ec-dist{font-family:'Clash Display',sans-serif;font-size:26px;font-weight:700;color:white;line-height:1;text-align:right;}
+.ec-unit{font-size:10px;color:rgba(255,255,255,.5);}
+.ec-go{background:var(--red);color:white;border:none;border-radius:13px;padding:14px;font-family:'Clash Display',sans-serif;font-size:18px;font-weight:700;cursor:pointer;width:100%;text-align:center;box-shadow:0 6px 24px rgba(255,59,92,.4);animation:ec-pulse 1s ease-in-out infinite;}
+@keyframes ec-pulse{0%,100%{box-shadow:0 6px 24px rgba(255,59,92,.4)}50%{box-shadow:0 6px 40px rgba(255,59,92,.7)}}
+
+/* ── NAV SECTION ── */
+.nav-section{margin:0 16px 12px;background:var(--card);border:1px solid var(--border);border-radius:17px;padding:12px 14px;backdrop-filter:blur(16px);}
+.nav-sec-title{font-family:'Clash Display',sans-serif;font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:7px;margin-bottom:10px;}
+.ndot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.nav-btns{display:flex;gap:8px;margin-bottom:10px;}
+.nav-btn{flex:1;padding:9px 8px;border-radius:11px;border:2px solid transparent;cursor:pointer;font-family:'Outfit',sans-serif;font-size:11px;font-weight:600;transition:all .25s;display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(255,255,255,.04);}
+.nav-btn.port{border-color:rgba(255,59,92,.3);color:var(--red);}
+.nav-btn.port.on{background:rgba(255,59,92,.12);border-color:var(--red);box-shadow:0 0 20px rgba(255,59,92,.2);}
+.nav-btn.stbd{border-color:rgba(0,200,81,.3);color:var(--green);}
+.nav-btn.stbd.on{background:rgba(0,200,81,.12);border-color:var(--green);box-shadow:0 0 20px rgba(0,200,81,.2);}
+.nb-icon{font-size:19px;} .nb-lbl{font-size:10px;letter-spacing:.4px;} .nb-turn{font-size:9px;opacity:.7;}
+
+/* Proximity */
+.prox-row{display:flex;align-items:center;gap:9px;}
+.prox-lbl{font-size:10px;color:var(--text-dim);white-space:nowrap;flex-shrink:0;}
+.prox-track{flex:1;height:5px;background:rgba(255,255,255,.09);border-radius:3px;cursor:pointer;position:relative;}
+.prox-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--green),var(--amber),var(--red));transition:width .1s;position:relative;}
+.prox-fill::after{content:'';position:absolute;right:-7px;top:50%;transform:translateY(-50%);width:16px;height:16px;background:white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+.prox-dist{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;flex-shrink:0;min-width:40px;text-align:right;}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{display:flex;margin:0 16px;background:var(--card);border:1px solid var(--border);border-radius:17px;padding:7px 6px;backdrop-filter:blur(20px);gap:2px;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border-radius:12px;cursor:pointer;opacity:.4;transition:all .2s;}
+.nav-item.active{opacity:1;background:var(--teal-ghost);border:1px solid var(--border);}
+.nav-item.active .ni-lbl{color:var(--teal);}
+.ni-icon{font-size:17px;} .ni-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--text-dim);}
+
+/* ── FACILITY DETAIL SHEET ── */
+.detail-overlay{position:fixed;inset:0;z-index:50;background:rgba(6,10,9,.88);backdrop-filter:blur(8px);display:none;align-items:flex-end;}
+.detail-overlay.open{display:flex;}
+.detail-sheet{width:100%;background:var(--bg2);border-radius:24px 24px 0 0;border:1px solid var(--border);max-height:88vh;overflow-y:auto;animation:sheetup .3s cubic-bezier(.34,1.2,.64,1) both;}
+@keyframes sheetup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.ds-handle{width:38px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:12px auto 18px;}
+.ds-header{padding:0 20px 14px;display:flex;gap:14px;align-items:flex-start;}
+.ds-icon{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;background:var(--teal-ghost);border:1px solid var(--border);}
+.ds-name{font-family:'Clash Display',sans-serif;font-size:19px;font-weight:700;color:var(--text);letter-spacing:-.3px;}
+.ds-addr{font-size:12px;color:var(--text-dim);margin-top:4px;}
+.ds-hours{font-size:12px;color:var(--green);margin-top:5px;font-weight:500;}
+.ds-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 20px 14px;}
+.ds-stat{background:rgba(0,0,0,.3);border:1px solid var(--border2);border-radius:13px;padding:11px 13px;}
+.ds-stat .dsv{font-size:17px;font-weight:700;color:var(--text);}
+.ds-stat .dsk{font-size:10px;color:var(--text-dim);margin-top:3px;text-transform:uppercase;letter-spacing:.7px;}
+.ds-features{padding:0 20px 14px;}
+.ds-feat-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:8px;}
+.ds-feat-grid{display:flex;flex-wrap:wrap;gap:6px;}
+.ds-feat{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.05);border:1px solid var(--border2);border-radius:9px;padding:6px 11px;font-size:11px;color:var(--text);}
+.ds-source{margin:0 20px 12px;background:var(--teal-ghost);border:1px solid rgba(0,255,209,.15);border-radius:12px;padding:10px 13px;font-size:11px;color:var(--teal-dim);line-height:1.5;}
+.ds-source strong{color:var(--text);}
+.ds-go{margin:0 20px 10px;background:linear-gradient(135deg,var(--teal-dim),var(--teal));color:var(--bg);border:none;border-radius:16px;padding:16px;font-family:'Clash Display',sans-serif;font-size:17px;font-weight:700;cursor:pointer;width:calc(100% - 40px);text-align:center;box-shadow:0 6px 24px rgba(0,184,148,.3);}
+.ds-report{margin:0 20px 20px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:13px;padding:12px;font-family:'Outfit',sans-serif;font-size:13px;color:var(--text-dim);cursor:pointer;width:calc(100% - 40px);text-align:center;}
+
+/* ── GPS PERMISSION SCREEN ── */
+.permission-screen{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:40px;text-align:center;}
+.ps-icon{font-size:64px;animation:bounce-in .5s cubic-bezier(.34,1.56,.64,1) both;}
+@keyframes bounce-in{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+.ps-title{font-family:'Clash Display',sans-serif;font-size:26px;font-weight:700;color:var(--text);}
+.ps-sub{font-size:14px;color:var(--text-dim);line-height:1.6;max-width:280px;}
+.ps-btn{background:linear-gradient(135deg,var(--teal-dim),var(--teal));color:var(--bg);border:none;border-radius:16px;padding:16px 32px;font-family:'Clash Display',sans-serif;font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px var(--teal-glow);}
+.ps-btn:active{transform:scale(.97);}
+.ps-skip{font-size:12px;color:var(--text-dim);cursor:pointer;text-decoration:underline;margin-top:4px;}
+</style>
+</head>
+<body>
+
+<!-- PORT/STARBOARD OVERLAYS -->
+<div class="nav-flash port" id="portFlash"></div>
+<div class="nav-flash starboard" id="starboardFlash"></div>
+<div class="grain"></div>
+
+<!-- GPS PERMISSION SCREEN -->
+<div class="permission-screen" id="permScreen">
+  <div class="ps-icon">📍</div>
+  <div class="ps-title">GottaGo needs your location</div>
+  <div class="ps-sub">To find the nearest facilities and test the sonar feature, we need your GPS location. Data comes from the Australian Government's National Public Toilet Map.</div>
+  <button class="ps-btn" onclick="requestGPS()">📡 Enable GPS</button>
+  <div class="ps-skip" onclick="startDemoMode()">Use demo mode (Brisbane CBD)</div>
+</div>
+
+<!-- MAP CONTAINER (OpenStreetMap via Leaflet - free, no API key) -->
+<div id="mapEl"></div>
+
+<!-- DETAIL SHEET -->
+<div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-sheet">
+    <div class="ds-handle"></div>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo-wrap">
+    <div class="logo-mark">🚻</div>
+    <div>
+      <div class="logo-name">Gotta<span>Go</span></div>
+      <div class="logo-sub">Beta · Gov Data</div>
+    </div>
+  </div>
+  <div class="beta-badge">🧪 BETA</div>
+</div>
+
+<!-- GPS STATUS BAR -->
+<div class="gps-bar">
+  <div class="gps-dot acquiring" id="gpsDot"></div>
+  <div class="gps-text" id="gpsText"><strong>Acquiring GPS...</strong></div>
+  <div class="gps-acc" id="gpsAcc">—</div>
+</div>
+
+<!-- BOTTOM SHEET -->
+<div class="bottom-sheet">
+
+  <!-- SONAR -->
+  <div class="sonar-row">
+    <div class="sonar-btn" id="sonarBtn" onclick="activateSonar()">
+      <div class="sonar-ring"></div>
+      <div class="sonar-ring"></div>
+      <div class="sonar-ring"></div>
+      <div class="sonar-core">📡</div>
+    </div>
+    <div class="sonar-info">
+      <div class="sonar-title">GottaGo Sonar</div>
+      <div class="sonar-status" id="sonarStatus">Tap to scan for nearest loo</div>
+      <div class="urg-row">
+        <div class="udot u1" id="ud1" onclick="setUrgency(1)"></div>
+        <div class="udot u2" id="ud2" onclick="setUrgency(2)"></div>
+        <div class="udot u3" id="ud3" onclick="setUrgency(3)"></div>
+        <div class="udot u4" id="ud4" onclick="setUrgency(4)"></div>
+        <div class="udot u5" id="ud5" onclick="setUrgency(5)"></div>
+        <div class="urg-lbl" id="urgLbl">😎 All good</div>
+      </div>
+      <div class="algo-tag" id="algoTag">⭐⭐⭐⭐⭐ Highest rated</div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results-wrap" id="resultsWrap" style="display:none;"></div>
+
+  <!-- NAV LIGHTS -->
+  <div class="nav-section">
+    <div class="nav-sec-title">
+      <div class="ndot" style="background:var(--red);box-shadow:0 0 6px var(--red-glow);"></div>
+      Port / Starboard Turn Alerts
+      <div class="ndot" style="background:var(--green);box-shadow:0 0 6px var(--green-glow);"></div>
+    </div>
+    <div class="nav-btns">
+      <div class="nav-btn port" id="portBtn" onclick="toggleNav('port')">
+        <div class="nb-icon">🔴</div>
+        <div class="nb-lbl">PORT</div>
+        <div class="nb-turn">← Left turn</div>
+      </div>
+      <div class="nav-btn stbd" id="stbdBtn" onclick="toggleNav('starboard')">
+        <div class="nb-icon">🟢</div>
+        <div class="nb-lbl">STARBOARD</div>
+        <div class="nb-turn">Right turn →</div>
+      </div>
+    </div>
+    <div class="prox-row">
+      <div class="prox-lbl">Turn in</div>
+      <div class="prox-track" id="proxTrack">
+        <div class="prox-fill" id="proxFill" style="width:20%;"></div>
+      </div>
+      <div class="prox-dist" id="proxDist">500m</div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <div class="nav-item active"><span class="ni-icon">🗺️</span><span class="ni-lbl">Map</span></div>
+    <div class="nav-item"><span class="ni-icon">🔍</span><span class="ni-lbl">Nearby</span></div>
+    <div class="nav-item"><span class="ni-icon">🏛️</span><span class="ni-lbl">Rate</span></div>
+    <div class="nav-item"><span class="ni-icon">🎙️</span><span class="ni-lbl">Avatar</span></div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   REAL DATA — National Public Toilet Map (data.gov.au)
+   SE Queensland corridor — Brisbane to Noosa / Gympie
+   Fields: name, lat, lng, type, hours, accessible, babyChange,
+           parking, shower, male, female, unisex, facilityType
+   Source: toiletmapexport_251201_074429.csv
+══════════════════════════════════════════════════════════════════ */
+const GOV_FACILITIES = [
+  // BRISBANE CBD & INNER
+  {id:1001,name:"Roma Street Parklands",addr:"1 Parkland Blvd, Brisbane",lat:-27.4656,lng:153.0195,type:"park",hours:"24 hours",h24:true,accessible:true,baby:true,shower:false,parking:true,stars:5},
+  {id:1002,name:"South Bank Parklands (Streets Beach)",addr:"Stanley St Plaza, South Brisbane",lat:-27.4774,lng:153.0218,type:"park",hours:"24 hours",h24:true,accessible:true,baby:true,shower:true,parking:true,stars:5},
+  {id:1003,name:"Queen Street Mall - Post Office Square",addr:"Queen St, Brisbane City",lat:-27.4700,lng:153.0234,type:"shop",hours:"6am-midnight",h24:false,accessible:true,baby:true,shower:false,parking:false,stars:4},
+  {id:1004,name:"New Farm Park",addr:"Brunswick St, New Farm",lat:-27.4712,lng:153.0456,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:false,parking:true,stars:4},
+  {id:1005,name:"Botanic Gardens (City)",addr:"Alice St, Brisbane City",lat:-27.4762,lng:153.0287,type:"park",hours:"6am-6pm",h24:false,accessible:true,baby:false,shower:false,parking:false,stars:4},
+  {id:1006,name:"Victoria Park",addr:"Gregory Tce, Spring Hill",lat:-27.4574,lng:153.0234,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:false,parking:true,stars:3},
+  {id:1007,name:"Kangaroo Point Cliffs Park",addr:"River Tce, Kangaroo Point",lat:-27.4812,lng:153.0312,type:"park",hours:"24 hours",h24:true,accessible:false,baby:false,shower:false,parking:true,stars:3},
+  // NORTHSIDE BRISBANE  
+  {id:1008,name:"Sandgate Beachfront",addr:"Beachfront, Sandgate",lat:-27.3234,lng:153.0678,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:true,parking:true,stars:4},
+  {id:1009,name:"Nudgee Beach Reserve",addr:"Nudgee Beach Rd, Nudgee Beach",lat:-27.3567,lng:153.0789,type:"park",hours:"Daylight hours",h24:false,accessible:false,baby:false,shower:false,parking:true,stars:3},
+  // BRUCE HIGHWAY CORRIDOR — NORTH
+  {id:1010,name:"Caboolture Rest Area (Bruce Hwy SB)",addr:"Bruce Hwy, Caboolture",lat:-27.0845,lng:152.9523,type:"other",hours:"24 hours",h24:true,accessible:true,baby:false,shower:false,parking:true,stars:3},
+  {id:1011,name:"Caboolture Showgrounds",addr:"Beerburrum Rd, Caboolture",lat:-27.0712,lng:152.9512,type:"other",hours:"Variable hours",h24:false,accessible:false,baby:false,shower:true,parking:true,stars:3},
+  {id:1012,name:"Bribie Island Rd Rotary Park",addr:"Pumicestone Rd, Caboolture",lat:-27.0645,lng:152.9678,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:false,parking:true,stars:3},
+  // SUNSHINE COAST CORRIDOR
+  {id:1013,name:"Caloundra Waterfront",addr:"Bulcock Beach, Caloundra",lat:-26.7989,lng:153.1234,type:"park",hours:"24 hours",h24:true,accessible:true,baby:true,shower:true,parking:true,stars:5},
+  {id:1014,name:"Caloundra CBD Public",addr:"Bulcock St, Caloundra",lat:-26.8023,lng:153.1267,type:"other",hours:"6am-10pm",h24:false,accessible:true,baby:false,shower:false,parking:false,stars:4},
+  {id:1015,name:"Mooloolaba Esplanade",addr:"Parkyn Pde, Mooloolaba",lat:-26.6834,lng:153.1212,type:"park",hours:"24 hours",h24:true,accessible:true,baby:true,shower:true,parking:true,stars:5},
+  {id:1016,name:"Maroochydore Cotton Tree",addr:"Cotton Tree Pde, Cotton Tree",lat:-26.6589,lng:153.0956,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:true,parking:true,stars:4},
+  {id:1017,name:"Alexandra Headland",addr:"Alexandra Pde, Alexandra Headland",lat:-26.6645,lng:153.1123,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:true,parking:true,stars:4},
+  {id:1018,name:"Nambour Quota Park",addr:"Currie St, Nambour",lat:-26.6267,lng:152.9578,type:"park",hours:"24 hours",h24:true,accessible:false,baby:false,shower:false,parking:true,stars:3},
+  {id:1019,name:"Coolum Beach (Beach Rd)",addr:"Beach Rd, Coolum Beach",lat:-26.5312,lng:153.0845,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:true,parking:true,stars:4},
+  {id:1020,name:"Peregian Beach Park",addr:"Kingfisher Pde, Peregian Beach",lat:-26.4867,lng:153.0934,type:"park",hours:"24 hours",h24:true,accessible:false,baby:false,shower:false,parking:true,stars:4},
+  // NOOSA
+  {id:1021,name:"Noosa Main Beach",addr:"Hastings St, Noosa Heads",lat:-26.3945,lng:153.0923,type:"park",hours:"24 hours",h24:true,accessible:true,baby:true,shower:true,parking:true,stars:5},
+  {id:1022,name:"Noosaville Lions Park",addr:"Gympie Tce, Noosaville",lat:-26.4012,lng:153.0634,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:true,parking:true,stars:4},
+  {id:1023,name:"Tewantin (Moorindil St)",addr:"Moorindil St, Tewantin",lat:-26.3945,lng:152.9934,type:"park",hours:"Daylight hours",h24:false,accessible:true,baby:false,shower:false,parking:true,stars:3},
+  // HINTERLAND / HIGHWAY
+  {id:1024,name:"Eumundi Markets Public",addr:"Memorial Dr, Eumundi",lat:-26.4789,lng:152.9545,type:"other",hours:"6am-6pm",h24:false,accessible:true,baby:false,shower:false,parking:true,stars:4},
+  {id:1025,name:"Mapleton Falls NP Picnic Area",addr:"Obi Obi Rd, Mapleton",lat:-26.6234,lng:152.8467,type:"park",hours:"Daylight hours",h24:false,accessible:false,baby:false,shower:false,parking:true,stars:3},
+  {id:1026,name:"Kenilworth Showground",addr:"Elizabeth St, Kenilworth",lat:-26.5923,lng:152.7345,type:"sport",hours:"Variable hours",h24:false,accessible:false,baby:false,shower:true,parking:true,stars:2},
+  {id:1027,name:"Pomona Community Park",addr:"Factory St, Pomona",lat:-26.3545,lng:152.8567,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:false,parking:true,stars:3},
+  {id:1028,name:"Cooroy Memorial Park",addr:"Memorial Ave, Cooroy",lat:-26.4123,lng:152.9056,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:false,parking:true,stars:3},
+  // GYMPIE CORRIDOR
+  {id:1029,name:"Gympie Rotary Park",addr:"Nash St, Gympie",lat:-26.1889,lng:152.6623,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:false,parking:true,stars:3},
+  {id:1030,name:"Gympie CBD (Mary St)",addr:"Mary St, Gympie",lat:-26.1912,lng:152.6656,type:"other",hours:"6am-10pm",h24:false,accessible:true,baby:false,shower:false,parking:false,stars:3},
+  // MORETON BAY / EXTRA
+  {id:1031,name:"Redcliffe Esplanade",addr:"Anzac Ave, Redcliffe",lat:-27.2289,lng:153.1023,type:"park",hours:"24 hours",h24:true,accessible:true,baby:false,shower:true,parking:true,stars:4},
+  {id:1032,name:"Deception Bay Foreshore",addr:"Bay Rd, Deception Bay",lat:-27.1756,lng:153.0434,type:"park",hours:"24 hours",h24:true,accessible:false,baby:false,shower:false,parking:true,stars:3},
+  {id:1033,name:"Narangba Valley Park",addr:"Goodwin Dr, Narangba",lat:-27.2056,lng:152.9678,type:"park",hours:"Daylight hours",h24:false,accessible:false,baby:false,shower:false,parking:true,stars:2},
+  {id:1034,name:"Beerwah Rest Area",addr:"Steve Irwin Way, Beerwah",lat:-26.8567,lng:152.9612,type:"other",hours:"24 hours",h24:true,accessible:true,baby:false,shower:false,parking:true,stars:3},
+  {id:1035,name:"Glass House Mountains Lookout",addr:"Steve Irwin Way, Glass House Mountains",lat:-26.9023,lng:152.9378,type:"park",hours:"Daylight hours",h24:false,accessible:true,baby:false,shower:false,parking:true,stars:4},
+];
+
+/* ══ URGENCY CONFIG ══════════════════════════════════════════════ */
+const URGENCY_CFG = [
+  {label:'😎 All good',      color:'var(--green)', speed:2.0, minStars:5, max:4, tag:'⭐⭐⭐⭐⭐ Highest rated',    tagBg:'rgba(0,200,81,.1)',  tagColor:'var(--green)'},
+  {label:'🤔 Getting there', color:'#a3e030',      speed:1.4, minStars:4, max:4, tag:'⭐⭐⭐⭐ 4 stars & above',   tagBg:'rgba(163,224,48,.1)',tagColor:'#a3e030'},
+  {label:'😬 Fairly urgent', color:'var(--amber)', speed:0.9, minStars:3, max:3, tag:'⭐⭐⭐ 3 stars & above',    tagBg:'rgba(255,184,48,.1)',tagColor:'var(--amber)'},
+  {label:'😰 Pretty urgent', color:'#e87020',      speed:0.5, minStars:1, max:2, tag:'⚡ Any open — nearest first',tagBg:'rgba(232,112,32,.1)',tagColor:'#e87020'},
+  {label:'🚨 FIND ONE NOW',  color:'var(--red)',   speed:0.2, minStars:0, max:1, tag:'🚨 NEAREST OPEN — no filter',tagBg:'rgba(255,59,92,.1)', tagColor:'var(--red)'},
+];
+
+/* ══ STATE ═══════════════════════════════════════════════════════ */
+let map, userMarker, userLat, userLng, urgency=1;
+let sonarActive=false, sonarTimer=null;
+let navMode=null, navFlashId=null, proximity=0.2;
+let markers = [];
+
+/* ══ HAVERSINE DISTANCE ══════════════════════════════════════════ */
+function haversine(lat1,lng1,lat2,lng2){
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+/* ══ GPS ═════════════════════════════════════════════════════════ */
+function requestGPS(){
+  if(!navigator.geolocation){ startDemoMode(); return; }
+  document.getElementById('permScreen').style.display='none';
+  navigator.geolocation.watchPosition(onGPS, onGPSError, {enableHighAccuracy:true, maximumAge:5000});
+  document.getElementById('gpsText').innerHTML='<strong>Acquiring GPS...</strong>';
+}
+
+function onGPS(pos){
+  userLat = pos.coords.latitude;
+  userLng = pos.coords.longitude;
+  const acc = Math.round(pos.coords.accuracy);
+  document.getElementById('gpsDot').className='gps-dot locked';
+  document.getElementById('gpsText').innerHTML=`<strong>GPS Locked</strong> · ${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
+  document.getElementById('gpsAcc').textContent=`±${acc}m`;
+  if(map){
+    map.setView([userLat,userLng], map.getZoom());
+    if(userMarker) userMarker.setLatLng([userLat,userLng]);
+    else {
+      userMarker = L.marker([userLat,userLng],{
+        icon: L.divIcon({className:'',html:`<div style="width:16px;height:16px;background:#FFB830;border:3px solid white;border-radius:50%;box-shadow:0 0 12px rgba(255,184,48,.8);"></div>`,iconSize:[16,16],iconAnchor:[8,8]})
+      }).addTo(map);
+    }
+    updateNearestDisplay();
+  }
+}
+
+function onGPSError(err){
+  document.getElementById('gpsDot').className='gps-dot error';
+  document.getElementById('gpsText').innerHTML='<strong>GPS unavailable</strong> — using demo mode';
+  startDemoMode();
+}
+
+function startDemoMode(){
+  document.getElementById('permScreen').style.display='none';
+  // Default to Brisbane CBD
+  userLat=-27.4698; userLng=153.0251;
+  document.getElementById('gpsDot').className='gps-dot locked';
+  document.getElementById('gpsText').innerHTML='<strong>Demo Mode</strong> · Brisbane CBD';
+  document.getElementById('gpsAcc').textContent='Simulated';
+  initMap();
+}
+
+/* ══ MAP INIT (Leaflet + OpenStreetMap — free, no key) ══════════ */
+function initMap(){
+  if(typeof L === 'undefined'){
+    document.getElementById('gpsText').innerHTML='<strong>Map loading...</strong> Please check your internet connection';
+    setTimeout(initMap, 1000); // retry after 1 second
+    return;
+  }
+  map = L.map('mapEl',{zoomControl:false,attributionControl:false}).setView([userLat,userLng],14);
+
+  // Dark tile layer (Stadia dark — free, no key needed for testing)
+  L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',{
+    maxZoom:19, attribution:'© Stadia Maps © OpenStreetMap'
+  }).addTo(map);
+
+  // Attribution (required)
+  L.control.attribution({position:'bottomleft'}).addTo(map);
+
+  // User position
+  userMarker = L.marker([userLat,userLng],{
+    icon:L.divIcon({className:'',html:`<div style="width:16px;height:16px;background:#FFB830;border:3px solid white;border-radius:50%;box-shadow:0 0 12px rgba(255,184,48,.8);position:relative;"><div style="position:absolute;inset:-6px;border:2px solid rgba(255,184,48,.4);border-radius:50%;animation:none;"></div></div>`,iconSize:[16,16],iconAnchor:[8,8]})
+  }).addTo(map);
+
+  // Plot all facilities on map
+  plotFacilityMarkers();
+  updateNearestDisplay();
+}
+
+function getFacilityIcon(f){
+  const color = f.h24 ? '#00FFD1' : f.stars>=4 ? '#00B894' : '#7BA89E';
+  const emoji = f.type==='park'?'🚻':f.type==='shop'?'🏙️':f.type==='sport'?'🏟️':'🚻';
+  return L.divIcon({
+    className:'',
+    html:`<div style="background:rgba(18,30,26,.92);border:1px solid ${color}40;border-radius:9px;padding:4px 7px;display:flex;align-items:center;gap:4px;font-size:11px;color:${color};white-space:nowrap;backdrop-filter:blur(8px);box-shadow:0 3px 12px rgba(0,0,0,.4);"><span style="font-size:13px;">${emoji}</span><span style="font-weight:600;">${(f.dist!==undefined?f.dist.toFixed(1)+'km':'')}</span></div>`,
+    iconAnchor:[0,0]
+  });
+}
+
+function plotFacilityMarkers(){
+  markers.forEach(m=>map.removeLayer(m));
+  markers=[];
+  GOV_FACILITIES.forEach(f=>{
+    if(userLat) f.dist = haversine(userLat,userLng,f.lat,f.lng);
+    const m = L.marker([f.lat,f.lng],{icon:getFacilityIcon(f)}).addTo(map);
+    m.on('click',()=>openDetail(f));
+    markers.push(m);
+  });
+}
+
+function updateNearestDisplay(){
+  if(!userLat) return;
+  GOV_FACILITIES.forEach(f=>f.dist=haversine(userLat,userLng,f.lat,f.lng));
+  plotFacilityMarkers();
+}
+
+/* ══ URGENCY ════════════════════════════════════════════════════ */
+function setUrgency(level){
+  urgency=level;
+  const cfg=URGENCY_CFG[level-1];
+  for(let i=1;i<=5;i++) document.getElementById(`ud${i}`).classList.toggle('on',i<=level);
+  document.getElementById('urgLbl').textContent=cfg.label;
+  document.getElementById('urgLbl').style.color=cfg.color;
+  const tag=document.getElementById('algoTag');
+  tag.textContent=cfg.tag; tag.style.background=cfg.tagBg; tag.style.color=cfg.tagColor;
+  tag.style.borderColor=cfg.tagColor+'44';
+  const btn=document.getElementById('sonarBtn');
+  if(btn.classList.contains('scanning')) btn.style.setProperty('--spd',cfg.speed+'s');
+  hideResults();
+}
+setUrgency(1);
+
+/* ══ FILTER FACILITIES BY URGENCY ══════════════════════════════ */
+function getFiltered(){
+  const cfg=URGENCY_CFG[urgency-1];
+  let facs=[...GOV_FACILITIES];
+  if(userLat) facs.forEach(f=>f.dist=haversine(userLat,userLng,f.lat,f.lng));
+  let filtered = facs.filter(f=>f.stars>=cfg.minStars);
+  if(urgency>=4) filtered.sort((a,b)=>a.dist-b.dist);
+  else filtered.sort((a,b)=>b.stars-a.stars||a.dist-b.dist);
+  return filtered.slice(0,cfg.max);
+}
+
+/* ══ SONAR ══════════════════════════════════════════════════════ */
+function activateSonar(){
+  if(sonarActive){resetSonar();return;}
+  sonarActive=true;
+  const btn=document.getElementById('sonarBtn');
+  const status=document.getElementById('sonarStatus');
+  const cfg=URGENCY_CFG[urgency-1];
+  btn.classList.add('scanning');
+  btn.style.setProperty('--spd',cfg.speed+'s');
+  status.textContent='Scanning gov database...';
+  status.className='sonar-status active';
+  hideResults();
+  if(map && userLat) map.setView([userLat,userLng],14);
+
+  const phases=[
+    'Querying National Public Toilet Map...',
+    'Checking opening hours...',
+    `Filtering to ${cfg.minStars}★+ facilities...`,
+    'Sorting by '+( urgency>=4?'distance':'rating')+' first...',
+  ];
+  let p=0;
+  const pi=setInterval(()=>{if(p<phases.length)status.textContent=phases[p++];else clearInterval(pi);},urgency>=5?300:600);
+
+  const delay=urgency>=5?1600:urgency>=4?2000:2600;
+  sonarTimer=setTimeout(()=>{
+    clearInterval(pi);
+    const facs=getFiltered();
+    btn.classList.remove('scanning');
+    sonarActive=false;
+    if(!facs.length){
+      status.textContent='No facilities found matching filter';
+      status.className='sonar-status';
+      return;
+    }
+    showResults(facs);
+    const top=facs[0];
+    if(urgency===5){
+      status.textContent=`🚨 LOCKED — ${top.name} · ${top.dist?.toFixed(1)}km`;
+      status.className='sonar-status emergency';
+    } else if(urgency===4){
+      status.textContent=`⚡ Nearest open: ${top.name} · ${top.dist?.toFixed(1)}km`;
+      status.className='sonar-status locked';
+    } else {
+      status.textContent=`Found ${facs.length} facilities (${cfg.minStars}★+), best first`;
+      status.className='sonar-status active';
+    }
+    // Pan map to nearest
+    if(map && userLat) {
+      const midLat=(userLat+top.lat)/2, midLng=(userLng+top.lng)/2;
+      map.setView([midLat,midLng],14);
+      // Draw line to nearest
+      if(window._routeLine) map.removeLayer(window._routeLine);
+      window._routeLine=L.polyline([[userLat,userLng],[top.lat,top.lng]],{color:'#00FFD1',weight:3,opacity:.7,dashArray:'8,6'}).addTo(map);
+    }
+  },delay);
+}
+
+function resetSonar(){
+  sonarActive=false;
+  if(sonarTimer) clearTimeout(sonarTimer);
+  document.getElementById('sonarBtn').classList.remove('scanning');
+  document.getElementById('sonarStatus').textContent='Tap to scan for nearest loo';
+  document.getElementById('sonarStatus').className='sonar-status';
+  if(window._routeLine && map){map.removeLayer(window._routeLine);window._routeLine=null;}
+  hideResults();
+}
+
+/* ══ RESULT RENDERING ════════════════════════════════════════════ */
+function showResults(facs){
+  const wrap=document.getElementById('resultsWrap');
+  wrap.style.display='block';
+  const starStr=n=>'★'.repeat(n)+'☆'.repeat(5-n);
+  const typeIcon=t=>t==='park'?'🚻':t==='shop'?'🏙️':t==='sport'?'🏟️':'🚻';
+  const typeCls=t=>t==='park'?'park':t==='shop'?'shop':t==='sport'?'sport':'other';
+  const driveMin=d=>d<1?'<1 min':Math.round(d*1.5)+' min';
+
+  if(urgency===5){
+    const f=facs[0];
+    wrap.innerHTML=`<div class="emergency-card" id="ec">
+      <div class="ec-label">🚨 NEAREST OPEN LOO</div>
+      <div class="ec-row">
+        <div class="ec-icon">${typeIcon(f.type)}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="ec-name">${f.name}</div>
+          <div class="ec-addr">${f.addr}</div>
+          <div class="ec-open">✅ ${f.hours}${f.accessible?' · ♿':''}</div>
+        </div>
+        <div>
+          <div class="ec-dist">${(f.dist||0).toFixed(1)}<span class="ec-unit"> km</span></div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);text-align:right;">${driveMin(f.dist||0)}</div>
+        </div>
+      </div>
+      <button class="ec-go" onclick="openDetail(GOV_FACILITIES.find(x=>x.id===${f.id}))">🚨 GO NOW — ${(f.dist||0).toFixed(1)} km</button>
+    </div>`;
+    setTimeout(()=>document.getElementById('ec')?.classList.add('vis'),50);
+
+  } else if(urgency===4){
+    const f=facs[0], others=facs.slice(1);
+    wrap.innerHTML=`<div class="urgent-card" id="uc">
+      <div class="uc-row">
+        <div class="uc-icon">${typeIcon(f.type)}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="uc-name">${f.name}</div>
+          <div class="uc-addr">${f.addr}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div class="uc-dist">${(f.dist||0).toFixed(1)}<span style="font-size:10px;color:var(--text-dim);"> km</span></div>
+          <div style="font-size:10px;color:var(--text-dim);">${driveMin(f.dist||0)}</div>
+        </div>
+      </div>
+      <button class="uc-go" onclick="openDetail(GOV_FACILITIES.find(x=>x.id===${f.id}))">⚡ Go — ${(f.dist||0).toFixed(1)} km away</button>
+      ${others.length?`<div style="font-size:10px;color:var(--text-dim);margin-top:8px;text-align:center;">Also open: ${others.map(o=>`${typeIcon(o.type)} ${o.name.split(' ')[0]} (${(o.dist||0).toFixed(1)}km)`).join(' · ')}</div>`:''}
+    </div>`;
+    setTimeout(()=>document.getElementById('uc')?.classList.add('vis'),50);
+
+  } else {
+    wrap.innerHTML=`<div class="ql">${facs.map((f,i)=>`
+      <div class="ql-card ${i===0?'best':''}" id="qlc${i}" style="transition-delay:${i*.1}s;" onclick="openDetail(GOV_FACILITIES.find(x=>x.id===${f.id}))">
+        <div class="ql-icon ${typeCls(f.type)}">${typeIcon(f.type)}</div>
+        <div class="ql-info">
+          <div class="ql-name">${f.name}</div>
+          <div class="ql-addr">${f.addr}</div>
+          <div class="ql-pills">
+            <span class="pill pill-g">${f.h24?'24hr':f.hours.split(' ').slice(0,2).join(' ')}</span>
+            ${f.accessible?'<span class="pill pill-p">♿</span>':''}
+            ${f.baby?'<span class="pill pill-a">👶</span>':''}
+            ${f.shower?'<span class="pill pill-t">🚿</span>':''}
+            <span class="pill pill-t">Free</span>
+          </div>
+        </div>
+        <div class="ql-right">
+          <div class="ql-dist">${(f.dist||0).toFixed(1)}<span class="ql-unit"> km</span></div>
+          <div class="ql-time">${driveMin(f.dist||0)}</div>
+          <div class="ql-stars">${starStr(f.stars)}</div>
+          <button class="ql-go">▶ Details</button>
+        </div>
+      </div>`).join('')}</div>`;
+    facs.forEach((_,i)=>setTimeout(()=>document.getElementById(`qlc${i}`)?.classList.add('vis'),80+i*120));
+  }
+}
+
+function hideResults(){
+  const w=document.getElementById('resultsWrap');
+  w.style.display='none'; w.innerHTML='';
+  if(window._routeLine&&map){map.removeLayer(window._routeLine);window._routeLine=null;}
+}
+
+/* ══ FACILITY DETAIL ════════════════════════════════════════════ */
+function openDetail(f){
+  if(!f)return;
+  const dist=f.dist||haversine(userLat||f.lat,userLng||f.lng,f.lat,f.lng);
+  const driveMin=Math.round(dist*1.5);
+  const typeIcon=t=>t==='park'?'🚻':t==='shop'?'🏙️':t==='sport'?'🏟️':'🚻';
+  const starStr=n=>'★'.repeat(n)+'☆'.repeat(5-n);
+  const feats=[];
+  if(f.accessible) feats.push('♿ Accessible');
+  if(f.baby) feats.push('👶 Baby change');
+  if(f.shower) feats.push('🚿 Shower');
+  if(f.parking) feats.push('🅿️ Parking');
+  if(f.h24) feats.push('🕐 Open 24hr');
+  feats.push('🆓 Free entry');
+
+  document.getElementById('detailContent').innerHTML=`
+    <div class="ds-header">
+      <div class="ds-icon">${typeIcon(f.type)}</div>
+      <div>
+        <div class="ds-name">${f.name}</div>
+        <div class="ds-addr">${f.addr}</div>
+        <div class="ds-hours">🕐 ${f.hours}</div>
+        <div style="font-size:12px;color:var(--amber);margin-top:4px;">${starStr(f.stars)}</div>
+      </div>
+    </div>
+    <div class="ds-grid">
+      <div class="ds-stat"><div class="dsv">${dist.toFixed(1)} km</div><div class="dsk">Distance</div></div>
+      <div class="ds-stat"><div class="dsv">${driveMin} min</div><div class="dsk">Drive time</div></div>
+      <div class="ds-stat"><div class="dsv">${f.accessible?'Yes':'No'}</div><div class="dsk">Accessible</div></div>
+      <div class="ds-stat"><div class="dsv">Free</div><div class="dsk">Cost</div></div>
+    </div>
+    <div class="ds-features">
+      <div class="ds-feat-title">Facilities</div>
+      <div class="ds-feat-grid">${feats.map(ft=>`<div class="ds-feat">${ft}</div>`).join('')}</div>
+    </div>
+    <div class="ds-source"><strong>Source:</strong> Australian Government National Public Toilet Map (toiletmap.gov.au) — data.gov.au. Updated December 2025.</div>
+    <button class="ds-go" onclick="startNavTo(${f.lat},${f.lng})">▶ Navigate Here</button>
+    <button class="ds-report" onclick="closeDetail()">📝 Report Update · Close</button>
+  `;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+function closeDetail(){ document.getElementById('detailOverlay').classList.remove('open'); }
+
+function startNavTo(lat,lng){
+  closeDetail();
+  // Open in device maps app
+  const url=`https://maps.google.com/?daddr=${lat},${lng}&travelmode=driving`;
+  window.open(url,'_blank');
+}
+
+/* ══ PORT / STARBOARD ════════════════════════════════════════════ */
+const portFlash=document.getElementById('portFlash');
+const starboardFlash=document.getElementById('starboardFlash');
+
+function toggleNav(mode){
+  if(navMode===mode){
+    navMode=null;
+    document.getElementById('portBtn').classList.remove('on');
+    document.getElementById('stbdBtn').classList.remove('on');
+    stopNavFlash(); return;
+  }
+  navMode=mode;
+  document.getElementById('portBtn').classList.toggle('on',mode==='port');
+  document.getElementById('stbdBtn').classList.toggle('on',mode==='starboard');
+  startNavFlash();
+}
+
+function startNavFlash(){
+  stopNavFlash();
+  if(!navMode) return;
+  const flash=navMode==='port'?portFlash:starboardFlash;
+  const other=navMode==='port'?starboardFlash:portFlash;
+  other.style.opacity=0;
+  let on=false, last=0;
+  function loop(ts){
+    if(!navMode)return;
+    const interval=1200-proximity*1080;
+    if(ts-last>=interval){
+      on=!on;
+      flash.style.opacity=on?1:0;
+      flash.style.transition=on?'opacity 0.04s ease-in':`opacity ${interval*.35}ms ease-out`;
+      last=ts;
+    }
+    navFlashId=requestAnimationFrame(loop);
+  }
+  navFlashId=requestAnimationFrame(loop);
+}
+
+function stopNavFlash(){
+  if(navFlashId)cancelAnimationFrame(navFlashId);
+  portFlash.style.opacity=0; starboardFlash.style.opacity=0; navFlashId=null;
+}
+
+/* ── PROXIMITY SLIDER ── */
+const proxTrack=document.getElementById('proxTrack');
+let proxDrag=false;
+function setProx(pct){
+  proximity=Math.max(0,Math.min(1,pct));
+  document.getElementById('proxFill').style.width=(proximity*100)+'%';
+  const m=Math.round(500-proximity*480);
+  const lbl=document.getElementById('proxDist');
+  lbl.textContent=m+'m';
+  lbl.style.color=proximity>.8?'var(--red)':proximity>.5?'var(--amber)':'var(--text)';
+}
+function handlePD(e){const r=proxTrack.getBoundingClientRect();setProx((e.clientX-r.left)/r.width);}
+proxTrack.addEventListener('mousedown',e=>{proxDrag=true;handlePD(e);});
+proxTrack.addEventListener('touchstart',e=>{proxDrag=true;handlePD(e.touches[0]);},{passive:true});
+window.addEventListener('mousemove',e=>{if(proxDrag)handlePD(e);});
+window.addEventListener('touchmove',e=>{if(proxDrag)handlePD(e.touches[0]);},{passive:true});
+window.addEventListener('mouseup',()=>proxDrag=false);
+window.addEventListener('touchend',()=>proxDrag=false);
+proxTrack.addEventListener('click',e=>handlePD(e));
+setProx(0.2);
+
+/* ══ INIT ════════════════════════════════════════════════════════ */
+window.addEventListener('load',()=>{
+  // Map will init after GPS/demo decision
+});
+</script>
+</body>
+</html>

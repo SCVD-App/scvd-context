@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GottaGo — The Gap Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#090D0C; --bg2:#111916;
+  --teal:#00FFD1; --teal-dim:#00B894; --teal-glow:rgba(0,255,209,0.3); --teal-ghost:rgba(0,255,209,0.08);
+  --amber:#FFB830; --amber-glow:rgba(255,184,48,0.3); --amber-ghost:rgba(255,184,48,0.1);
+  --red:#FF4B6E; --red-ghost:rgba(255,75,110,0.1);
+  --green:#00E896; --green-ghost:rgba(0,232,150,0.1);
+  --purple:#A78BFA; --gold:#C9A84C;
+  --text:#E8F5F2; --text-dim:#7BA89E; --text-ghost:rgba(232,245,242,0.3);
+  --card:rgba(18,30,26,0.95); --border:rgba(0,255,209,0.1); --border2:rgba(255,255,255,0.06);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+html,body{width:100%;height:100%;overflow:hidden;}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);}
+
+/* PHONE */
+.phone{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden;}
+#mapCanvas{position:absolute;inset:0;width:100%;height:100%;z-index:0;}
+
+/* GRAIN */
+.grain{position:fixed;inset:-50%;width:200%;height:200%;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:.45;pointer-events:none;z-index:2;animation:grain 8s steps(10) infinite;}
+@keyframes grain{0%,100%{transform:translate(0,0)}10%{transform:translate(-2%,-3%)}30%{transform:translate(3%,2%)}50%{transform:translate(-1%,4%)}70%{transform:translate(2%,-1%)}90%{transform:translate(-3%,1%)}}
+
+/* TOPBAR */
+.topbar{position:relative;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:48px 18px 10px;background:linear-gradient(180deg,rgba(9,13,12,.98) 0%,transparent 100%);flex-shrink:0;}
+.logo-wrap{display:flex;align-items:center;gap:9px;}
+.logo-mark{width:36px;height:36px;background:var(--teal);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 20px var(--teal-glow);}
+.logo-name{font-family:'Clash Display',sans-serif;font-size:20px;font-weight:700;color:var(--text);letter-spacing:-.3px;}
+.logo-name span{color:var(--teal);}
+.logo-sub{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:1px;}
+
+/* MODE TOGGLE — the hero UI element */
+.mode-toggle{
+  display:flex;
+  background:rgba(0,0,0,.5);
+  border:1px solid var(--border2);
+  border-radius:20px;
+  padding:3px;
+  gap:2px;
+  backdrop-filter:blur(12px);
+}
+.mode-btn{
+  padding:6px 12px;
+  border-radius:16px;
+  font-size:11px;font-weight:600;
+  cursor:pointer;
+  transition:all .25s;
+  color:var(--text-dim);
+  white-space:nowrap;
+}
+.mode-btn.active-council{
+  background:rgba(0,232,150,.15);
+  color:var(--green);
+  border:1px solid rgba(0,232,150,.3);
+}
+.mode-btn.active-camps{
+  background:rgba(255,184,48,.15);
+  color:var(--amber);
+  border:1px solid rgba(255,184,48,.3);
+}
+
+/* MAP PINS */
+.map-pins{position:absolute;inset:0;z-index:10;pointer-events:none;}
+.pin{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;transition:opacity .4s, transform .3s;}
+.pin.hiding{opacity:0;transform:translate(-50%,-50%) scale(0.5);}
+.pin-bubble{
+  background:var(--card);
+  border:1px solid var(--border2);
+  border-radius:11px;
+  padding:5px 9px;
+  display:flex;align-items:center;gap:5px;
+  backdrop-filter:blur(12px);
+  box-shadow:0 4px 16px rgba(0,0,0,.5);
+  white-space:nowrap;
+  font-size:11px;
+}
+.pin-bubble.council{border-color:rgba(0,232,150,.3);}
+.pin-bubble.camps{border-color:rgba(255,184,48,.35);}
+.pin-bubble.camps-pulse::after{
+  content:'';position:absolute;inset:0;border-radius:11px;
+  border:2px solid var(--amber);
+  animation:camp-ping 1.5s ease-out infinite;
+}
+@keyframes camp-ping{
+  0%{transform:scale(1);opacity:.8;}
+  100%{transform:scale(1.5);opacity:0;}
+}
+.pin-icon{font-size:15px;}
+.pin-name{color:var(--text-dim);font-size:10px;}
+.pin-type{font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;}
+.pin-type.council{background:rgba(0,232,150,.15);color:var(--green);}
+.pin-type.camps{background:rgba(255,184,48,.15);color:var(--amber);}
+
+/* GAP ZONE */
+.gap-zone{
+  position:absolute;
+  border:2px dashed rgba(255,75,110,.5);
+  border-radius:16px;
+  background:rgba(255,75,110,.05);
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity .4s;
+  pointer-events:none;
+}
+.gap-label{
+  background:rgba(255,75,110,.15);
+  border:1px solid rgba(255,75,110,.4);
+  border-radius:10px;
+  padding:4px 10px;
+  font-size:10px;font-weight:700;
+  color:var(--red);
+  white-space:nowrap;
+}
+
+/* BOTTOM SHEET */
+.bottom-sheet{position:absolute;bottom:0;left:0;right:0;z-index:20;padding:0 0 24px;background:linear-gradient(0deg,rgba(9,13,12,.99) 0%,rgba(9,13,12,0) 100%);}
+
+/* STATUS BANNER */
+.status-banner{
+  margin:0 16px 12px;
+  border-radius:16px;
+  padding:12px 14px;
+  display:flex;gap:12px;align-items:center;
+  backdrop-filter:blur(16px);
+  transition:all .4s;
+  border:1px solid transparent;
+}
+.status-banner.council-mode{
+  background:rgba(0,232,150,.07);
+  border-color:rgba(0,232,150,.2);
+}
+.status-banner.camps-mode{
+  background:rgba(255,184,48,.07);
+  border-color:rgba(255,184,48,.25);
+}
+.sb-icon{font-size:22px;flex-shrink:0;}
+.sb-text{flex:1;}
+.sb-title{font-size:13px;font-weight:600;color:var(--text);}
+.sb-sub{font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4;}
+
+/* STAT PILLS */
+.stat-pills{display:flex;gap:8px;margin:0 16px 12px;flex-wrap:wrap;}
+.stat-pill{
+  flex:1;min-width:0;
+  background:var(--card);
+  border:1px solid var(--border2);
+  border-radius:14px;
+  padding:10px 12px;
+  text-align:center;
+  backdrop-filter:blur(12px);
+  transition:all .4s;
+}
+.stat-pill.council-highlight{border-color:rgba(0,232,150,.3);background:rgba(0,232,150,.06);}
+.stat-pill.camps-highlight{border-color:rgba(255,184,48,.3);background:rgba(255,184,48,.06);}
+.sp-val{font-family:'Clash Display',sans-serif;font-size:20px;font-weight:700;color:var(--text);line-height:1;transition:color .3s;}
+.sp-val.green{color:var(--green);}
+.sp-val.amber{color:var(--amber);}
+.sp-val.red{color:var(--red);}
+.sp-key{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);margin-top:3px;}
+
+/* LEGEND */
+.legend{
+  margin:0 16px 12px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:12px 14px;
+  backdrop-filter:blur(16px);
+}
+.legend-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:8px;}
+.legend-items{display:flex;gap:12px;flex-wrap:wrap;}
+.leg-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);}
+.leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+
+/* BOTTOM NAV */
+.bottom-nav{display:flex;margin:0 16px;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:8px 6px;backdrop-filter:blur(20px);gap:2px;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border-radius:12px;cursor:pointer;opacity:.4;transition:all .2s;}
+.nav-item.active{opacity:1;background:var(--teal-ghost);border:1px solid var(--border);}
+.nav-item.active .ni-label{color:var(--teal);}
+.ni-icon{font-size:18px;} .ni-label{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);}
+
+/* CAMPS REVEAL OVERLAY */
+.reveal-overlay{
+  position:fixed;inset:0;z-index:50;
+  background:rgba(9,13,12,.85);
+  backdrop-filter:blur(8px);
+  display:none;align-items:center;justify-content:center;
+  flex-direction:column;gap:20px;
+  text-align:center;padding:30px;
+}
+.reveal-overlay.show{display:flex;}
+.reveal-icon{font-size:60px;animation:bounce-in .5s cubic-bezier(.34,1.56,.64,1) both;}
+@keyframes bounce-in{from{transform:scale(0);opacity:0;}to{transform:scale(1);opacity:1;}}
+.reveal-title{font-family:'Clash Display',sans-serif;font-size:26px;font-weight:700;color:var(--amber);}
+.reveal-sub{font-size:14px;color:var(--text-dim);max-width:280px;line-height:1.6;}
+.reveal-stats{display:flex;gap:16px;margin-top:4px;}
+.rs-item{text-align:center;}
+.rs-val{font-family:'Clash Display',sans-serif;font-size:28px;font-weight:700;}
+.rs-key{font-size:10px;color:var(--text-dim);margin-top:2px;}
+.reveal-btn{
+  background:linear-gradient(135deg,var(--amber-dim),var(--amber));
+  color:#0A0F0E;
+  border:none;border-radius:16px;padding:16px 32px;
+  font-family:'Clash Display',sans-serif;font-size:18px;font-weight:700;
+  cursor:pointer;
+  box-shadow:0 8px 24px rgba(255,184,48,.3);
+  transition:all .2s;
+}
+.reveal-btn:active{transform:scale(.97);}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<!-- REVEAL OVERLAY -->
+<div class="reveal-overlay" id="revealOverlay">
+  <div class="reveal-icon">🏕️</div>
+  <div class="reveal-title">This is what Camps Australia unlocks</div>
+  <div class="reveal-sub">Every orange pin is a verified rest stop, truck bay, station stay, or regional facility — invisible to GottaGo without their data.</div>
+  <div class="reveal-stats">
+    <div class="rs-item"><div class="rs-val" style="color:var(--green)">19</div><div class="rs-key">Council loos</div></div>
+    <div class="rs-item"><div class="rs-val" style="color:var(--amber)">+31</div><div class="rs-key">Camps AU adds</div></div>
+    <div class="rs-item"><div class="rs-val" style="color:var(--teal)">50</div><div class="rs-key">Total coverage</div></div>
+  </div>
+  <button class="reveal-btn" onclick="activateCampsMode()">🏕️ Unlock the Map</button>
+</div>
+
+<div class="phone">
+  <canvas id="mapCanvas"></canvas>
+  <div class="map-pins" id="mapPins"></div>
+
+  <!-- GAP ZONES (council mode only) -->
+  <div class="gap-zone" id="gap1" style="left:52%;top:22%;width:28%;height:18%;transform:translate(-50%,-50%);">
+    <div class="gap-label">⚠️ 47km gap — no data</div>
+  </div>
+  <div class="gap-zone" id="gap2" style="left:25%;top:65%;width:22%;height:15%;transform:translate(-50%,-50%);">
+    <div class="gap-label">⚠️ No coverage</div>
+  </div>
+  <div class="gap-zone" id="gap3" style="left:78%;top:55%;width:18%;height:20%;transform:translate(-50%,-50%);">
+    <div class="gap-label">⚠️ Dead zone</div>
+  </div>
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo-wrap">
+      <div class="logo-mark">🚻</div>
+      <div>
+        <div class="logo-name">Gotta<span>Go</span></div>
+        <div class="logo-sub">Data Gap Demo</div>
+      </div>
+    </div>
+    <div class="mode-toggle">
+      <div class="mode-btn active-council" id="btnCouncil" onclick="setMode('council')">🏛️ Council only</div>
+      <div class="mode-btn" id="btnCamps" onclick="triggerReveal()">🏕️ + Camps AU</div>
+    </div>
+  </div>
+
+  <!-- BOTTOM SHEET -->
+  <div class="bottom-sheet">
+
+    <!-- STATUS BANNER -->
+    <div class="status-banner council-mode" id="statusBanner">
+      <div class="sb-icon" id="sbIcon">🏛️</div>
+      <div class="sb-text">
+        <div class="sb-title" id="sbTitle">Council & Government Data Only</div>
+        <div class="sb-sub" id="sbSub">Sourced from the National Public Toilet Map (data.gov.au) — 19,000+ urban facilities. Highway corridors, rest stops and regional facilities are invisible.</div>
+      </div>
+    </div>
+
+    <!-- STAT PILLS -->
+    <div class="stat-pills">
+      <div class="stat-pill" id="pill1">
+        <div class="sp-val green" id="p1val">19</div>
+        <div class="sp-key" id="p1key">Council loos found</div>
+      </div>
+      <div class="stat-pill" id="pill2">
+        <div class="sp-val red" id="p2val">3</div>
+        <div class="sp-key" id="p2key">Dead zones on route</div>
+      </div>
+      <div class="stat-pill" id="pill3">
+        <div class="sp-val red" id="p3val">47km</div>
+        <div class="sp-key" id="p3key">Longest gap</div>
+      </div>
+    </div>
+
+    <!-- LEGEND -->
+    <div class="legend">
+      <div class="legend-title">Map Key</div>
+      <div class="legend-items" id="legendItems">
+        <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Council / Gov toilet</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--red);opacity:.5;"></div>Gap zone (no data)</div>
+      </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <div class="bottom-nav">
+      <div class="nav-item active"><span class="ni-icon">🗺️</span><span class="ni-label">Map</span></div>
+      <div class="nav-item"><span class="ni-icon">🧭</span><span class="ni-label">Route</span></div>
+      <div class="nav-item"><span class="ni-icon">🔍</span><span class="ni-label">Nearby</span></div>
+      <div class="nav-item"><span class="ni-icon">🎙️</span><span class="ni-label">Avatar</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══ MAP CANVAS ═══════════════════════════════════════════════════ */
+const canvas = document.getElementById('mapCanvas');
+const ctx = canvas.getContext('2d');
+let W, H, t = 0;
+
+function resize() { W = canvas.width = canvas.offsetWidth; H = canvas.height = canvas.offsetHeight; }
+
+// Simulated road network: Bruce Hwy corridor Brisbane → Noosa → Gympie
+const ROADS = [
+  // Bruce Highway main (thick, prominent)
+  { pts:[[.08,.85],[.15,.72],[.22,.60],[.30,.50],[.38,.42],[.46,.36],[.54,.30],[.62,.25],[.72,.20],[.82,.17],[.92,.15]], w:4, color:'rgba(0,255,209,.2)', route:true },
+  // Sunshine Motorway branch
+  { pts:[[.30,.50],[.35,.58],[.40,.65],[.48,.70],[.55,.72]], w:2.5, color:'rgba(0,255,209,.12)' },
+  // Eumundi-Noosa Road
+  { pts:[[.54,.30],[.56,.38],[.58,.46],[.60,.54],[.62,.60]], w:2, color:'rgba(0,255,209,.09)' },
+  // Hinterland roads
+  { pts:[[.22,.60],[.18,.52],[.16,.44],[.18,.36],[.22,.30]], w:1.5, color:'rgba(0,255,209,.07)' },
+  { pts:[[.46,.36],[.44,.28],[.42,.20],[.40,.14]], w:1.5, color:'rgba(0,255,209,.07)' },
+  // Cross roads
+  { pts:[[.08,.40],[.20,.42],[.35,.44],[.50,.43],[.65,.41],[.80,.38]], w:1.5, color:'rgba(0,255,209,.06)' },
+];
+
+function drawRoad(r) {
+  const pts = r.pts.map(([x,y]) => [x*W, y*H]);
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i=1; i<pts.length; i++) {
+    const mx=(pts[i-1][0]+pts[i][0])/2, my=(pts[i-1][1]+pts[i][1])/2;
+    ctx.quadraticCurveTo(pts[i-1][0], pts[i-1][1], mx, my);
+  }
+  ctx.strokeStyle = r.color; ctx.lineWidth = r.w; ctx.stroke();
+  if (r.route) {
+    const pos = ((t * .003) % 1);
+    const g = ctx.createLinearGradient(0,0,W,0);
+    g.addColorStop(Math.max(0,pos-.1),'rgba(0,255,209,0)');
+    g.addColorStop(pos,'rgba(0,255,209,.6)');
+    g.addColorStop(Math.min(1,pos+.1),'rgba(0,255,209,0)');
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i=1; i<pts.length; i++) {
+      const mx=(pts[i-1][0]+pts[i][0])/2, my=(pts[i-1][1]+pts[i][1])/2;
+      ctx.quadraticCurveTo(pts[i-1][0], pts[i-1][1], mx, my);
+    }
+    ctx.strokeStyle = g; ctx.lineWidth = 5; ctx.stroke();
+  }
+}
+
+let carPos = 0;
+function getRoutePoint(tp) {
+  const pts = ROADS[0].pts.map(([x,y]) => [x*W, y*H]);
+  const seg = Math.min(Math.floor(tp*(pts.length-1)), pts.length-2);
+  const frac = tp*(pts.length-1) - seg;
+  return [pts[seg][0]+(pts[seg+1][0]-pts[seg][0])*frac, pts[seg][1]+(pts[seg+1][1]-pts[seg][1])*frac];
+}
+
+function frame() {
+  ctx.clearRect(0,0,W,H);
+  // Background
+  const bg = ctx.createRadialGradient(W*.45,H*.45,0,W*.45,H*.45,W*.9);
+  bg.addColorStop(0,'#0E1C18'); bg.addColorStop(.6,'#091210'); bg.addColorStop(1,'#050E0C');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  // Grid dots
+  ctx.fillStyle='rgba(0,255,209,.025)';
+  for(let x=0;x<W;x+=32) for(let y=0;y<H;y+=32){ctx.beginPath();ctx.arc(x,y,.7,0,Math.PI*2);ctx.fill();}
+  // Roads
+  ROADS.forEach(drawRoad);
+  // Ambient glow patches (simulate towns)
+  [[W*.15,H*.72,'rgba(0,255,209,'],[W*.30,H*.50,'rgba(0,255,209,'],[W*.55,H*.30,'rgba(0,255,209,'],[W*.82,H*.17,'rgba(0,255,209,']].forEach(([ox,oy,col]) => {
+    const p = Math.sin(t*.015+ox)*.5+.5;
+    const g = ctx.createRadialGradient(ox,oy,0,ox,oy,55+p*15);
+    g.addColorStop(0,col+(0.06+p*.03)+')'); g.addColorStop(1,col+'0)');
+    ctx.fillStyle=g; ctx.fillRect(ox-80,oy-80,160,160);
+  });
+  // Car
+  carPos=(carPos+.0006)%.92;
+  const[cx,cy]=getRoutePoint(carPos);
+  ctx.beginPath(); ctx.arc(cx,cy,8,0,Math.PI*2); ctx.fillStyle='rgba(255,184,48,.2)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2);
+  const cg=ctx.createRadialGradient(cx-1,cy-1,0,cx,cy,5);
+  cg.addColorStop(0,'#FFE080'); cg.addColorStop(1,'#FFB830');
+  ctx.fillStyle=cg; ctx.fill();
+  t++; requestAnimationFrame(frame);
+}
+
+/* ══ FACILITY DATA ════════════════════════════════════════════════ */
+// COUNCIL ONLY — urban, clustered, missing the highway
+const COUNCIL_PINS = [
+  // Brisbane cluster (bottom left)
+  {l:'10%',t:'80%',icon:'🚻',name:'Roma St Parklands',type:'council'},
+  {l:'14%',t:'75%',icon:'🚻',name:'South Bank',type:'council'},
+  {l:'18%',t:'78%',icon:'🏙️',name:'Fortitude Valley',type:'council'},
+  {l:'12%',t:'72%',icon:'🚻',name:'Newstead Park',type:'council'},
+  // Caboolture area
+  {l:'22%',t:'63%',icon:'🚻',name:'Caboolture Lagoon',type:'council'},
+  {l:'26%',t:'60%',icon:'🏙️',name:'Caboolture CBD',type:'council'},
+  // Sunshine Coast cluster (mid right)
+  {l:'58%',t:'68%',icon:'🚻',name:'Mooloolaba Esplanade',type:'council'},
+  {l:'53%',t:'70%',icon:'🏙️',name:'Maroochydore CBD',type:'council'},
+  {l:'62%',t:'65%',icon:'🚻',name:'Alexandra Headland',type:'council'},
+  {l:'55%',t:'64%',icon:'🚻',name:'Buderim',type:'council'},
+  // Noosa cluster
+  {l:'66%',t:'55%',icon:'🚻',name:'Noosa Heads Main Beach',type:'council'},
+  {l:'70%',t:'52%',icon:'🏙️',name:'Noosaville',type:'council'},
+  {l:'68%',t:'58%',icon:'🚻',name:'Noosa River Park',type:'council'},
+  // Caloundra cluster
+  {l:'48%',t:'75%',icon:'🚻',name:'Caloundra Waterfront',type:'council'},
+  {l:'45%',t:'72%',icon:'🏙️',name:'Caloundra CBD',type:'council'},
+  // Nambour
+  {l:'44%',t:'52%',icon:'🏙️',name:'Nambour CBD',type:'council'},
+  {l:'42%',t:'56%',icon:'🚻',name:'Nambour Library',type:'council'},
+  // Coolum
+  {l:'62%',t:'62%',icon:'🚻',name:'Coolum Beach',type:'council'},
+  // Eumundi
+  {l:'54%',t:'44%',icon:'🏙️',name:'Eumundi Markets',type:'council'},
+];
+
+// CAMPS AU — fills the HIGHWAY GAPS and regional areas
+const CAMPS_PINS = [
+  // Bruce Highway corridor — the critical gaps
+  {l:'16%',t:'66%',icon:'🛣️',name:'Bruce Hwy Rest Area N1',type:'camps'},
+  {l:'24%',t:'55%',icon:'🚛',name:'Caboolture Truck Bay',type:'camps'},
+  {l:'31%',t:'48%',icon:'⛽',name:'Elimbah Servo Rest Stop',type:'camps'},
+  {l:'36%',t:'44%',icon:'🛣️',name:'Bruce Hwy Northbound Bay',type:'camps'},
+  {l:'40%',t:'40%',icon:'🛣️',name:'Bruce Hwy Rest Area N2',type:'camps'},
+  {l:'46%',t:'34%',icon:'🏕️',name:'Eudlo Creek Camp Ground',type:'camps'},
+  {l:'50%',t:'30%',icon:'⛽',name:'Yandina Servo',type:'camps'},
+  {l:'57%',t:'26%',icon:'🛣️',name:'Bruce Hwy Rest Bay',type:'camps'},
+  {l:'64%',t:'22%',icon:'🏕️',name:'Pomona Showgrounds',type:'camps'},
+  {l:'70%',t:'18%',icon:'🛣️',name:'Cooroy Rest Area',type:'camps'},
+  {l:'76%',t:'16%',icon:'⛽',name:'Cooroy Servo',type:'camps'},
+  {l:'82%',t:'15%',icon:'🏕️',name:'Cooran Camping Area',type:'camps'},
+  {l:'88%',t:'14%',icon:'🛣️',name:'Gympie Approach Bay',type:'camps'},
+  // Hinterland gaps
+  {l:'20%',t:'50%',icon:'🏕️',name:'D\'Aguilar State Forest',type:'camps'},
+  {l:'28%',t:'43%',icon:'🏡',name:'Woodford Station Stay',type:'camps'},
+  {l:'34%',t:'36%',icon:'🏕️',name:'Maleny Council Grounds',type:'camps'},
+  {l:'38%',t:'30%',icon:'⛽',name:'Mapleton Servo',type:'camps'},
+  {l:'42%',t:'25%',icon:'🏕️',name:'Kenilworth Showground',type:'camps'},
+  // Missing coastal
+  {l:'52%',t:'62%',icon:'🏕️',name:'Mudjimba Beach Camp',type:'camps'},
+  {l:'60%',t:'70%',icon:'🛣️',name:'Bokarina Rest Area',type:'camps'},
+  {l:'65%',t:'76%',icon:'⛽',name:'Bokarina Servo',type:'camps'},
+  // Far north fills
+  {l:'78%',t:'22%',icon:'🏡',name:'Kin Kin Station Stay',type:'camps'},
+  {l:'84%',t:'20%',icon:'🏕️',name:'Kandanga Camp Reserve',type:'camps'},
+  {l:'90%',t:'18%',icon:'🛣️',name:'Imbil Truck Stop',type:'camps'},
+  // Sunshine Coast hinterland
+  {l:'35%',t:'55%',icon:'🏕️',name:'Peachester Rest Area',type:'camps'},
+  {l:'48%',t:'44%',icon:'⛽',name:'Woombye Servo',type:'camps'},
+  {l:'44%',t:'48%',icon:'🛣️',name:'Nambour Rest Bay',type:'camps'},
+  // Southwest gap
+  {l:'18%',t:'44%',icon:'🏕️',name:'Kilcoy Free Camp',type:'camps'},
+  {l:'14%',t:'50%',icon:'🛣️',name:'D\'Aguilar Hwy Bay',type:'camps'},
+  {l:'25%',t:'35%',icon:'🏕️',name:'Jimna Camping Reserve',type:'camps'},
+  // Extra fills  
+  {l:'72%',t:'42%',icon:'🏕️',name:'Lake Cootharaba Camp',type:'camps'},
+];
+
+/* ══ MODE CONTROL ═════════════════════════════════════════════════ */
+let mode = 'council';
+let campsRevealed = false;
+
+function buildPins() {
+  const container = document.getElementById('mapPins');
+  const showCouncil = true;
+  const showCamps = mode === 'camps';
+
+  const allPins = [
+    ...COUNCIL_PINS.map(p => ({...p, show: showCouncil})),
+    ...CAMPS_PINS.map(p => ({...p, show: showCamps})),
+  ];
+
+  container.innerHTML = allPins.map((p, i) => `
+    <div class="pin ${p.show ? '' : 'hiding'}" style="left:${p.l};top:${p.t};"
+         id="pin${i}">
+      <div class="pin-bubble ${p.type} ${p.type==='camps'&&p.show?'camps-pulse':''}"
+           style="animation-delay:${Math.random()*.5}s;position:relative;">
+        <span class="pin-icon">${p.icon}</span>
+        <span class="pin-type ${p.type}">${p.type==='council'?'GOV':'CAMPS'}</span>
+        <span class="pin-name">${p.name.split(' ').slice(0,2).join(' ')}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function setMode(m) {
+  mode = m;
+
+  // Update toggle buttons
+  document.getElementById('btnCouncil').className = 'mode-btn' + (m==='council' ? ' active-council' : '');
+  document.getElementById('btnCamps').className = 'mode-btn' + (m==='camps' ? ' active-camps' : '');
+
+  // Gap zones
+  ['gap1','gap2','gap3'].forEach(id => {
+    document.getElementById(id).style.opacity = m === 'council' ? '1' : '0';
+  });
+
+  // Status banner
+  const banner = document.getElementById('statusBanner');
+  banner.className = 'status-banner ' + (m==='council' ? 'council-mode' : 'camps-mode');
+  document.getElementById('sbIcon').textContent = m==='council' ? '🏛️' : '🏕️';
+  document.getElementById('sbTitle').textContent = m==='council'
+    ? 'Council & Government Data Only'
+    : 'Council + Camps Australia Wide Data';
+  document.getElementById('sbSub').textContent = m==='council'
+    ? 'National Public Toilet Map (data.gov.au). Great for cities. Highway corridors, rest stops & regional areas are invisible.'
+    : '50 verified facilities covering the full route. No more dead zones. Every rest stop, truck bay, station stay and camp ground included.';
+
+  // Stats
+  if (m === 'council') {
+    document.getElementById('p1val').textContent = '19';
+    document.getElementById('p1val').className = 'sp-val green';
+    document.getElementById('p1key').textContent = 'Council loos found';
+    document.getElementById('pill1').className = 'stat-pill council-highlight';
+
+    document.getElementById('p2val').textContent = '3';
+    document.getElementById('p2val').className = 'sp-val red';
+    document.getElementById('p2key').textContent = 'Dead zones on route';
+    document.getElementById('pill2').className = 'stat-pill';
+
+    document.getElementById('p3val').textContent = '47km';
+    document.getElementById('p3val').className = 'sp-val red';
+    document.getElementById('p3key').textContent = 'Longest gap';
+    document.getElementById('pill3').className = 'stat-pill';
+  } else {
+    document.getElementById('p1val').textContent = '50';
+    document.getElementById('p1val').className = 'sp-val amber';
+    document.getElementById('p1key').textContent = 'Total facilities';
+    document.getElementById('pill1').className = 'stat-pill camps-highlight';
+
+    document.getElementById('p2val').textContent = '0';
+    document.getElementById('p2val').className = 'sp-val green';
+    document.getElementById('p2key').textContent = 'Dead zones';
+    document.getElementById('pill2').className = 'stat-pill camps-highlight';
+
+    document.getElementById('p3val').textContent = '8km';
+    document.getElementById('p3val').className = 'sp-val green';
+    document.getElementById('p3key').textContent = 'Max gap';
+    document.getElementById('pill3').className = 'stat-pill camps-highlight';
+  }
+
+  // Legend
+  document.getElementById('legendItems').innerHTML = m === 'council' ? `
+    <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Council / Gov toilet</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--red);opacity:.5;"></div>Gap zone (no data)</div>
+  ` : `
+    <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Council / Gov</div>
+    <div class="leg-item"><div class="leg-dot" style="background:var(--amber)"></div>Camps AU verified</div>
+    <div class="leg-item"><div class="leg-dot" style="background:rgba(0,232,150,.3)"></div>Full coverage ✓</div>
+  `;
+
+  buildPins();
+}
+
+function triggerReveal() {
+  if (campsRevealed) {
+    // Just switch straight to camps mode
+    setMode('camps');
+    return;
+  }
+  // Show the dramatic reveal overlay first
+  document.getElementById('revealOverlay').classList.add('show');
+}
+
+function activateCampsMode() {
+  campsRevealed = true;
+  document.getElementById('revealOverlay').classList.remove('show');
+  setMode('camps');
+}
+
+/* ══ INIT ═════════════════════════════════════════════════════════ */
+window.addEventListener('load', () => {
+  resize();
+  window.addEventListener('resize', resize);
+  frame();
+  setMode('council'); // start in council mode
+});
+</script>
+</body>
+</html>
