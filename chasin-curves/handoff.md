@@ -1,6 +1,6 @@
 # Chasin' Curves — Project Handoff
 
-**Session:** 15 (+ same-day follow-ups 15b/c/d) + Session 16 (24 Aug 2026)
+**Session:** 15 (+ same-day follow-ups 15b/c/d) + Session 16 (24 Aug 2026) + Session 16c
 **Date:** 23–24 August 2026
 **Status:** BUILT AND DEPLOYED SAME DAY — GPS Snail Trail capture (phase 2 of the master build plan, opt-in add-on to Session 14's Logbook) coded, validated, and pushed live at Scott's request to support a real beta test that left the same day: Scott's aunty Sandy and her husband Dave, starting a 5-week, ~7,000km caravanning trip through Victoria and South Australia.
 
@@ -12,6 +12,30 @@ The Session 14/15 day-cap tracker (`FIXED_DAY_CAPS`, `rollingDayCount`) always a
 - **TAS** — the whole Special Interest Vehicle scheme was rewritten effective 1 Dec 2025 (replacing the old separate historic/vintage/street rod categories). New unified cap: 104 days, all classes, no separate uncapped club-event carve-out — genuinely pure day-cap, same shape as VIC/SA. But the official guidelines document never states whether the 12-month period is rolling or anchored — checked the scheme page, the guidelines/application PDF, and the FAQ, all silent on it. Left as an open question (see Open Actions) rather than guessed at.
 
 Built both counting models as permanent, independent functions rather than replacing one with the other — `rollingDayCount` (unchanged) and a new `anchoredDayCount`, dispatched by a single `dayCountFor(vehicle, entries)` function keyed off `ANCHORED_WINDOW_STATES` (currently just `["NT"]`). The vehicle's own `regoState` is the only thing that selects which counter runs — there's no separate manual toggle to fall out of sync with it, and reclassifying a state (as TAS's window type gets confirmed, for instance) is a one-line addition to that list, not a rewrite. Anchored states need a per-vehicle `regoAnniversary` date (new Garage field, shown only for anchored states) to know where the current period starts; with none set, the UI asks for it rather than silently guessing a rolling fallback for a state now known not to be one. All logic covered by a standalone Node test (8 assertions) including a case proving the two counters can disagree on the same entry set — confirming they run independently, not as one function with a flag.
+
+## Session 16b — first live beta bug: Sandy's "trip disappeared" report
+
+Sandy's exact report, mid-trip: "The trip was recording the whole way but it disappeared when I stopped it. I just noticed that I hadn't finished setting up my profile so maybe that's why." Traced the full stop-and-save path (`handleStopTrip` → `api.saveTrail` → the worker's `PUT /logbook/:id/:entryId`) end to end before touching anything, since a live tester's report deserves a real diagnosis, not a guess dressed up as a fix.
+
+**Her own theory doesn't hold up.** `currentUser.id` is set to the account email at signup regardless of whether optional profile fields (bio, avatar, location) are filled in, and nothing on the trail-save path reads profile completeness. Incomplete profile setup isn't the cause.
+
+**What almost certainly happened instead: a real bug, but not data loss.** `postLogEntry` (which creates the Logbook entry itself, with the start odometer) has to succeed before GPS trail recording even begins — so if the trail was genuinely recording, as she describes, that entry already existed in her Logbook the whole time, trail or no trail. But `handleStopTrip` had no success confirmation at all: on a successful save it just cleared `activeTrip` to `null`, so the `ActiveTripBanner` — her only signal that anything was happening — silently vanished with zero acknowledgment either way. Someone watching that banner as their sole indicator would read its disappearance as "gone," exactly as she described, whether or not the save actually worked. Ruled out an actual data-loss bug in the save path itself (worker-side validation, auth-token lifetime — 30 days, nowhere near expiring on day one — and the entry-creation flow all check out).
+
+**Two fixes shipped, both defensive rather than a single unverified guess at root cause:**
+- **`TripSavedNotice`** — new banner shown for 8s (dismissable) right after a successful stop-and-save: "Trip saved to your Logbook" plus the actual point count, or, honestly, "No GPS points recorded this trip — just the odometer reading was saved" if the trail came back empty. That second message matters — if her trail genuinely had zero points (e.g. location permission never actually granted despite the checkbox being ticked), the app was previously saving an empty trail silently with no signal either way; now it says so plainly instead of pretending nothing happened.
+- **Failed "Log Trip Now" no longer closes the modal.** Separate latent bug found while tracing this: `handleLogTrip` swallowed its own errors (alert + return) without telling the modal, and `LogTripModal` closed itself unconditionally after calling it — so a failed trip-log attempt (network hiccup, auth hiccup) closed the form with only an easily-missed browser `alert()` as the only trace, identical shape to what Sandy described. `handleLogTrip` now returns a real success/failure boolean, threaded through `LogbookView.handleSubmit` and `LogTripModal.handleSubmit`, so the modal only closes — and points only get awarded — on confirmed success.
+
+**Still worth asking Sandy directly, since this was traced from the code, not from her actual device logs:** does the trip now show up in her Logbook (even without a "📍 pts" button, which only appears when a trail has one or more points)? If yes with no trail button, the entry saved but the trail came back empty — worth asking whether location permission was actually granted on her device. If the entry itself isn't there at all, that's a different and more serious bug than anything found here, and would need her actual browser/device details to chase further.
+
+## Session 16c — real evidence: Sandy was inside Facebook's in-app browser, not Safari
+
+Scott pulled the actual Cloudflare Worker log for one of Sandy's requests (a `PUT /garage/sandyjoh1@yahoo.com.au`, status 200) and its `user-agent` header settled what 16b could only infer from code: `...Mobile/23G71 [FBAN/FBIOS;FBAV/575.0.0.28.104;...]`. `FBAN/FBIOS` is Facebook's own in-app-browser signature — Sandy opened the app link from inside Facebook (or Messenger) and never left its embedded WKWebView for real Safari.
+
+That matters because Facebook's in-app browser on iOS is a well-documented bad environment for exactly what a trip recording needs: it evicts `localStorage` aggressively once the host app backgrounds (which is what `activeTrip`'s resume-on-reload relies on), doesn't reliably hold a geolocation permission grant for the page's whole life, and doesn't implement the Screen Wake Lock API at all — so 15b's wake-lock fix, which normally keeps a dedicated recording device's screen on, silently does nothing there. Any one of those three would produce "recorded fine, then gone," matching her report considerably better than 16b's no-confirmation-banner theory alone. That fix stays — it's a real, separate defensive improvement — but this is the stronger root-cause candidate.
+
+**Caveat, stated plainly:** this one log entry is a `/garage` PUT, not the `/logbook` calls from her actual trip — it proves she was in the FB browser for at least that action in the same session, not that every request that day came from it. Worth asking Scott to pull `/logbook` entries around the same timestamp if it's ever worth nailing down further, though for a fix, it doesn't need to be: the same environment served both requests, and the fix below is worth shipping regardless of which specific call it affected.
+
+**Fix shipped:** `detectInAppBrowser()` — a UA sniff for Facebook/Messenger, Instagram, Line, and WeChat's known in-app-browser markers (tested against Sandy's actual captured UA string, plus real Safari and Chrome UAs as negative controls, all correct). When one's detected, a dismissible `InAppBrowserWarning` banner shows both pre-login (top of `LoginScreen`) and post-login (top of the app shell, above the Pit Pass banner) — plain language ("You're in Facebook's built-in browser"), explains what it risks, and offers a "Copy link to open elsewhere" button since there's no reliable way to force an escape to Safari from JavaScript on iOS. Dismissing it is per-session only (a plain `useState`, resets on reload) since the risk is present for as long as the tab stays open inside the host app, not just at first sight of the banner.
 
 ## Same-day follow-ups (15b, 15c, 15d)
 
@@ -55,7 +79,7 @@ No infra changes this session. Same Cloudflare Worker / KV / R2 setup as Session
 
 | # | Task |
 |---|------|
-| 1 | Watch the beta test run live — first real-world signal on whether foreground-only polling is actually good enough in practice, or whether the 20s interval / accuracy settings need tuning |
+| 1 | Ask Sandy to open Chasin' Curves in Safari directly (not via the Facebook/Messenger link) for her next attempt, and whether the earlier trip now shows up in her Logbook (with or without a "📍 pts" trail button) — confirms whether 16b/16c's diagnosis was right, or whether there's a deeper bug still to chase |
 | 2 | Set Registration State (and, for NT vehicles, the new registration renewal date) on Scott's five existing test vehicles (carried over from Session 14) |
 | 3 | Confirm whether TAS's 12-month period is rolling or anchored to rego renewal — its guidelines are silent on this; NT is now confirmed anchored (Session 16) and TAS's day cap (104) is confirmed, only the window type remains open. Ring Transport Tasmania directly if it's needed before relying on this for a real roadside stop: (03) 6166 3262 / vehicle.registration@transport.tas.gov.au |
 | 4 | Same open question for NSW/ACT/SA/VIC — their day caps are set but the rolling-vs-anchored model was never individually confirmed either; currently defaulted to rolling (the conservative assumption) same as TAS |
@@ -88,7 +112,7 @@ Unchanged this session — see `tgm/handoff.md`.
 | Tester | Status | Notes |
 |--------|--------|-------|
 | Shane "Skeeny" | ✅ Active | Emergent trip coordinator — calls the group "the Rat Bags." Real-world test case flagged in the Murphy Report spec for why an unincorporated Crew can't satisfy any state's compliance scheme on its own. |
-| (unnamed, new) | 🔜 Pending | The GPS trail beta test case Scott flagged this session — first live trail data expected once this ships. |
+| Sandy & Dave | ✅ Active | Scott's aunty + husband, 5-week/~7,000km VIC/SA caravanning trip. First live trail test (Session 16b): reported a trip "disappearing" after stopping it — traced to a missing success confirmation (fixed) and, per real Cloudflare log evidence (Session 16c), to using the app via Facebook's in-app browser rather than Safari (warning banner shipped). Retrying with the fix in place. |
 
 ## Filing note
 
