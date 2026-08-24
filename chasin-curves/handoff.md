@@ -1,8 +1,18 @@
 # Chasin' Curves — Project Handoff
 
-**Session:** 15
+**Session:** 15 (+ same-day follow-ups 15b/c/d)
 **Date:** 23 August 2026
-**Status:** BUILT AND DEPLOYED SAME DAY — GPS Snail Trail capture (phase 2 of the master build plan, opt-in add-on to Session 14's Logbook) coded, validated, and pushed live at Scott's request to support a same-day beta test.
+**Status:** BUILT AND DEPLOYED SAME DAY — GPS Snail Trail capture (phase 2 of the master build plan, opt-in add-on to Session 14's Logbook) coded, validated, and pushed live at Scott's request to support a real beta test that left the same day: Scott's aunty Sandy and her husband Dave, starting a 5-week, ~7,000km caravanning trip through Victoria and South Australia.
+
+## Same-day follow-ups (15b, 15c, 15d)
+
+Three smaller builds landed after the initial GPS trail push, all same day, all in direct response to the live beta test:
+
+- **15b — Screen Wake Lock.** Sandy & Dave need Waze for navigation on unfamiliar roads, which pauses GPS polling the moment the tab backgrounds (a hard browser/OS restriction, not tunable). Recommended workaround: a second dedicated device running Chasin' Curves for trail-only recording while Waze runs on the main phone. Added the Wake Lock API (`navigator.wakeLock`) so that dedicated device's screen won't auto-lock mid-trip — requested on trip start and on tab re-visibility, released on stop/discard/sign-out. Degrades silently if unsupported; the existing resume-on-reload logic already covers the single-phone case with gaps.
+- **15c — "Invite a Mate."** A Profile-screen button using the Web Share API (clipboard-copy fallback) to send a link carrying the inviter's display name as a client-side query param, shown as a personalized "🏁 invited by" banner on the login screen. No backend change — signup was already open to anyone with an email, this is onboarding polish only.
+- **15d — Daily Trip Share Card.** The "nice touch" Scott wanted for the family group chat following Sandy & Dave's trip: a "📤 Share a Day" button on the Logbook screen that rolls a calendar day's completed (odometer-closed) trips into one branded PNG — big distance figure, date, vehicle, and (when GPS trail data exists) a Mapbox Static Images route overview plus reverse-geocoded start/end place names (e.g. "Robe, SA → Naracoorte, SA"). Shared via the Web Share API's file-sharing (`navigator.canShare({ files })`) so it drops straight into a chat app as an image; falls back to an in-modal preview + manual download if the browser can't share files. Distance is always summed from Logbook odometer readings (accurate even with GPS gaps from Waze use), never from the trail itself — the map/place-name layer is cosmetic and fails gracefully (day still gets a branded card with no map). New pure helpers (`encodePolyline`, `downsampleForMap`, `groupEntriesByDay`) covered by a standalone Node logic test, including the canonical Google/Mapbox polyline test vector.
+
+None of the three needed a worker.js change — all client-side, reusing the existing public Mapbox token for both the Static Images and Geocoding APIs.
 
 ---
 
