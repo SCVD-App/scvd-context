@@ -1,8 +1,17 @@
 # Chasin' Curves — Project Handoff
 
-**Session:** 15 (+ same-day follow-ups 15b/c/d)
-**Date:** 23 August 2026
+**Session:** 15 (+ same-day follow-ups 15b/c/d) + Session 16 (24 Aug 2026)
+**Date:** 23–24 August 2026
 **Status:** BUILT AND DEPLOYED SAME DAY — GPS Snail Trail capture (phase 2 of the master build plan, opt-in add-on to Session 14's Logbook) coded, validated, and pushed live at Scott's request to support a real beta test that left the same day: Scott's aunty Sandy and her husband Dave, starting a 5-week, ~7,000km caravanning trip through Victoria and South Australia.
+
+## Session 16 — Compliance day-cap counters: NT and TAS confirmed, dual counting model built
+
+The Session 14/15 day-cap tracker (`FIXED_DAY_CAPS`, `rollingDayCount`) always assumed one counting model — a rolling 365-day trailing window — for every state, with NT and TAS left out entirely because their exact day caps hadn't been confirmed. Scott's own instinct (24 Aug) was that a rolling window would be too ambiguous for a roadside check, and that at least some states probably hard-reset the count on the vehicle's registration renewal date instead. A web research pass against each state's own official guidelines confirmed he was right, at least for NT:
+
+- **NT** — Motor Vehicle Enthusiast Club Registration Scheme Guidelines, Section 7 / Condition 10: 90 days total (60 club events + 30 maintenance/test-driving/personal use), explicitly "in the 12 month period **from commencement date of the current registration period**" — a hard-anchored count, not rolling. Only the 30-day personal-use half is this app's day-cap side (club events aren't tracked yet).
+- **TAS** — the whole Special Interest Vehicle scheme was rewritten effective 1 Dec 2025 (replacing the old separate historic/vintage/street rod categories). New unified cap: 104 days, all classes, no separate uncapped club-event carve-out — genuinely pure day-cap, same shape as VIC/SA. But the official guidelines document never states whether the 12-month period is rolling or anchored — checked the scheme page, the guidelines/application PDF, and the FAQ, all silent on it. Left as an open question (see Open Actions) rather than guessed at.
+
+Built both counting models as permanent, independent functions rather than replacing one with the other — `rollingDayCount` (unchanged) and a new `anchoredDayCount`, dispatched by a single `dayCountFor(vehicle, entries)` function keyed off `ANCHORED_WINDOW_STATES` (currently just `["NT"]`). The vehicle's own `regoState` is the only thing that selects which counter runs — there's no separate manual toggle to fall out of sync with it, and reclassifying a state (as TAS's window type gets confirmed, for instance) is a one-line addition to that list, not a rewrite. Anchored states need a per-vehicle `regoAnniversary` date (new Garage field, shown only for anchored states) to know where the current period starts; with none set, the UI asks for it rather than silently guessing a rolling fallback for a state now known not to be one. All logic covered by a standalone Node test (8 assertions) including a case proving the two counters can disagree on the same entry set — confirming they run independently, not as one function with a flag.
 
 ## Same-day follow-ups (15b, 15c, 15d)
 
@@ -12,7 +21,7 @@ Three smaller builds landed after the initial GPS trail push, all same day, all 
 - **15c — "Invite a Mate."** A Profile-screen button using the Web Share API (clipboard-copy fallback) to send a link carrying the inviter's display name as a client-side query param, shown as a personalized "🏁 invited by" banner on the login screen. No backend change — signup was already open to anyone with an email, this is onboarding polish only.
 - **15d — Daily Trip Share Card.** The "nice touch" Scott wanted for the family group chat following Sandy & Dave's trip: a "📤 Share a Day" button on the Logbook screen that rolls a calendar day's completed (odometer-closed) trips into one branded PNG — big distance figure, date, vehicle, and (when GPS trail data exists) a Mapbox Static Images route overview plus reverse-geocoded start/end place names (e.g. "Robe, SA → Naracoorte, SA"). Shared via the Web Share API's file-sharing (`navigator.canShare({ files })`) so it drops straight into a chat app as an image; falls back to an in-modal preview + manual download if the browser can't share files. Distance is always summed from Logbook odometer readings (accurate even with GPS gaps from Waze use), never from the trail itself — the map/place-name layer is cosmetic and fails gracefully (day still gets a branded card with no map). New pure helpers (`encodePolyline`, `downsampleForMap`, `groupEntriesByDay`) covered by a standalone Node logic test, including the canonical Google/Mapbox polyline test vector.
 
-None of the three needed a worker.js change — all client-side, reusing the existing public Mapbox token for both the Static Images and Geocoding APIs.
+None of the three needed a worker.js change — all client-side, reusing the existing public Mapbox token for both the Static Images and Geocoding APIs. Session 16's day-cap work also needed no worker.js change — the Garage endpoint already stores the vehicle array opaquely, so the new `regoAnniversary` field just rides along in the existing PUT.
 
 ---
 
@@ -47,9 +56,9 @@ No infra changes this session. Same Cloudflare Worker / KV / R2 setup as Session
 | # | Task |
 |---|------|
 | 1 | Watch the beta test run live — first real-world signal on whether foreground-only polling is actually good enough in practice, or whether the 20s interval / accuracy settings need tuning |
-| 2 | Set Registration State on Scott's five existing test vehicles (carried over from Session 14) |
-| 3 | Confirm whether the rolling-365-day window is the right model vs. an anchored rego-year window (carried over from Session 14) |
-| 4 | Direct-read NT and TAS scheme guideline PDFs to close the day-cap gaps (carried over) |
+| 2 | Set Registration State (and, for NT vehicles, the new registration renewal date) on Scott's five existing test vehicles (carried over from Session 14) |
+| 3 | Confirm whether TAS's 12-month period is rolling or anchored to rego renewal — its guidelines are silent on this; NT is now confirmed anchored (Session 16) and TAS's day cap (104) is confirmed, only the window type remains open. Ring Transport Tasmania directly if it's needed before relying on this for a real roadside stop: (03) 6166 3262 / vehicle.registration@transport.tas.gov.au |
+| 4 | Same open question for NSW/ACT/SA/VIC — their day caps are set but the rolling-vs-anchored model was never individually confirmed either; currently defaulted to rolling (the conservative assumption) same as TAS |
 | 5 | Roads GPX extraction from a saved trail (master plan step 3, parallel with Murphy Report) — next build once GPS trail is confirmed working live from the beta test |
 | 6 | Murphy Report UI (master plan step 3, parallel with Roads extraction) |
 | 7 | Build a shortlist of QLD incorporated clubs for a Murphy Report pilot partnership (carried over) |

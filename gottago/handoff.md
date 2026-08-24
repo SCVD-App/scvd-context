@@ -20,8 +20,8 @@ This project has real momentum from an earlier working session, but that session
 - `gottago-gap-demo.html` — the Camps Australia partnership pitch demo: toggles between 19 council-only facilities (3 dead zones) and 50 facilities with Camps AU data layered in (zero gaps). This is the single best asset for the partnership conversation.
 - `GottaGo-Proposal.docx` — full 9-section partnership proposal for Camps Australia, send-ready.
 - `GottaGo-Session-1.docx` — session 1 summary from the original build.
-
-**Referenced in the recovered project email but not present in this folder** — worth tracking down if Scott still has them anywhere: `gottago-revenue-v2.html` (interactive revenue model, live sliders, 5-year projections) and `gottago-revenue-model.html` (v1 reference).
+- `gottago-revenue-v2.html` — interactive revenue model. Nine live sliders (Camps AU base subscriber pool, premium %, claim rate, free→paid and half-off→paid conversion rates, organic signups and their conversion rate, ARPU, platform fee %, Camps AU revenue share %), a Year 1 user funnel, and Year 3 net-revenue capture-rate scenarios, with a churn-aware (15%/yr) multi-year formula. Found and added to this folder 24 Aug 2026, after the rest of the recovery — was initially thought lost.
+- `gottago-revenue-model.html` — v1 reference version of the above.
 
 ## Key Features Designed & Built
 
@@ -64,15 +64,16 @@ All UI design, logic, data sourcing, and feature specs are already done — a de
 
 | # | Task |
 |---|------|
-| 1 | Track down the two missing revenue-model HTML files if Scott still has them anywhere |
-| 2 | ABN + business name registration with ASIC |
-| 3 | Trademark search for "GottaGo" at IP Australia before filing |
-| 4 | Draft and send the Camps Australia partnership letter (proposal doc already send-ready) |
-| 5 | Begin technical co-founder search |
-| 6 | Patent conversation re: port/starboard nav flash |
-| 7 | Commission app icon artwork |
-| 8 | Google Play developer account registration |
-| 9 | Roadmap idea from Chasin' Curves (23 Aug 2026): port its Logbook + "Share a Day" trip-postcard feature into GottaGo once development resumes — a natural fit given GottaGo's own grey-nomad/caravanning audience |
+| 1 | ABN + business name registration with ASIC |
+| 2 | Trademark search for "GottaGo" at IP Australia before filing |
+| 3 | Draft and send the Camps Australia partnership letter (proposal doc already send-ready) |
+| 4 | Begin technical co-founder search |
+| 5 | Patent conversation re: port/starboard nav flash |
+| 6 | Commission app icon artwork |
+| 7 | Google Play developer account registration |
+| 8 | Roadmap idea from Chasin' Curves (23 Aug 2026): port its Logbook + "Share a Day" trip-postcard feature into GottaGo once development resumes — a natural fit given GottaGo's own grey-nomad/caravanning audience |
+
+All assets referenced in the recovered project email are now accounted for in this folder — nothing outstanding to track down.
 
 ## Filing Note
 
