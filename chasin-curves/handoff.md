@@ -1,6 +1,6 @@
 # Chasin' Curves — Project Handoff
 
-**Session:** 15 (+ same-day follow-ups 15b/c/d) + Session 16 (24 Aug 2026) + Session 16c + Session 16d + Session 16e + Session 16f (25 Aug 2026)
+**Session:** 15 (+ same-day follow-ups 15b/c/d) + Session 16 (24 Aug 2026) + Session 16c + Session 16d + Session 16e + Session 16f + Session 16g + Session 16h (25 Aug 2026)
 **Date:** 23–24 August 2026
 **Status:** BUILT AND DEPLOYED SAME DAY — GPS Snail Trail capture (phase 2 of the master build plan, opt-in add-on to Session 14's Logbook) coded, validated, and pushed live at Scott's request to support a real beta test that left the same day: Scott's aunty Sandy and her husband Dave, starting a 5-week, ~7,000km caravanning trip through Victoria and South Australia.
 
@@ -159,6 +159,37 @@ Scott's fix, exactly as he described it: make the postcard selectable by log ent
 Validated: Babel transform + `node --check` on the full file; a new standalone Node test (`/tmp/resolve_entry_trail.js`, 10 assertions) that reproduces the actual bug scenario — a LandCruiser leg and a same-day Z4 leg with real-shaped coordinates — and confirms they resolve to two independent shareable rows with zero cross-contamination between their trails (this is the literal regression test for today's blob route). Written to both repos via the device bridge (LF `scvd-context`, CRLF `Chasin-Curves`), verified byte-identical.
 
 **Still not tested against a real browser in this session.** Once deployed: open Share a Trip, confirm it now lists individual trips (not days), and confirm sharing the Mount Mellum → Landsborough LandCruiser leg on its own produces a real, sensible-looking route instead of the blob. Worth noting for later, not now: if Scott ever wants a genuine multi-leg-same-vehicle trip (fuel stop, lunch stop) rolled into one card again, that's a small, separate follow-up (e.g. multi-select in this same modal) — deliberately not rebuilt speculatively here since he asked for per-entry, not for a smarter same-vehicle grouping heuristic.
+
+## Session 16g — Share a Trip: multi-select "Share Combined" for a deliberate multi-leg postcard
+
+Scott's reaction to 16f's per-entry fix: right call to stop *automatically* merging trips, but merging is genuinely something he wants — "a lazy Sunday in the sports car" with a few stops turned into one postcard event, not four separate ones. The 16f note already flagged this as the obvious next step ("if Scott ever wants a genuine multi-leg-same-vehicle trip... that's a small, separate follow-up — multi-select in this same modal"), so this is exactly that.
+
+`ShareDayModal` now has a checkbox on every row alongside its existing one-tap Share button. Ticking two or more brings up a "N trips selected — combine into one card" bar with a **Share Combined** button. The combine math is the same as the old (removed) day-rollup — sum `distanceKm`, concatenate each entry's `resolveEntryTrail(entry)` in timestamp order, single vehicle name if every selected leg shares one vehicle else "Multiple vehicles" — the difference is entirely about *when* it runs: only over legs a person explicitly ticked, never automatically over everything that happened to log on the same calendar day. That's what actually fixes the Session 16f blob-route bug for good — the failure mode wasn't "combining is bad," it was "combining without being asked is bad."
+
+Implementation notes:
+- `handleShare` (per-entry) and the old day-combine logic were unified into one `buildAndShare(entries)` — a single entry behaves identically to how 16f left it (this is covered by a regression assertion in the test below).
+- Date label now handles a genuine multi-day combine too (e.g. Sandy's caravan trip shared as one card spanning several days): same-day selections get the usual full date, cross-day selections render as a range ("24 Aug – 26 Aug") instead of silently picking the wrong single day.
+- `buildAndShare` returns whether the card was actually built (AbortError from a dismissed native share sheet still counts as "built" — nothing to retry) so the caller only clears the multi-select checkboxes on an actual success, not on a real failure.
+- Busy state changed from "only this row's button is disabled" to "every Share button is disabled while any build is in flight" — closes a latent (pre-existing, not previously flagged) hole where tapping a second Share button mid-build could start a concurrent card render.
+
+Validated: Babel transform + `node --check`; a new standalone Node test (`/tmp/combined_share.js`, 9 assertions) covering: three same-vehicle legs selected out of timestamp order still combine oldest-first with correct summed distance and concatenated trail; a deliberate multi-vehicle combine still resolves to "Multiple vehicles" (same label as before, now an intentional choice rather than an accident); a multi-day combine renders a date range instead of a wrong single date; and a plain single-entry share is byte-for-byte the same shape as pre-16g. Written to both repos via the device bridge, verified byte-identical.
+
+**Still not tested against a real browser.** The Mount Mellum → Landsborough LandCruiser leg from earlier today plus whatever the Z4 run turns into are the natural first real test: share each solo (should look like 16f), then tick both and Share Combined, and check the "Multiple vehicles" combined card looks sane. The lazy-Sunday case Scott actually wants — several same-vehicle Z4 legs combined — is untested against a live multi-stop trail alignment; worth specifically checking the route line doesn't kink oddly at the stop-to-stop joins once there's a real multi-leg trail to look at.
+
+## Session 16h — Combined cards always get a real hero photo, never "no vehicle at all"
+
+Scott's question after 16g: "With multiple vehicles which hero shot will be displayed? The daily report defaulted to the dark background." Two separate things bundled in that one observation, worth splitting apart:
+
+1. **The dark-background card he saw** was built by the OLD calendar-day rollup, before 16f/16g existed — `day.vehicleIds.length === 1 ? ... : "Multiple vehicles"` with `heroUrl` left `null` for any multi-vehicle day. With no photo AND (for reasons not diagnosable after the fact, no console evidence survives from that exact build — possibly a transient Mapbox hiccup, not investigated further since that whole codepath no longer exists) the map also failing to load that time, `drawTripCard`'s `!heroImg && !mapDrawn` fallback fired: plain dark background, just the decorative road-line squiggle. That specific card can't recur — the day-rollup it came from is gone as of 16f.
+2. **The actual design question — which hero shot for a multi-vehicle combine — was still open** in 16g's code: `buildAndShare` inherited the same "heroUrl stays null for >1 vehicle" rule from the old day-rollup, unchanged. So the honest answer to "which hero shot" as of 16g was: none, by design, same gap.
+
+Fixed properly rather than just explained: a combined card now always resolves a real hero photo, even across vehicles. Rule: whichever vehicle covered the most distance across the selected legs (`kmByVehicle`, summed per `vehicleId`, highest wins) — not an arbitrary "first selected" or "first in the garage." The caption changed to match: `"2016 Toyota LandCruiser 200 Series + 1 other"` instead of a generic `"Multiple vehicles"` that named nothing. A single-vehicle combine or single-entry share is unaffected — same vehicle name as always, just resolved through the one shared `heroVehicleId` path now instead of a separate branch.
+
+This doesn't make the dark-background fallback impossible (the dominant vehicle could still have zero photos and no avatar, or the map could still fail to load for unrelated reasons) — but it removes the one guaranteed-empty case: a multi-vehicle combine, which previously had NO photo by design regardless of what was in the Garage, now always tries for one.
+
+Validated: Babel transform + `node --check`; extended `/tmp/combined_share.js` (now 13 assertions) with cases confirming the dominant vehicle is picked correctly by distance (not selection order), the caption names it correctly, the photo-resolution chain (`heroPhoto` → `photos[0]` → `avatar` → null) still works standalone, and an unknown/missing vehicle id degrades to no photo rather than throwing. Written to both repos, verified byte-identical.
+
+**Still not tested against a real browser or with real vehicle photos.** Worth Scott checking on the next combined share: does the caption read naturally, and does the photo shown actually match the vehicle the caption names.
 
 ## Content Brand
 
