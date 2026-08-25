@@ -1,6 +1,6 @@
 # Chasin' Curves — Project Handoff
 
-**Session:** 15 (+ same-day follow-ups 15b/c/d) + Session 16 (24 Aug 2026) + Session 16c + Session 16d + Session 16e (25 Aug 2026)
+**Session:** 15 (+ same-day follow-ups 15b/c/d) + Session 16 (24 Aug 2026) + Session 16c + Session 16d + Session 16e + Session 16f (25 Aug 2026)
 **Date:** 23–24 August 2026
 **Status:** BUILT AND DEPLOYED SAME DAY — GPS Snail Trail capture (phase 2 of the master build plan, opt-in add-on to Session 14's Logbook) coded, validated, and pushed live at Scott's request to support a real beta test that left the same day: Scott's aunty Sandy and her husband Dave, starting a 5-week, ~7,000km caravanning trip through Victoria and South Australia.
 
@@ -144,6 +144,21 @@ Fix: two lightweight, one-off GPS fixes, not a second trail-recording feature.
 Validated: `node --check` on both files after a Babel transform of `app.js`; a standalone Node test (`/tmp/trail_synthesis.js`, 11 assertions) covering: coords-only synthesizes a 2-point trail with correct lat/lng/t; a real recorded trail always wins over coords on the same entry; neither trail nor coords produces an empty trail with no crash; a lone `startCoord` with no `endCoord` does *not* synthesize a trail (a route needs both ends); a multi-leg day correctly concatenates a synthesized leg and a fully-recorded leg in timestamp order, and `distanceKm` is unaffected. Written to both repos via the device bridge, verified byte-identical (LF `scvd-context` copy and CRLF `Chasin-Curves` copy for both `app.js` and `worker.js`).
 
 **Not yet tested against a real browser or a real GPS fix in this session** — same caveat as 16d. Once deployed, the real test is: log a fresh trip (or add a return odo to an existing open one) and check that (a) the "📍 pin captured" note appears in the Logbook, and (b) sharing that day now produces a postcard with a map and route, without needing the full "Track GPS trail" checkbox turned on.
+
+## Session 16f — Share a Trip is now per log entry, not per calendar day (fixes a real blob-shaped route)
+
+Session 16e's fix worked — a real card came back today with an actual gold route line and a "Mount Mellum, QLD → Landsborough, QLD" caption, proof the start/finish coords and the bbox math are all correctly wired end to end. But the route itself was a nonsense blocky shape, not a road, and the caption read "Multiple vehicles · 2 legs" for 62km. Root cause: Scott logged the LandCruiser trip this morning, then took the Z4 out this afternoon per the 16d plan — two completely unrelated trips that both landed on 25 August. The old `groupEntriesByDay` rollup (from Session 15/16d, comment: "a family updating a group chat shares by day... a day may have several legs... that should roll into one distance and route") concatenated both vehicles' trails into one `flatMap`, which draws a straight connecting line from the end of one car's route to the start of the other's — that's the blob. The "Multiple vehicles" fallback label was the same underlying assumption showing through in text.
+
+Scott's fix, exactly as he described it: make the postcard selectable by log entry instead of by day. Calendar-day rollup is gone entirely.
+
+- **`groupEntriesByDay` removed.** Nothing else in the codebase used it (checked — only `ShareDayModal` did; the day-cap compliance counters use their own `dayCountFor`/`rollingDayCount`/`anchoredDayCount` path, untouched). Replaced with `resolveEntryTrail(entry)`, the same recorded-trail-else-synthesized-pins logic from 16e but scoped to one entry instead of flatMapped across a day.
+- **`ShareDayModal` now lists one row per completed (odometer-closed) log entry**, most recent first — not one row per day. Each row shows its own vehicle, date, distance, and trail note (`N GPS pts` for a real recorded trail, `start + finish pins` for the 16e fallback, nothing if neither). A multi-leg or multi-vehicle day now just means multiple rows, each shareable independently — no forced merging, and nothing stops sharing more than one card for the same day if that's what someone wants.
+- `handleShare` now builds the card from a single entry's own `odometerEnd - odometerStart`, its own vehicle's hero photo (always resolvable now — there's never an ambiguous "which car" case since it's always exactly one), and `resolveEntryTrail(entry)`. `legCount` is always 1.
+- UI text: "📤 Share a Day" → "📤 Share a Trip", modal title/subtitle updated to match ("Turns one logged trip into a shareable card"). Internal state var renamed `sharingDay` → `sharingTrip` for the same reason.
+
+Validated: Babel transform + `node --check` on the full file; a new standalone Node test (`/tmp/resolve_entry_trail.js`, 10 assertions) that reproduces the actual bug scenario — a LandCruiser leg and a same-day Z4 leg with real-shaped coordinates — and confirms they resolve to two independent shareable rows with zero cross-contamination between their trails (this is the literal regression test for today's blob route). Written to both repos via the device bridge (LF `scvd-context`, CRLF `Chasin-Curves`), verified byte-identical.
+
+**Still not tested against a real browser in this session.** Once deployed: open Share a Trip, confirm it now lists individual trips (not days), and confirm sharing the Mount Mellum → Landsborough LandCruiser leg on its own produces a real, sensible-looking route instead of the blob. Worth noting for later, not now: if Scott ever wants a genuine multi-leg-same-vehicle trip (fuel stop, lunch stop) rolled into one card again, that's a small, separate follow-up (e.g. multi-select in this same modal) — deliberately not rebuilt speculatively here since he asked for per-entry, not for a smarter same-vehicle grouping heuristic.
 
 ## Content Brand
 
