@@ -4,6 +4,14 @@
 **Date:** 23–24 August 2026
 **Status:** BUILT AND DEPLOYED SAME DAY — GPS Snail Trail capture (phase 2 of the master build plan, opt-in add-on to Session 14's Logbook) coded, validated, and pushed live at Scott's request to support a real beta test that left the same day: Scott's aunty Sandy and her husband Dave, starting a 5-week, ~7,000km caravanning trip through Victoria and South Australia.
 
+## Start here (picking this up in a new chat)
+
+The Trip Postcard work (Sessions 16d–16i, all 25 Aug) is the live thread — read those sections in order, they tell one continuous story from "the map didn't line up with the route" through to today's single open bug. Everything in them is coded, validated with a standalone Node test, deployed to both `Chasin-Curves` and `scvd-context` via the device bridge, and verified byte-identical. Nothing is sitting half-written.
+
+**The one thing actually blocking further progress:** Session 16i. No trip logged today captured a GPS start/finish pin, on either of Scott's devices, despite the capture code (16e) being live and working correctly by every code-level check. Diagnostic logging shipped (`pollGpsPoint` now logs a specific reason — permission denied / unavailable / timeout / unsupported — when a labeled fix fails), but the actual root cause is still open. Scott's plan, his own words: "will take a drive in the morning and see what we can see." When he reports back, the very first thing to do is check whether he's got a console screenshot from that drive — that single piece of evidence should immediately settle which of Session 16i's candidate causes it is. Don't re-diagnose from scratch; read 16i first, it already rules out stale data and re-checks the code path in full.
+
+Secondary, non-blocking thread from 16h: the mobile card in Scott's laptop-vs-phone comparison was missing its hero photo entirely (the laptop got it right). Flagged to him as still open, not yet investigated — worth a look once 16i is resolved, since it may or may not be related (both are "an image failed to load on one specific device," but different images/hosts, so not assumed to be the same cause).
+
 ## Session 16 — Compliance day-cap counters: NT and TAS confirmed, dual counting model built
 
 The Session 14/15 day-cap tracker (`FIXED_DAY_CAPS`, `rollingDayCount`) always assumed one counting model — a rolling 365-day trailing window — for every state, with NT and TAS left out entirely because their exact day caps hadn't been confirmed. Scott's own instinct (24 Aug) was that a rolling window would be too ambiguous for a roadside check, and that at least some states probably hard-reset the count on the vehicle's registration renewal date instead. A web research pass against each state's own official guidelines confirmed he was right, at least for NT:
