@@ -1,6 +1,6 @@
 # Chasin' Curves — Project Handoff
 
-**Session:** 15 (+ same-day follow-ups 15b/c/d) + Session 16 (24 Aug 2026) + Session 16c + Session 16d
+**Session:** 15 (+ same-day follow-ups 15b/c/d) + Session 16 (24 Aug 2026) + Session 16c + Session 16d + Session 16e (25 Aug 2026)
 **Date:** 23–24 August 2026
 **Status:** BUILT AND DEPLOYED SAME DAY — GPS Snail Trail capture (phase 2 of the master build plan, opt-in add-on to Session 14's Logbook) coded, validated, and pushed live at Scott's request to support a real beta test that left the same day: Scott's aunty Sandy and her husband Dave, starting a 5-week, ~7,000km caravanning trip through Victoria and South Australia.
 
@@ -128,6 +128,22 @@ Unchanged — BMW Z4 E85 Imola Red, Jaguar X350 Champagne, Triumph Thunderbird S
 ## TGM Integration
 
 Unchanged this session — see `tgm/handoff.md`.
+
+## Session 16e — Logbook now captures start/finish GPS coords, so odometer-only trips get a reproducible Trip Postcard
+
+Session 16d's photo-hero + faded-map postcard needs a `trail` array to draw anything (map or route) — `hasTrail = trail && trail.length >= 2` gates both layers. Real GPS Trail recordings (`trackGps`, opt-in, continuous, needs the screen on for the whole drive) always produce one. But today's actual test trip — the LandCruiser's 35km run used to sanity-check the 16d fix — was logged as a plain odometer entry, with no trail at all, which is exactly why that share came back with no map and no route even once the R2 CORS fix landed: nothing was broken, there was just no geometry to plot. Scott asked for a way to make these reproducible without requiring the full continuous trail every time.
+
+Fix: two lightweight, one-off GPS fixes, not a second trail-recording feature.
+
+- **`handleLogTrip`** (app.js) now calls the existing `pollGpsPoint()` helper (already used by the GPS Trail poller) once, right when "Log Trip Now" is tapped, and sends it as `startCoord` in the same `POST /logbook/:id` call that creates the entry. A denied/unavailable/slow fix resolves to `null` and never blocks logging the trip — same "graceful, never a thrown error" pattern as the rest of the postcard work.
+- **`LogbookView.handleReturnOdo`** does the same at hand-back time, sending `endCoord` alongside the return odometer reading via the existing `PUT /logbook/:id/:entryId` endpoint (the one that already handles `odometerEnd` and `trail`).
+- **`worker.js`** validates both (`isValidCoord`, shared by both routes) and stores them as `entry.startCoord` / `entry.endCoord` in the KV-persisted entry — no new endpoints, reusing the existing two.
+- **`groupEntriesByDay`** now falls back to synthesizing a straight two-point `[{startCoord,...},{endCoord,...}]` trail for any leg that has both coords but no recorded trail; a real recorded trail still always wins if one exists. This is the one piece that makes the postcard code itself need zero changes — `drawTripCard`'s `hasTrail`/bbox/route logic already handles a 2-point trail correctly (it's literally what the original Deception Bay → Sydney bug case in the bbox fix validation was).
+- Logbook entry rows now show a small "📍 Start pin captured" / "Start + finish pins captured" note when there's no full trail, so this is visible without opening DevTools.
+
+Validated: `node --check` on both files after a Babel transform of `app.js`; a standalone Node test (`/tmp/trail_synthesis.js`, 11 assertions) covering: coords-only synthesizes a 2-point trail with correct lat/lng/t; a real recorded trail always wins over coords on the same entry; neither trail nor coords produces an empty trail with no crash; a lone `startCoord` with no `endCoord` does *not* synthesize a trail (a route needs both ends); a multi-leg day correctly concatenates a synthesized leg and a fully-recorded leg in timestamp order, and `distanceKm` is unaffected. Written to both repos via the device bridge, verified byte-identical (LF `scvd-context` copy and CRLF `Chasin-Curves` copy for both `app.js` and `worker.js`).
+
+**Not yet tested against a real browser or a real GPS fix in this session** — same caveat as 16d. Once deployed, the real test is: log a fresh trip (or add a return odo to an existing open one) and check that (a) the "📍 pin captured" note appears in the Logbook, and (b) sharing that day now produces a postcard with a map and route, without needing the full "Track GPS trail" checkbox turned on.
 
 ## Content Brand
 
