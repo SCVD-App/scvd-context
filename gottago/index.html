@@ -79,7 +79,7 @@ body{font-family:'Outfit',sans-serif;color:var(--text);}
 .dump-stops-btn{background:var(--amber-ghost);color:var(--amber);border:1px solid rgba(255,184,48,.25);border-radius:10px;padding:7px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
 .dump-via-active{font-size:11px;color:var(--amber);background:var(--amber-ghost);border-radius:10px;padding:6px 10px;display:flex;align-items:center;gap:7px;}
 .dump-via-clear{cursor:pointer;opacity:.7;}
-.route-cancel{font-size:10px;color:var(--text-dim);background:rgba(255,255,255,.07);padding:4px 9px;border-radius:9px;cursor:pointer;flex-shrink:0;}
+.route-cancel{font-size:11px;font-weight:700;color:var(--red);background:rgba(255,59,92,.12);border:1px solid rgba(255,59,92,.3);padding:6px 11px;border-radius:9px;cursor:pointer;flex-shrink:0;}
 .route-stats{display:flex;gap:14px;}
 .rs-item{display:flex;flex-direction:column;}
 .rs-val{font-size:13px;font-weight:700;color:var(--text);line-height:1;}
@@ -518,7 +518,7 @@ body{font-family:'Outfit',sans-serif;color:var(--text);}
   <div class="route-bar" id="routeBar">
     <div class="route-bar-top">
       <div class="route-dest">To: <span id="routeDestLabel">—</span></div>
-      <div class="route-cancel" onclick="clearDestination()">✕ End</div>
+      <div class="route-cancel" onclick="clearDestination()">✕ End Route</div>
     </div>
     <div class="route-stats">
       <div class="rs-item"><div class="rs-val" id="routeKm">—</div><div class="rs-key">Distance</div></div>

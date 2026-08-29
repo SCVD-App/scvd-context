@@ -6,6 +6,10 @@
 
 ---
 
+## What happened this session, part 4 (route cancel button wasn't discoverable)
+
+Scott routed to a real destination (Allstar Batteries, Caboolture) and couldn't find a way to cancel it. The control already existed — `clearDestination()` wired to a "✕ End" pill in the route bar since Session 1 — but it was styled as a barely-there 10px gray-on-gray tag in the corner, easy to miss glancing at a phone. Made it visually load-bearing: bigger, red-tinted, bordered, relabelled "✕ End Route". No behavior change, just made the exit clearly visible.
+
 ## What happened this session, part 3 (map tiles were silently broken)
 
 Scott hit a screen full of "401 Error / Invalid Authentication" tiles testing on a real phone for the first time. Root cause: the base map has used Stadia Maps dark tiles since Session 1, and Stadia's free tier requires the site's domain to be registered in their dashboard before it'll serve tiles — that registration never happened, so tiles have 401'd since the very first deploy. It was invisible until now purely because of the other Session 2 bug fix (`onGPS()` not calling `initMap()`) — the real map never rendered on a phone before that fix, so there was nothing to notice was broken.
