@@ -1,80 +1,85 @@
-# Project Handoff
+# Project Handoff — GottaGo (own repo)
 
-**Session:** 10
-**Date:** 23 August 2026
-**Status:** PROTOTYPE BUILT, PRE-DEVELOPMENT — a working browser prototype and a full business/partnership package already exist from a Claude session that predates this repo's GitHub workflow. Recovered and filed here today so it isn't lost track of again.
+**Session:** 2 (of this repo)
+**Date:** 29 August 2026
+**Status:** LIVE on GitHub Pages at `SCVD-App/Gotta-Go`. Mapbox Directions + Geocoding wired in (real road routing, replacing Session 1's straight-line estimates), plus Long Haul mode now actually does something: nationwide RV dump point data + route-corridor stop planning. No Stripe worker, no backend.
 
 ---
 
-## Overview
+## What happened this session, part 2 (Long Haul dump points)
 
-GottaGo is a route-aware, real-time public toilet locator for navigation apps — the pitch is that no existing GPS app tells drivers where to stop for a toilet. Tagline: "Never Be Caught Short." Target market: over-50s, grey nomads, families with young kids, pregnant women, and people with bladder/bowel conditions. Primary platform planned as Google Play (Android first, iOS to follow).
+Scott asked to locate RV dump points nationwide and add a dump-point routing option. Chose the bigger of two options offered — not just folding dump points into Sonar as another facility type, but actually building out Long Haul mode's route-corridor planner (previously just UI toggles with an honest "not built yet" note).
 
-This project has real momentum from an earlier working session, but that session predated the scvd-context/GitHub process, so none of it made it into version control until today — Scott dug up everything he still had and dropped it straight into this folder.
+**Data**: the exact same National Public Toilet Map CSV (data.gov.au, CC-BY 3.0 AU — same license already cited for the toilet data) turns out to carry a `DumpPoint` boolean column, plus `DPWashout`, `DPAfterHours`, and `DrinkingWater` flags. Downloaded the full August 2026 export (25,449 facility rows) via the browser, filtered to `DumpPoint=true`: **1,393 real dump points nationwide** — NSW 347, QLD 324, WA 238, SA 199, VIC 181, TAS 80, NT 23, ACT 1. Built into `dumppoints.json` (~360KB) as its own file, loaded lazily only when Long Haul mode is actually used — Quick Dash users never fetch it.
 
-## What's In This Folder
+**Feature**: when a route is planned in Long Haul mode, `planDumpStops()` runs a corridor search (`findDumpPointsAlongRoute()`) against the real Mapbox route geometry — a bounding-box prefilter narrows the 1,393 candidates, then each is checked against a sampled version of the route line (capped ~800 points for performance on long routes), keeping anything within 8km of the corridor. Results sort by distance into the trip, so the list reads top-to-bottom as "stops you'll pass in order." A pill on the route bar ("🛻 N dump points along this route") opens a list (`dump-modal`); tapping one sets it as a real Mapbox waypoint (`activeDestination.viaStop`) and `refreshDirectRoute()` recalculates the whole trip through it — same Directions-API waypoint mechanism already built for the toilet diversion feature, just applied to a planned stop instead of an ephemeral one. The route bar then shows "via <stop name>" with a real revised ETA, and a ✕ clears it. The via-stop persists to localStorage like the destination itself, so it survives a reload.
 
-- `gottago-beta-v2.html` — **primary beta app.** Real GPS (with a "demo mode · Brisbane CBD" fallback), Leaflet + OpenStreetMap + Stadia dark tiles, 35 real SE Queensland government facilities embedded. Sonar wedge UI bottom-left (radar-pulse button, five urgency levels from 😎 to 🚨, isosceles wedge narrowing at calm and widening at emergency), bottom nav (Map / Nearby / Rate / Voice), nav-lights FAB (🚦) bottom-right. Confirmed rendering correctly — screenshot on file.
-- `gottago-beta.html` — beta v1, kept as reference.
-- `gottago-app-v2.html` — full interactive concept demo covering all designed features.
-- `gottago-gap-demo.html` — the Camps Australia partnership pitch demo: toggles between 19 council-only facilities (3 dead zones) and 50 facilities with Camps AU data layered in (zero gaps). This is the single best asset for the partnership conversation.
-- `GottaGo-Proposal.docx` — full 9-section partnership proposal for Camps Australia, send-ready.
-- `GottaGo-Session-1.docx` — session 1 summary from the original build.
-- `gottago-revenue-v2.html` — interactive revenue model. Nine live sliders (Camps AU base subscriber pool, premium %, claim rate, free→paid and half-off→paid conversion rates, organic signups and their conversion rate, ARPU, platform fee %, Camps AU revenue share %), a Year 1 user funnel, and Year 3 net-revenue capture-rate scenarios, with a churn-aware (15%/yr) multi-year formula. Found and added to this folder 24 Aug 2026, after the rest of the recovery — was initially thought lost.
-- `gottago-revenue-model.html` — v1 reference version of the above.
+**Deliberately not built this pass**: gap warnings and vehicle-type filtering (the other Long Haul checkboxes) — still just visual toggles, said plainly in the in-app note, not wired to anything. No on-map markers for the candidate dump points (list-only, same choice made for the toilet diversion feature). Corridor width (8km) and result cap (20) are hardcoded, not user-configurable yet.
 
-## Key Features Designed & Built
+---
 
-- **Smart Sonar** — radar-pulse activation button; scan speed tied to urgency; five urgency levels filter results by quality rating and distance.
-- **Port/Starboard Nav Flash** — full-screen edge pulses (left = red, right = green) for upcoming turns, pulse frequency increasing as the turn approaches (500m slow → 20m rapid); flagged as potentially patentable, tucked behind a FAB submenu to preserve screen space.
-- **House of Lords Rating Scale** — 🏛️ House of Lords → 👑 Throne Room → 🚻 The Loo → ⛽ Servo Stop → ⚠️ Thunderbox.
-- **Six Voice Avatars** — Bazza, Reginald, Morag, Seamus, Gran, Randy — each with urgency-matched scripts.
-- **Route Modes** — Quick Dash (short trips) and Long Haul (full trip planning, gap alerts, vehicle type, accessible/baby filters).
+## What happened this session (Mapbox integration)
 
-## Data Strategy
+Scott confirmed reusing the same Mapbox public token already live in Chasin' Curves (`pk.eyJ1...` — public token, safe client-side, not the Stripe key he almost grabbed by mistake — see note below). Wired into `index.html`:
 
-- Current beta data: Australian Government National Public Toilet Map (toiletmap.gov.au / data.gov.au) — 19,000+ facilities nationally, free for derivative products. 35 real SE QLD facilities embedded in the beta.
-- Strategic data partner target: **Camps Australia Wide** (Heatley & Michelle Gilmore, Rainbow Beach QLD) — 15,500+ human-verified highway/regional sites, ~200,000 app subscribers, existing licensing deals with GPSOz and Hema Maps. WikiCamps' recent acquisition by a caravan park chain is framed as an opening for an independent alternative.
-- Proposed deal terms: free 12-month GottaGo Pro for current Camps AU premium members, a tracked 50%-off link for their subscribers, 12% net revenue share, $3,000/yr minimum guarantee, "Camps AU Verified" badge, quarterly reporting with audit rights, review at 25,000 active users, 2-year term with 90 days exit notice.
+- **Geocoding**: Route Planner's "To" field now calls Mapbox Geocoding v6 (`/search/geocode/v6/forward`) instead of Nominatim — same vendor as Directions, one token for both.
+- **Direct route**: `fetchRoute()` calls Mapbox Directions v5 (`driving-traffic` profile, so it's traffic-aware). `refreshDirectRoute()` fires once per destination set/restore (not on every GPS tick — deliberate, to keep API usage down per the scoping doc) and draws the real routed line + real distance/time in the route bar. Falls back to the haversine estimate (shown with a `~` prefix so it's honest about being an estimate) if the fetch fails.
+- **Diversion delta**: `openDetail()` now fires two real Directions calls the moment a facility sheet opens with a destination active — one direct leg, one via the facility as a waypoint — and shows the real delta ("+X km / +Y min, real road routing, live traffic") once they land, replacing the straight-line placeholder shown while loading. Falls back gracefully to the straight-line estimate, clearly labelled, if Mapbox can't be reached.
+- **Fixed a bug found during this pass**: `onGPS()` never called `initMap()` — only `startDemo()` did — so a real device (as opposed to demo mode) was rendering no map at all in the live deployment. Fixed: the first real GPS fix now initialises the map.
 
-## Subscription Model
+**Deliberately not changed this session:** Sonar's ranking (nearest-card, results list, facility list) stays on the haversine+estMinutes heuristic — cheap to rank many candidates at once, versus live-routing all of them; the base map tiles stay Leaflet+Stadia, not Mapbox GL JS — only the REST Directions/Geocoding APIs were added; no on-map preview of the diversion route yet (still text-only in the detail sheet) — flagged as a future polish item, not built now.
 
-- Free — map view, nearest loo, basic ratings.
-- GottaGo Plus — $4.99/mo or $39.99/yr — route planning, Long Haul mode, gap alerts, 2 avatars, Camps AU data, offline.
-- GottaGo Pro — $7.99/mo or $59.99/yr — all avatars, House of Lords ratings, accessibility/baby filters.
-- Fleet/Organisation — $199–$999/yr — white-label, API, multi-user.
+## What happened Session 1 (relocation)
 
-## Mapping & Infra
+This repo is GottaGo's first proper home — previously its only assets lived in `scvd-context/gottago/` (the shared context-mirror repo), which was never meant to be the live source, same as every other app in the portfolio. This session:
 
-Recommended platform: Mapbox — free up to 25,000 MAU, ~$0.22/user/month beyond that. Beta currently runs on Leaflet + OpenStreetMap + Stadia dark tiles, free, no API key.
+1. Reviewed both recovered prototypes line by line: `gottago-beta-v2.html` (real GPS, real Leaflet/OSM map, real facility data from the National Public Toilet Map, working Sonar) and `gottago-app-v2.html` (Route Planner UI, Quick Dash/Long Haul modes, avatar picker — but a canvas mockup underneath, no real GPS, hardcoded destination).
+2. Consolidated them into **one real app** (`index.html`) — beta-v2's engine is the foundation; app-v2's Route Planner, avatar system, and Nearby-list UI are ported in and wired to real data instead of mocks.
+3. Added the PWA basics (`manifest.json`, two icons) matching the pattern already used by Jumpin' Pin / Hnefatafl / Two Ancient Classics.
+4. Built the first real version of the destination/waypoint feature Scott asked for (see below) — using straight-line estimates, not real road routing yet.
 
-## Legal & Registration (priority order)
+## Architecture decisions made during consolidation
 
-1. ABN registration (free) — before ASIC.
-2. Business name with ASIC ($42/yr or $98/3yr).
-3. Trademark search + filing with IP Australia, Classes 9 & 38 (~$500–2,000, 7+ months).
-4. Patent conversation re: port/starboard nav flash, before wider public exposure.
-5. Company registration (Pty Ltd, $611) — once taking on partners/investors.
+- **One map, not two.** app-v2 had a separate fake canvas per screen (map screen, route screen). Dropped that entirely — there's one real Leaflet map instance now, and an active route is just a marker + line + a `route-bar` panel layered on top of it, not a separate screen. Simpler, and it's how a real app would do this anyway.
+- **One facility detail sheet, not two.** app-v2 had its own separate facility-detail modal, duplicating beta-v2's already-working one. Kept only beta-v2's (`openDetail()`), and every entry point (map pins, Sonar results, the Nearby list) now calls into it — one source of truth for facility info and the "Navigate" handoff.
+- **Canonical facility data.** app-v2's fake `FACILITIES` array (hardcoded distances, invented venue types) is gone. Everything reads from the real `GOV_FACILITIES` list beta-v2 already had, with distances always computed live via GPS.
+- **House of Lords Rating Scale is now actually implemented** (`lordsLabel()`), mapped off each facility's star rating — this was designed months ago but never wired up in either prototype. Shows on the facility detail sheet.
 
-## Development Path
+## The destination / waypoint feature — what's real vs. what's still an estimate
 
-All UI design, logic, data sourcing, and feature specs are already done — a developer or co-founder inherits a finished blueprint, not a blank page. Cost ranges surveyed: AU senior dev $80–150/hr (~$40–80k MVP), Eastern European freelancer $40–60/hr (~$20–35k), Upwork $25–45/hr (~$15–25k), or a technical co-founder on equity (recommended — pitch via River City Labs Brisbane, Fishburners, or CoFoundersLab).
+Scott's ask: when a destination is locked in and the user triggers the loo-finder mid-trip, save that destination and treat the facility stop as a waypoint, with a revised ETA. The scoping doc (`gottago-relocation-scope.md`, sent to Scott 28 Aug) worked out that this needs GottaGo to own the destination itself — no phone OS lets a third-party app see or edit another app's live navigation — and confirmed Option A: GottaGo becomes the trip's own navigator, built on Mapbox Directions.
 
-## Open Actions
+**What's built tonight, ahead of the Mapbox phase:**
+- Route Planner's "To" field now geocodes to a real place (Nominatim/OSM, free, no key — swap for Mapbox Geocoding once the Directions API key exists) and stores it as `activeDestination`, **persisted to localStorage** — survives a reload or the tab being backgrounded, not just held in memory.
+- The map shows a real destination marker + line once a route is planned, with a live-updating distance/time readout in the `route-bar` panel.
+- When Sonar finds a facility while a destination is active, the facility's detail sheet shows exactly how much that stop adds — "adds ~X km / ~Y min" — computed from real GPS coordinates.
+- The "Navigate" handoff to Google Maps now carries the **full trip**, not just the toilet stop: `origin` = you, `waypoints` = the facility, `destination` = wherever you were already headed. The destination is never dropped, even in this external-handoff version.
 
-| # | Task |
-|---|------|
-| 1 | ABN + business name registration with ASIC |
-| 2 | Trademark search for "GottaGo" at IP Australia before filing |
-| 3 | Draft and send the Camps Australia partnership letter (proposal doc already send-ready) |
-| 4 | Begin technical co-founder search |
-| 5 | Patent conversation re: port/starboard nav flash |
-| 6 | Commission app icon artwork |
-| 7 | Google Play developer account registration |
-| 8 | Roadmap idea from Chasin' Curves (23 Aug 2026): port its Logbook + "Share a Day" trip-postcard feature into GottaGo once development resumes — a natural fit given GottaGo's own grey-nomad/caravanning audience |
+**Session 1 shipped this on straight-line (haversine) estimates.** Session 2 (above) replaced the direct-route and diversion-delta figures with real Mapbox Directions routing. What's still not real: actual turn-by-turn guidance and the Port/Starboard Nav Flash driven off real maneuver data — see "explicitly NOT built" below.
 
-All assets referenced in the recovered project email are now accounted for in this folder — nothing outstanding to track down.
+## What's explicitly NOT built (said plainly, not left implicit)
 
-## Filing Note
+- Long Haul mode's gap-alert analysis and vehicle-type filtering — UI toggles exist, nothing behind them yet.
+- Ratings/reviews ("Rate" nav tab) — shows a "not live yet" toast, no submission flow.
+- Camps Australia data layer — no partnership integration exists; facility data is 100% the free government dataset.
+- Real turn-by-turn navigation, Port/Starboard Nav Flash driven by real route data (currently a standalone toggle, not tied to an actual route's upcoming turns).
+- Any backend — no Cloudflare Worker, no Stripe, no subscriptions. This is 100% client-side, matching the no-build-tools house style.
 
-This folder was a stub (Session 9, 26 June 2026, "no build started") until today — the prototype and business assets above were actually built in an earlier Claude session that predated the scvd-context/GitHub workflow, so they existed only in that session's chat history and an email until Scott recovered and filed them here. Nothing in this folder has been pushed to any live hosting or app store yet.
+## Files in this repo
+
+- `index.html` — the consolidated app.
+- `dumppoints.json` — 1,393 nationwide RV dump points, filtered from the National Public Toilet Map CSV (data.gov.au, CC-BY 3.0 AU). Fetched lazily by Long Haul mode only.
+- `manifest.json`, `icon-192.png`, `icon-512.png` — PWA basics. Final logo built 28 Aug 2026 from Scott's own sketch, workshopped through two directions: first a capital G + lowercase g with the tail sweeping into an arrow (to imply direction), then — Scott's call, and the one that shipped — a large G + small G pair (both the same letterform, reads as "GG") framed by four bright-red N/S/E/W ticks that carry the directional/navigation cue instead of the tail. Original open action #6 (commission icon artwork) downgraded to "optional professional polish pass" rather than "not started" — this is a real logo now, not a placeholder.
+- `handoff.md` — this file.
+
+## Open actions carried over from the original recovery handoff (`scvd-context/gottago/handoff.md`)
+
+Still open, unrelated to tonight's work: ABN/business name registration, trademark search for "GottaGo," the Camps Australia partnership letter, technical co-founder search, patent conversation re: Port/Starboard Nav Flash, Google Play developer account registration. The business/partnership documents (`GottaGo-Proposal.docx`, revenue model files) stay in `scvd-context/gottago/` — they're not app code and don't need to live in this repo.
+
+## Next session
+
+1. Build the Port/Starboard Nav Flash off real Directions step/maneuver data (`fetchRoute()` already returns `steps`) instead of the standalone manual toggle.
+2. Long Haul mode's remaining checkboxes — gap warnings, vehicle-type filtering — are still just visual toggles; wire them up or drop them.
+3. Decide (Scott's call, still open): ship this as PWA-only for now, or hold for a Capacitor wrapper before any public release — see the scoping doc for why that matters specifically for this app's "works while driving toward something else" pitch.
+4. Optional polish: on-map markers for the candidate dump points (currently list-only, same as the toilet diversion feature), and a tunable corridor width instead of the hardcoded 8km.
+5. Keep an eye on Mapbox Directions usage against the 100k free requests/month tier as real users show up (see scoping doc for the pricing tiers above that) — Long Haul's corridor search adds no extra Directions calls itself (it reuses the route already fetched for the route bar), so this doesn't change the usage math.
