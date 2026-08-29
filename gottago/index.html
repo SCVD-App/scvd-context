@@ -56,6 +56,16 @@ body{font-family:'Outfit',sans-serif;color:var(--text);}
 .gps-bar{position:fixed;top:90px;left:12px;right:12px;z-index:20;
   background:var(--card);border:1px solid var(--border);border-radius:12px;
   padding:8px 12px;display:flex;align-items:center;gap:8px;backdrop-filter:blur(16px);}
+
+/* ── TURN-BY-TURN BANNER (Option 1: lightweight nav cues) ── */
+.turn-banner{position:fixed;top:140px;left:12px;right:12px;z-index:20;display:none;
+  align-items:center;gap:12px;background:var(--card);border:1px solid var(--teal-dim);
+  border-radius:14px;padding:10px 14px;backdrop-filter:blur(16px);box-shadow:0 4px 20px rgba(0,0,0,.35);}
+.turn-icon{font-size:26px;flex-shrink:0;width:34px;text-align:center;}
+.turn-info{flex:1;min-width:0;}
+.turn-instruction{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.turn-distance{font-size:11px;color:var(--teal-dim);margin-top:1px;}
+.turn-recalc{flex-shrink:0;background:rgba(255,255,255,.07);border:none;color:var(--text-dim);font-size:16px;width:34px;height:34px;border-radius:10px;cursor:pointer;}
 .gps-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 .gps-dot.acquiring{background:var(--amber);animation:blink .8s ease-in-out infinite;}
 .gps-dot.locked{background:var(--teal);box-shadow:0 0 6px var(--teal-glow);}
@@ -511,6 +521,16 @@ body{font-family:'Outfit',sans-serif;color:var(--text);}
   <div class="gps-acc" id="gpsAcc">—</div>
 </div>
 
+<!-- TURN-BY-TURN BANNER (hidden until a route with real Directions steps is active) -->
+<div class="turn-banner" id="turnBanner">
+  <div class="turn-icon" id="turnIcon">⬆️</div>
+  <div class="turn-info">
+    <div class="turn-instruction" id="turnInstruction">—</div>
+    <div class="turn-distance" id="turnDistance">—</div>
+  </div>
+  <button class="turn-recalc" id="turnRecalcBtn" onclick="refreshDirectRoute()" title="Recalculate from here">🔄</button>
+</div>
+
 <!-- BOTTOM CHROME -->
 <div class="bottom-chrome">
 
@@ -649,6 +669,7 @@ let markers=[];
 let currentAvatar=0,currentMode='quick';
 let activeDestination=null,destMarker=null,destLine=null;
 let GOV_DUMPPOINTS=null,dumpStops=[];
+let navStepIndex=0,navWakeLock=null;
 
 /* MAPBOX — Directions v5 + Geocoding v6. Same public token already used by Chasin' Curves. */
 const MAPBOX_TOKEN='pk.eyJ1Ijoic2N2ZCIsImEiOiJjbXRkcm41aWMwOWU2MnpwdGlodnVsNnhrIn0.tyhIKA6GZb71MVPRb5D25w'; // URL-restricted to scvd-app.github.io
@@ -799,6 +820,96 @@ function clearViaStop(){
   refreshDirectRoute();
 }
 
+/**
+ * Turn-by-turn banner (Option 1 — lightweight nav cues). Deliberately NOT a full turn-by-turn
+ * engine: it rides entirely on the `steps` array Mapbox already returns in the same Directions
+ * call that draws the route line, so it costs nothing extra to run. It does not detect going
+ * off-route and does not auto-reroute — on purpose. Scott's call: Waze/Google Maps nagging you
+ * back onto the route the second you pull off for fuel is the thing to avoid, not replicate.
+ * The 🔄 button on the banner is the opt-in "I'm back on track, recalculate from here" action.
+ */
+function turnIcon(m){
+  if(!m)return '⬆️';
+  if(m.type==='arrive')return '🏁';
+  if(m.type==='depart')return '🚗';
+  if(m.type==='roundabout'||m.type==='rotary')return '🔀';
+  const mod=m.modifier||'';
+  if(mod==='sharp left')return '↩️';
+  if(mod==='sharp right')return '↪️';
+  if(mod==='slight left')return '↖️';
+  if(mod==='slight right')return '↗️';
+  if(mod==='left')return '⬅️';
+  if(mod==='right')return '➡️';
+  if(mod==='uturn')return '🔄';
+  return '⬆️';
+}
+function turnFallbackText(m,streetName){
+  const name=streetName?` onto ${streetName}`:'';
+  if(m&&m.type==='arrive')return `You have arrived${name}`;
+  if(m&&m.type==='depart')return `Head out${name}`;
+  const mod=(m&&m.modifier)||'';
+  if(mod)return `Turn ${mod}${name}`;
+  return `Continue straight${name}`;
+}
+function speakStep(step){
+  if(!step||!('speechSynthesis' in window))return;
+  try{
+    const text=(step.maneuver&&step.maneuver.instruction)||turnFallbackText(step.maneuver,step.name);
+    speechSynthesis.cancel(); // don't stack instructions if steps advance quickly
+    speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+  }catch(e){ /* speech synthesis unsupported/blocked — the banner text still shows */ }
+}
+async function requestNavWakeLock(){
+  if(!('wakeLock' in navigator)||navWakeLock)return;
+  try{
+    navWakeLock=await navigator.wakeLock.request('screen');
+    navWakeLock.addEventListener('release',()=>{navWakeLock=null;});
+  }catch(e){ /* denied or unsupported — navigation still works, screen may just sleep */ }
+}
+function releaseNavWakeLock(){
+  if(navWakeLock){navWakeLock.release().catch(()=>{});navWakeLock=null;}
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&activeDestination&&activeDestination.steps&&activeDestination.steps.length){
+    requestNavWakeLock(); // the browser drops the lock whenever the tab is hidden — reclaim it
+  }
+});
+
+/* Called once a fresh route (with steps) comes back from Mapbox — resets tracking to step 0,
+   since a freshly-fetched route always starts from wherever the user currently is. */
+function planTurnByTurn(dest){
+  navStepIndex=0;
+  if(dest.steps&&dest.steps.length){
+    speakStep(dest.steps[0]);
+    requestNavWakeLock();
+  }
+  updateTurnBanner();
+}
+
+const TURN_ADVANCE_KM=0.04; // ~40m — close enough to a maneuver point to call it "passed"
+function updateTurnBanner(){
+  const banner=document.getElementById('turnBanner');
+  if(!banner)return;
+  const dest=activeDestination;
+  if(!dest||!dest.steps||!dest.steps.length||!userLat){
+    banner.style.display='none';
+    return;
+  }
+  while(navStepIndex<dest.steps.length-1){
+    const m=dest.steps[navStepIndex].maneuver;
+    if(haversine(userLat,userLng,m.location[1],m.location[0])<=TURN_ADVANCE_KM){
+      navStepIndex++;
+      speakStep(dest.steps[navStepIndex]);
+    } else break;
+  }
+  const step=dest.steps[navStepIndex],m=step.maneuver;
+  const distKm=haversine(userLat,userLng,m.location[1],m.location[0]);
+  banner.style.display='flex';
+  document.getElementById('turnIcon').textContent=turnIcon(m);
+  document.getElementById('turnInstruction').textContent=m.instruction||turnFallbackText(m,step.name);
+  document.getElementById('turnDistance').textContent=distKm<0.1?Math.round(distKm*1000)+' m':distKm.toFixed(1)+' km';
+}
+
 function haversine(a,b,c,d){const R=6371,dL=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180;const x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
 function estMinutes(km){return Math.max(1,Math.round(km*1.5));}
 function lordsLabel(stars){if(stars>=5)return '🏛️ House of Lords';if(stars===4)return '👑 Throne Room';if(stars===3)return '🚻 The Loo';if(stars===2)return '⛽ Servo Stop';return '⚠️ Thunderbox';}
@@ -827,6 +938,7 @@ function onGPS(p){
   else userMarker=L.marker([userLat,userLng],{icon:L.divIcon({className:'',html:`<div style="width:14px;height:14px;background:#FFB830;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(255,184,48,.8);"></div>`,iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map);
   updateDistances();updateNearestCard();
   if(activeDestination)updateRouteBar();
+  updateTurnBanner();
 }
 function onGPSErr(){document.getElementById('gpsDot').className='gps-dot error';startDemo();}
 function startDemo(){
@@ -1080,10 +1192,13 @@ function setDestination(dest){
 }
 function clearDestination(){
   activeDestination=null;
+  navStepIndex=0;
+  releaseNavWakeLock();
   try{localStorage.removeItem('gottago_destination');}catch(e){}
   if(destMarker&&map){map.removeLayer(destMarker);destMarker=null;}
   if(destLine&&map){map.removeLayer(destLine);destLine=null;}
   document.getElementById('routeBar').style.display='none';
+  document.getElementById('turnBanner').style.display='none';
 }
 function restoreDestination(){
   let saved=null;
@@ -1121,8 +1236,10 @@ function refreshDirectRoute(){
       if(activeDestination!==dest)return; // destination changed/cleared while this was in flight
       dest.routedKm=route.distanceKm;
       dest.routedMin=route.durationMin;
+      dest.steps=route.steps;
       drawRouteLine(route.geometry);
       updateRouteBar();
+      planTurnByTurn(dest);
       if(dest.longHaul)planDumpStops(dest,route.geometry);
     })
     .catch(()=>{ /* stay on the haversine estimate already shown by updateRouteBar() */ });

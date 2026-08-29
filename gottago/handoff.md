@@ -6,6 +6,16 @@
 
 ---
 
+## What happened this session, part 5 (Option 1 — lightweight turn-by-turn)
+
+Scott asked whether GottaGo should get a Google Maps/Waze-style navigation screen. Scoped three tiers before building anything: (1) a lightweight turn-cue banner built entirely from data already being fetched, (2) a dedicated full-screen driving mode on top of that same engine, (3) real turn-by-turn via Mapbox's separate Navigation SDK — which is priced per-MAU + per-trip and would need GottaGo to stop being a pure PWA (reliable background GPS needs a native wrapper). Given Scott's real worry — a free-to-paying ratio that could leave him funding thousands of free users — Option 3 is specifically the one that ties infrastructure cost directly to user count; Options 1 and 2 don't, since they add no new API calls at all. That's the intended shape going forward: keep 1 and 2 free (they cost nothing extra to give away), and if full turn-by-turn ever gets built, that's the natural Premium gate, because it's the only one of the three whose cost scales with usage.
+
+Built Option 1 this pass. `fetchRoute()` already returns Mapbox's `steps` array in the same Directions response used for the route line — it was being discarded; now it's stored on `activeDestination.steps` and `planTurnByTurn()` resets tracking to step 0 every time a fresh route comes in (manual recalc included, restore-from-reload included). `updateTurnBanner()` runs on every GPS tick: works out how far the user is from the next maneuver point, advances to the next step once within ~40m, and updates a banner (icon + instruction + live distance) fixed near the top of the screen. New steps get spoken aloud via the browser's built-in `SpeechSynthesis` — free, no vendor, though it's whatever generic voice the device provides, not an actual avatar accent; that's a real limit of the API, not something worth faking. Screen stays awake during navigation via the Screen Wake Lock API (`navigator.wakeLock`) — same mechanism Mic Drop already uses, re-acquired on `visibilitychange` since the browser drops it whenever the tab is hidden.
+
+Deliberately does NOT detect going off-route or auto-reroute — this was Scott's explicit ask, prompted by how much Waze/Google Maps nagging him back onto a route the second he pulls off for fuel annoys him. The 🔄 button on the banner is a manual, opt-in "recalculate from here" — it just calls the same `refreshDirectRoute()` already built for the route bar. No live rerouting engine, no proactive off-route warnings, by design.
+
+**Next**: Option 2 (dedicated full-screen driving mode — bigger turn arrow, distance countdown, auto-recentering map) sits on top of this same engine; Scott wants Option 1 proven out first before that build.
+
 ## What happened this session, part 4 (route cancel button wasn't discoverable)
 
 Scott routed to a real destination (Allstar Batteries, Caboolture) and couldn't find a way to cancel it. The control already existed — `clearDestination()` wired to a "✕ End" pill in the route bar since Session 1 — but it was styled as a barely-there 10px gray-on-gray tag in the corner, easy to miss glancing at a phone. Made it visually load-bearing: bigger, red-tinted, bordered, relabelled "✕ End Route". No behavior change, just made the exit clearly visible.
