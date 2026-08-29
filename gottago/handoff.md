@@ -6,6 +6,12 @@
 
 ---
 
+## What happened this session, part 3 (map tiles were silently broken)
+
+Scott hit a screen full of "401 Error / Invalid Authentication" tiles testing on a real phone for the first time. Root cause: the base map has used Stadia Maps dark tiles since Session 1, and Stadia's free tier requires the site's domain to be registered in their dashboard before it'll serve tiles — that registration never happened, so tiles have 401'd since the very first deploy. It was invisible until now purely because of the other Session 2 bug fix (`onGPS()` not calling `initMap()`) — the real map never rendered on a phone before that fix, so there was nothing to notice was broken.
+
+Fix: switched the tile layer from Stadia to Mapbox's `dark-v11` style, reusing the same domain-restricted token already wired in for Directions/Geocoding — no new account or dashboard setup needed. Mapbox's tile free tier is 750,000 requests/month, well clear of what this app will use for a while. Worth knowing: tiles loaded this way (raster tiles via Leaflet) bill per individual tile request, not bundled as one "map load" the way Mapbox GL JS would — still comfortably inside the free tier, just a different usage shape to watch if traffic ever gets serious.
+
 ## What happened this session, part 2 (Long Haul dump points)
 
 Scott asked to locate RV dump points nationwide and add a dump-point routing option. Chose the bigger of two options offered — not just folding dump points into Sonar as another facility type, but actually building out Long Haul mode's route-corridor planner (previously just UI toggles with an honest "not built yet" note).

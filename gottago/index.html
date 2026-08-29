@@ -842,7 +842,10 @@ function startDemo(){
 function initMap(){
   if(typeof L==='undefined'){setTimeout(initMap,800);return;}
   map=L.map('mapEl',{zoomControl:false,attributionControl:true}).setView([userLat,userLng],14);
-  L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+  // Mapbox dark tiles via the same domain-restricted token already in use for Directions/Geocoding.
+  // (Was Stadia Maps — its free tier needs the domain registered in their dashboard, which never
+  // happened, so it silently 401'd. Mapbox's tile free tier is 750k requests/month, no extra setup.)
+  L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/512/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`,{tileSize:512,zoomOffset:-1,maxZoom:22,attribution:'© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
   userMarker=L.marker([userLat,userLng],{icon:L.divIcon({className:'',html:`<div style="width:14px;height:14px;background:#FFB830;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(255,184,48,.8);"></div>`,iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map);
   updateDistances();plotMarkers();updateNearestCard();
   restoreDestination();
