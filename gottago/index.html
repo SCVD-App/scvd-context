@@ -669,7 +669,7 @@ let markers=[];
 let currentAvatar=0,currentMode='quick';
 let activeDestination=null,destMarker=null,destLine=null;
 let GOV_DUMPPOINTS=null,dumpStops=[];
-let navStepIndex=0,navWakeLock=null;
+let navStepIndex=0,lastSpokenStepIndex=-1,navWakeLock=null;
 
 /* MAPBOX — Directions v5 + Geocoding v6. Same public token already used by Chasin' Curves. */
 const MAPBOX_TOKEN='pk.eyJ1Ijoic2N2ZCIsImEiOiJjbXRkcm41aWMwOWU2MnpwdGlodnVsNnhrIn0.tyhIKA6GZb71MVPRb5D25w'; // URL-restricted to scvd-app.github.io
@@ -875,35 +875,75 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
-/* Called once a fresh route (with steps) comes back from Mapbox — resets tracking to step 0,
-   since a freshly-fetched route always starts from wherever the user currently is. */
+/**
+ * v1 of this (shipped, then reported broken by Scott on a real drive) picked the active step by
+ * checking whether the user was within ~40m of THAT step's exact maneuver coordinate, advancing
+ * one step at a time. It fell apart at roundabouts and town intersections — real driving rarely
+ * passes within 40m of the precise point Mapbox chose, especially somewhere geometrically wide —
+ * so the index would stall on an already-passed maneuver (giving instructions several turns
+ * stale) or, once it did catch up, occasionally read out an unrelated step's direction entirely,
+ * which is exactly the "told to turn left where there was no left turn" report. It self-corrected
+ * on the long straight highway stretch because that's the one case point-proximity happens to work.
+ *
+ * Fix: stop tracking "have we hit this exact point" and instead work out, every GPS tick, how far
+ * the user actually is along the route line (nearest-point matching against the route geometry,
+ * same technique already used for the dump-point corridor search) and pick whichever step that
+ * progress distance falls into. This self-corrects every tick from real position rather than
+ * accumulating drift from missed proximity checks.
+ */
+function computeStepBoundaries(steps){
+  // boundaries[i] = distance (km) from the start of the route to step i's own maneuver point.
+  const b=[0];
+  let cum=0;
+  for(let i=0;i<steps.length-1;i++){cum+=(steps[i].distance||0)/1000;b.push(cum);}
+  return b;
+}
+function progressAlongRoute(coords,lat,lng){
+  if(!coords||coords.length<2)return null;
+  const step=Math.max(1,Math.floor(coords.length/1500));
+  let cum=0,prevLat=coords[0][1],prevLng=coords[0][0],bestCum=0,bestDist=Infinity;
+  for(let i=0;i<coords.length;i+=step){
+    const lt=coords[i][1],ln=coords[i][0];
+    if(i>0)cum+=haversine(prevLat,prevLng,lt,ln);
+    prevLat=lt;prevLng=ln;
+    const d=haversine(lat,lng,lt,ln);
+    if(d<bestDist){bestDist=d;bestCum=cum;}
+  }
+  return {km:bestCum,offRouteKm:bestDist};
+}
+
+/* Called once a fresh route (with steps) comes back from Mapbox — resets tracking, since a
+   freshly-fetched route always starts from wherever the user currently is. */
 function planTurnByTurn(dest){
-  navStepIndex=0;
+  lastSpokenStepIndex=-1;
   if(dest.steps&&dest.steps.length){
     speakStep(dest.steps[0]);
+    lastSpokenStepIndex=0;
     requestNavWakeLock();
   }
   updateTurnBanner();
 }
 
-const TURN_ADVANCE_KM=0.04; // ~40m — close enough to a maneuver point to call it "passed"
+const STEP_BOUNDARY_SLACK_KM=0.015; // ~15m tolerance so GPS jitter right at a maneuver point doesn't flicker the instruction back and forth
 function updateTurnBanner(){
   const banner=document.getElementById('turnBanner');
   if(!banner)return;
   const dest=activeDestination;
-  if(!dest||!dest.steps||!dest.steps.length||!userLat){
+  if(!dest||!dest.steps||!dest.steps.length||!dest.routeCoords||!userLat){
     banner.style.display='none';
     return;
   }
-  while(navStepIndex<dest.steps.length-1){
-    const m=dest.steps[navStepIndex].maneuver;
-    if(haversine(userLat,userLng,m.location[1],m.location[0])<=TURN_ADVANCE_KM){
-      navStepIndex++;
-      speakStep(dest.steps[navStepIndex]);
-    } else break;
+  const prog=progressAlongRoute(dest.routeCoords,userLat,userLng);
+  if(!prog){banner.style.display='none';return;}
+  const bounds=dest.stepBoundaries;
+  let idx=bounds.length-1;
+  for(let i=0;i<bounds.length;i++){
+    if(bounds[i]>=prog.km-STEP_BOUNDARY_SLACK_KM){idx=i;break;}
   }
+  navStepIndex=idx;
+  if(idx!==lastSpokenStepIndex){speakStep(dest.steps[idx]);lastSpokenStepIndex=idx;}
   const step=dest.steps[navStepIndex],m=step.maneuver;
-  const distKm=haversine(userLat,userLng,m.location[1],m.location[0]);
+  const distKm=Math.max(0,bounds[navStepIndex]-prog.km);
   banner.style.display='flex';
   document.getElementById('turnIcon').textContent=turnIcon(m);
   document.getElementById('turnInstruction').textContent=m.instruction||turnFallbackText(m,step.name);
@@ -1192,7 +1232,7 @@ function setDestination(dest){
 }
 function clearDestination(){
   activeDestination=null;
-  navStepIndex=0;
+  navStepIndex=0;lastSpokenStepIndex=-1;
   releaseNavWakeLock();
   try{localStorage.removeItem('gottago_destination');}catch(e){}
   if(destMarker&&map){map.removeLayer(destMarker);destMarker=null;}
@@ -1237,6 +1277,8 @@ function refreshDirectRoute(){
       dest.routedKm=route.distanceKm;
       dest.routedMin=route.durationMin;
       dest.steps=route.steps;
+      dest.routeCoords=route.geometry.coordinates;
+      dest.stepBoundaries=computeStepBoundaries(route.steps);
       drawRouteLine(route.geometry);
       updateRouteBar();
       planTurnByTurn(dest);
