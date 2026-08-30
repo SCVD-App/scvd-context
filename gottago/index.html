@@ -1319,7 +1319,7 @@ function renderDestination(){
   // Straight dashed line first for instant feedback — refreshDirectRoute() below swaps it for
   // the real routed geometry as soon as Directions responds (or leaves this up on failure).
   destLine=L.polyline([[userLat,userLng],[activeDestination.lat,activeDestination.lng]],{color:'#FFB830',weight:2.5,opacity:.55,dashArray:'2 8'}).addTo(map);
-  document.getElementById('routeBar').style.display='';
+  document.getElementById('routeBar').style.display='block';
   updateRouteBar();
   refreshDirectRoute();
 }
