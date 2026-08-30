@@ -342,6 +342,47 @@ body{font-family:'Outfit',sans-serif;color:var(--text);}
 
 /* ── TOAST ── */
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 18px;font-size:12px;color:var(--text);z-index:500;backdrop-filter:blur(20px);opacity:0;transition:opacity .3s;pointer-events:none;max-width:80vw;text-align:center;}
+
+/* ── LANDSCAPE (phone mounted sideways — e.g. Scott's Jag can only mount landscape) ──
+   Everything above was sized for a tall portrait screen: topbar + GPS bar + turn banner stacked
+   at the top, route bar + nearest card + Sonar wedge + bottom nav stacked at the bottom. On a
+   short landscape screen those two stacks collide and swallow the whole map. Nothing here changes
+   what's shown, only how much room each piece takes, so the map stays visible in between. */
+@media (orientation:landscape) and (max-height:500px){
+  .topbar{padding:10px 14px 6px;}
+  .gps-bar{top:52px;padding:5px 10px;gap:6px;}
+  .gps-text{font-size:10px;}
+  .gps-acc{font-size:9px;}
+  .turn-banner{top:90px;padding:7px 12px;gap:8px;}
+  .turn-icon{font-size:19px;width:26px;}
+  .turn-instruction{font-size:12px;}
+  .turn-distance{font-size:10px;}
+  .turn-recalc{width:28px;height:28px;font-size:14px;}
+
+  .bottom-chrome{padding:0 0 8px;}
+  .route-bar{margin:0 12px 6px;padding:7px 12px;}
+  .route-bar-top{margin-bottom:5px;}
+  .nearest-card{margin:0 12px 6px;padding:7px 10px;gap:8px;}
+  .nc-icon{width:28px;height:28px;font-size:14px;}
+  .nc-dist{font-size:15px;}
+
+  .bottom-row{padding:0 10px;}
+  .sonar-wedge{width:52px;height:72px;}
+  .wedge-svg{width:52px;height:72px;}
+  .notch.u1{width:10px;bottom:14px;}
+  .notch.u2{width:18px;bottom:27px;}
+  .notch.u3{width:27px;bottom:40px;}
+  .notch.u4{width:38px;bottom:53px;}
+  .notch.u5{width:48px;bottom:65px;}
+  .sonar-btn{width:36px;height:36px;font-size:16px;}
+  .urg-status{bottom:40px;font-size:8px;}
+
+  .bottom-nav{margin:6px 10px 0;padding:4px 4px;}
+  .nav-item{padding:3px 2px;}
+  .ni-lbl{display:none;} /* icon-only in landscape — saves the label row's height */
+  .nav-fab{width:40px;height:40px;font-size:18px;}
+  .nav-submenu{bottom:58px;}
+}
 </style>
 </head>
 <body>
@@ -374,6 +415,11 @@ body{font-family:'Outfit',sans-serif;color:var(--text);}
     Turn alerts
     <div class="nsm-ndot" style="background:var(--green);"></div>
   </div>
+  <div class="toggle-row" style="padding-top:0;">
+    <div class="toggle-left"><div class="toggle-label">Auto-flash on real turns</div><div class="toggle-sub">Flashes red/green off your live route — no fiddling needed</div></div>
+    <div class="toggle on" id="navLightsAutoToggle" onclick="toggleNavLightsAuto()"></div>
+  </div>
+  <div class="field-label" style="margin:2px 0 6px;">Manual preview</div>
   <div class="nsm-btns">
     <div class="nsm-btn port" id="portBtn" onclick="toggleNav('port')">
       <div class="nsm-icon">🔴</div>
@@ -948,10 +994,11 @@ function updateTurnBanner(){
   const dest=activeDestination;
   if(!dest||!dest.steps||!dest.steps.length||!dest.routeCoords||!userLat){
     banner.style.display='none';
+    stopAutoNavFlash();
     return;
   }
   const prog=progressAlongRoute(dest.routeCoords,userLat,userLng);
-  if(!prog){banner.style.display='none';return;}
+  if(!prog){banner.style.display='none';stopAutoNavFlash();return;}
   const bounds=dest.stepBoundaries;
   let idx=bounds.length-1;
   for(let i=0;i<bounds.length;i++){
@@ -965,6 +1012,7 @@ function updateTurnBanner(){
   document.getElementById('turnIcon').textContent=turnIcon(m);
   document.getElementById('turnInstruction').textContent=m.instruction||turnFallbackText(m,step.name);
   document.getElementById('turnDistance').textContent=distKm<0.1?Math.round(distKm*1000)+' m':distKm.toFixed(1)+' km';
+  updateAutoNavFlash(m.modifier,distKm);
 }
 
 function haversine(a,b,c,d){const R=6371,dL=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180;const x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
@@ -1251,6 +1299,7 @@ function clearDestination(){
   activeDestination=null;
   navStepIndex=0;lastSpokenStepIndex=-1;
   releaseNavWakeLock();
+  stopAutoNavFlash();
   try{localStorage.removeItem('gottago_destination');}catch(e){}
   if(destMarker&&map){map.removeLayer(destMarker);destMarker=null;}
   if(destLine&&map){map.removeLayer(destLine);destLine=null;}
@@ -1525,6 +1574,56 @@ function stopNavFlash(){
   portFlash.style.opacity=0;starboardFlash.style.opacity=0;navFlashId=null;
 }
 
+/**
+ * NAV LIGHTS — AUTO MODE. The PORT/STBD buttons + proximity slider above are the original demo
+ * controls (a fake "turn in ___m" preview, never tied to a real route in either prototype or this
+ * app). Now that real turn-by-turn has real per-step direction + live distance-to-turn, this
+ * drives the same red/green edge flash off that real data instead — on by default, with the
+ * toggle above as the "just give me voice/banner guidance" off switch. Manual preview below still
+ * works for demos; while a manual side is selected, auto-flash steps aside so the two don't fight
+ * over the same overlay.
+ */
+let navLightsAuto=true;
+let autoFlashSide=null,autoFlashProx=0,autoFlashId=null;
+const NAV_LIGHT_TRIGGER_KM=0.5; // starts flashing this far out — matches the demo slider's own range
+
+function toggleNavLightsAuto(){
+  navLightsAuto=!navLightsAuto;
+  try{localStorage.setItem('gottago_navlights_auto',navLightsAuto?'1':'0');}catch(e){}
+  document.getElementById('navLightsAutoToggle').classList.toggle('on',navLightsAuto);
+  if(!navLightsAuto)stopAutoNavFlash();
+}
+
+function updateAutoNavFlash(modifier,distKm){
+  if(!navLightsAuto||navMode){stopAutoNavFlash();return;} // manual preview takes precedence when active
+  const mod=modifier||'';
+  let side=null;
+  if(mod.includes('left'))side='port';
+  else if(mod.includes('right'))side='starboard';
+  if(!side||distKm==null||distKm>NAV_LIGHT_TRIGGER_KM){stopAutoNavFlash();return;}
+  if(side!==autoFlashSide)(side==='port'?starboardFlash:portFlash).style.opacity=0;
+  autoFlashSide=side;
+  autoFlashProx=Math.max(0,Math.min(1,1-distKm/NAV_LIGHT_TRIGGER_KM));
+  if(!autoFlashId)runAutoNavFlash();
+}
+function runAutoNavFlash(){
+  let on=false,last=0;
+  function loop(ts){
+    if(!autoFlashSide){portFlash.style.opacity=0;starboardFlash.style.opacity=0;autoFlashId=null;return;}
+    const flash=autoFlashSide==='port'?portFlash:starboardFlash;
+    const interval=1200-autoFlashProx*1080;
+    if(ts-last>=interval){on=!on;flash.style.opacity=on?1:0;flash.style.transition=on?'opacity 0.04s ease-in':`opacity ${interval*.35}ms ease-out`;last=ts;}
+    autoFlashId=requestAnimationFrame(loop);
+  }
+  autoFlashId=requestAnimationFrame(loop);
+}
+function stopAutoNavFlash(){
+  if(autoFlashSide===null&&!autoFlashId)return;
+  autoFlashSide=null;
+  if(autoFlashId){cancelAnimationFrame(autoFlashId);autoFlashId=null;}
+  if(!navMode){portFlash.style.opacity=0;starboardFlash.style.opacity=0;}
+}
+
 /* PROXIMITY SLIDER */
 const proxTrack=document.getElementById('proxTrack');
 let proxDrag=false;
@@ -1550,6 +1649,7 @@ setProx(0.2);
 (function(){
   try{const sa=localStorage.getItem('gottago_avatar');if(sa!==null)currentAvatar=parseInt(sa,10)||0;}catch(e){}
   try{const si=localStorage.getItem('gottago_mapicon');if(si!==null)currentMapIcon=parseInt(si,10)||0;}catch(e){}
+  try{const sn=localStorage.getItem('gottago_navlights_auto');if(sn!==null){navLightsAuto=sn==='1';document.getElementById('navLightsAutoToggle').classList.toggle('on',navLightsAuto);}}catch(e){}
   buildAvatarList();buildRouteAvatarGrid();buildMapIconGrid();
 })();
 </script>

@@ -2,9 +2,27 @@
 
 **Session:** 2 (of this repo)
 **Date:** 29 August 2026
-**Status:** LIVE on GitHub Pages at `SCVD-App/Gotta-Go`. Mapbox Directions + Geocoding wired in (real road routing, replacing Session 1's straight-line estimates), plus Long Haul mode now actually does something: nationwide RV dump point data + route-corridor stop planning. Option 1's turn-by-turn banner shipped, its step-tracking bug from real-world testing fixed, and users can now personalize their own map marker. No Stripe worker, no backend.
+**Status:** LIVE on GitHub Pages at `SCVD-App/Gotta-Go`. Mapbox Directions + Geocoding wired in (real road routing, replacing Session 1's straight-line estimates), plus Long Haul mode now actually does something: nationwide RV dump point data + route-corridor stop planning. Option 1's turn-by-turn banner shipped, its step-tracking bug from real-world testing fixed, users can personalize their own map marker, the Port/Starboard Nav Flash now actually reacts to real turns instead of being a demo-only toggle, and the UI no longer breaks when the phone is mounted in landscape. No Stripe worker, no backend.
 
 ---
+
+## What happened this session, part 9 (landscape support)
+
+Scott asked if the app would run in landscape. Checked rather than assumed: nothing was locking rotation, but the whole UI was hard-coded in fixed pixel offsets for a tall portrait screen — topbar + GPS bar + turn banner stacked at the top, route bar + nearest card + Sonar wedge + bottom nav stacked at the bottom. Screenshotted it rotated and confirmed the two stacks collide and eat the entire screen on a real phone's landscape height, leaving no usable map. Asked Scott whether to lock to portrait-only (quick, safe) or build a real landscape layout — he needs landscape specifically because his Jag can only mount the phone that way, and expects other older vehicles will be the same for some users, so portrait-lock was a non-starter.
+
+Built a `@media (orientation:landscape) and (max-height:500px)` block that shrinks (never hides) every piece of the top and bottom chrome — topbar padding, GPS bar, turn banner, route bar, nearest card, the Sonar wedge (proportionally rescaled, notch positions recalculated so they land in the same relative spots on the smaller dial), and the bottom nav (icons only, labels hidden to save the label row's height). Nothing about what's shown or how it behaves changed, only how much vertical room it takes, so the map has a clear band to breathe in between. Verified with screenshots at three landscape sizes (844×390, 915×412, and a deliberately small 740×360 for older phones) with an active route and turn banner showing — the worst-case UI state — confirming no overlap at any of them. Modal sheets (Personalize, Route Planner, etc.) needed no changes — their `vh`-based sizing already scales down and scrolls correctly on a short screen.
+
+**Caveat, said plainly:** tuned and measured against simulated phone dimensions in Playwright, not tested on an actual phone rotated in the Jag. Worth a real check next time Scott's driving with it mounted sideways — if anything still feels cramped or overlaps on his actual device, that's the next thing to fix.
+
+## What happened this session, part 8 (Nav Lights wired to real turns)
+
+Scott noticed the Port/Starboard screen-flash ("Nav Lights") never showed up during his test drive, despite it "working in the prototype." Turns out it never actually worked off real data anywhere — in both the old app-v2 canvas mockup and this app, it's always been a manual demo: tap the 🚦 FAB, pick PORT or STBD yourself, and drag a fake "turn in ___m" slider to preview the flash speeding up. Nothing there ever looked at an actual route.
+
+Asked Scott how he wanted it to behave now that real turn-by-turn data exists (steps, direction, live distance-to-turn — the same data driving the voice/banner guidance). He chose: auto-flash by default during navigation, with a quick off switch for anyone who just wants voice/banner cues.
+
+Built `updateAutoNavFlash(modifier, distKm)`, called from `updateTurnBanner()` on every GPS tick alongside the existing voice/banner logic — no new API calls, it rides the same Directions data. Left-ish modifiers (`left`, `slight left`, `sharp left`) flash the red PORT edge, right-ish modifiers flash the green STBD edge, and it stays off for straight-on/depart/arrive. Flash starts at 500m out (same range as the old demo slider) and speeds up the closer the turn gets, using the same interval curve the manual toggle already used. A new "Auto-flash on real turns" switch sits at the top of the Nav Lights sheet (`#navSubmenu`), on by default, persisted to `localStorage` (`gottago_navlights_auto`). The original PORT/STBD buttons and slider are kept as a "Manual preview" underneath — useful for demos — and take precedence if a manual side is actively selected, so the two don't fight over the same screen-edge overlay. Cleaned up alongside the turn banner and wake lock whenever a route ends (`clearDestination()`) or navigation data isn't available.
+
+Verified the trigger logic directly (modifier → side, distance → on/off and flash speed, manual-override deference) with a set of scripted checks before shipping, separate from the already-tested step-selection/voice logic this reuses.
 
 ## What happened this session, part 7 (custom map icon for the user's own marker)
 
