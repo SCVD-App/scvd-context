@@ -2,9 +2,15 @@
 
 **Session:** 2 (of this repo)
 **Date:** 29 August 2026
-**Status:** LIVE on GitHub Pages at `SCVD-App/Gotta-Go`. Mapbox Directions + Geocoding wired in (real road routing, replacing Session 1's straight-line estimates), plus Long Haul mode now actually does something: nationwide RV dump point data + route-corridor stop planning. No Stripe worker, no backend.
+**Status:** LIVE on GitHub Pages at `SCVD-App/Gotta-Go`. Mapbox Directions + Geocoding wired in (real road routing, replacing Session 1's straight-line estimates), plus Long Haul mode now actually does something: nationwide RV dump point data + route-corridor stop planning. Option 1's turn-by-turn banner shipped, its step-tracking bug from real-world testing fixed, and users can now personalize their own map marker. No Stripe worker, no backend.
 
 ---
+
+## What happened this session, part 7 (custom map icon for the user's own marker)
+
+Scott asked to let users pick their own icon on the map — he'd used a "Venom" character on Waze for a while and liked how it made his vehicle stand out. Worth saying plainly: a literal Venom icon isn't something GottaGo can build — that's Sony/Marvel-licensed IP Waze specifically paid to license, not a generic feature. What shipped instead is the same idea done with original, unlicensed art: a small set of icon choices (Campervan, 4WD, Ute, Sedan, Motorbike, Kangaroo, Croc) plus the existing plain dot kept as the default so nobody's map changes unless they opt in.
+
+The existing "Voice" nav tab (`#avatar-modal`) already had the right shape for this — a picker sheet with a grid of options — so it was renamed "Personalize" (nav label shortened to "You") and now covers both the voice avatar and the map icon in one sheet, icon grid on top. `MAP_ICONS` mirrors the existing `AVATARS` pattern: `selectMapIcon(idx)` persists the choice to `localStorage` (`gottago_mapicon`) and calls `refreshUserMarkerIcon()`, which swaps the live Leaflet marker's icon in place via `.setIcon()` — no need to recreate the marker or touch the map. `userMarkerIcon()`/`userMarkerHtml()` replace what used to be two copies of the same hardcoded orange-dot `L.divIcon` (one in `onGPS()`, one in `initMap()`) with one shared function, so the two marker-creation sites can never drift out of sync again. The saved preference loads on startup alongside the existing voice-avatar preference.
 
 ## What happened this session, part 6 (Option 1's step-tracking was broken — real drive test)
 

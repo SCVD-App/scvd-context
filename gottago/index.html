@@ -476,9 +476,13 @@ body{font-family:'Outfit',sans-serif;color:var(--text);}
 <div class="modal-overlay" id="avatar-modal">
   <div class="modal-sheet">
     <div class="sheet-handle"></div>
-    <div class="sheet-title">Choose Your Voice</div>
-    <div class="sheet-sub">Your guide for the road ahead</div>
-    <div class="scroll-area" style="padding-bottom:20px;"><div id="avatar-full-list"></div></div>
+    <div class="sheet-title">Personalize</div>
+    <div class="sheet-sub">Your voice guide and your map icon</div>
+    <div class="scroll-area" style="padding-bottom:20px;">
+      <div class="field-label" style="margin:0 18px 9px;">Your Map Icon</div>
+      <div class="avatar-grid" id="map-icon-grid" style="margin:0 18px 22px;"></div>
+      <div id="avatar-full-list"></div>
+    </div>
   </div>
 </div>
 
@@ -600,7 +604,7 @@ body{font-family:'Outfit',sans-serif;color:var(--text);}
       <div class="nav-item" onclick="setNavActive(this);openModal('route-modal')"><span class="ni-icon">🧭</span><span class="ni-lbl">Route</span></div>
       <div class="nav-item" onclick="setNavActive(this);openModal('list-modal')"><span class="ni-icon">🔍</span><span class="ni-lbl">Nearby</span></div>
       <div class="nav-item" onclick="setNavActive(this);toast('Ratings are on the roadmap — not live yet')"><span class="ni-icon">🏛️</span><span class="ni-lbl">Rate</span></div>
-      <div class="nav-item" onclick="setNavActive(this);openModal('avatar-modal')"><span class="ni-icon">🎙️</span><span class="ni-lbl">Voice</span></div>
+      <div class="nav-item" onclick="setNavActive(this);openModal('avatar-modal')"><span class="ni-icon">🎙️</span><span class="ni-lbl">You</span></div>
     </div>
 
     <!-- NAV LIGHTS FAB -->
@@ -661,12 +665,25 @@ const AVATARS=[
   {flag:'⚓',name:'Randy',style:'US Navy Trucker',sample:'"Breaker breaker — comfort station off the port bow, quarter mile. Copy?"'},
 ];
 
+/* MAP_ICONS — original, unlicensed marker options for the user's own position.
+   idx 0 keeps today's plain dot as the default so nobody's map changes unless they choose to. */
+const MAP_ICONS=[
+  {name:'Classic Dot',dot:true},
+  {name:'Campervan',emoji:'🚐'},
+  {name:'4WD',emoji:'🚙'},
+  {name:'Ute',emoji:'🛻'},
+  {name:'Sedan',emoji:'🚗'},
+  {name:'Motorbike',emoji:'🏍️'},
+  {name:'Kangaroo',emoji:'🦘'},
+  {name:'Croc',emoji:'🐊'},
+];
+
 let map,userMarker,userLat,userLng,urgency=1;
 let sonarActive=false,sonarTimer=null;
 let navMode=null,navFlashId=null,proximity=0.2;
 let navMenuOpen=false;
 let markers=[];
-let currentAvatar=0,currentMode='quick';
+let currentAvatar=0,currentMapIcon=0,currentMode='quick';
 let activeDestination=null,destMarker=null,destLine=null;
 let GOV_DUMPPOINTS=null,dumpStops=[];
 let navStepIndex=0,lastSpokenStepIndex=-1,navWakeLock=null;
@@ -975,7 +992,7 @@ function onGPS(p){
   }
   map.setView([userLat,userLng],map.getZoom());
   if(userMarker)userMarker.setLatLng([userLat,userLng]);
-  else userMarker=L.marker([userLat,userLng],{icon:L.divIcon({className:'',html:`<div style="width:14px;height:14px;background:#FFB830;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(255,184,48,.8);"></div>`,iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map);
+  else userMarker=L.marker([userLat,userLng],{icon:userMarkerIcon()}).addTo(map);
   updateDistances();updateNearestCard();
   if(activeDestination)updateRouteBar();
   updateTurnBanner();
@@ -998,7 +1015,7 @@ function initMap(){
   // (Was Stadia Maps — its free tier needs the domain registered in their dashboard, which never
   // happened, so it silently 401'd. Mapbox's tile free tier is 750k requests/month, no extra setup.)
   L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/512/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`,{tileSize:512,zoomOffset:-1,maxZoom:22,attribution:'© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
-  userMarker=L.marker([userLat,userLng],{icon:L.divIcon({className:'',html:`<div style="width:14px;height:14px;background:#FFB830;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(255,184,48,.8);"></div>`,iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map);
+  userMarker=L.marker([userLat,userLng],{icon:userMarkerIcon()}).addTo(map);
   updateDistances();plotMarkers();updateNearestCard();
   restoreDestination();
 }
@@ -1404,6 +1421,37 @@ function selectAvatar(idx){
   if(p)p.textContent=AVATARS[idx].sample;
 }
 
+/* MAP ICON (user's position marker) */
+function userMarkerHtml(){
+  const ic=MAP_ICONS[currentMapIcon]||MAP_ICONS[0];
+  if(ic.dot){
+    return `<div style="width:14px;height:14px;background:#FFB830;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(255,184,48,.8);"></div>`;
+  }
+  return `<div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(20,20,26,.55);border:2px solid #FFB830;border-radius:50%;box-shadow:0 0 10px rgba(255,184,48,.8);">${ic.emoji}</div>`;
+}
+function userMarkerIcon(){
+  const ic=MAP_ICONS[currentMapIcon]||MAP_ICONS[0];
+  const size=ic.dot?14:30;
+  return L.divIcon({className:'',html:userMarkerHtml(),iconSize:[size,size],iconAnchor:[size/2,size/2]});
+}
+function refreshUserMarkerIcon(){
+  if(userMarker)userMarker.setIcon(userMarkerIcon());
+}
+function selectMapIcon(idx){
+  currentMapIcon=idx;
+  try{localStorage.setItem('gottago_mapicon',idx);}catch(e){}
+  buildMapIconGrid();
+  refreshUserMarkerIcon();
+}
+function buildMapIconGrid(){
+  const g=document.getElementById('map-icon-grid');if(!g)return;
+  g.innerHTML=MAP_ICONS.map((ic,i)=>`
+    <div class="avatar-card ${i===currentMapIcon?'selected':''}" onclick="selectMapIcon(${i})">
+      <span class="av-flag">${ic.dot?'🟡':ic.emoji}</span>
+      <div class="av-name">${ic.name}</div>
+    </div>`).join('');
+}
+
 /* MODALS (generic) */
 function openModal(id){
   if(id==='list-modal')buildFacilityList();
@@ -1501,7 +1549,8 @@ setProx(0.2);
 /* INIT (avatar / route-planner UI that doesn't depend on GPS) */
 (function(){
   try{const sa=localStorage.getItem('gottago_avatar');if(sa!==null)currentAvatar=parseInt(sa,10)||0;}catch(e){}
-  buildAvatarList();buildRouteAvatarGrid();
+  try{const si=localStorage.getItem('gottago_mapicon');if(si!==null)currentMapIcon=parseInt(si,10)||0;}catch(e){}
+  buildAvatarList();buildRouteAvatarGrid();buildMapIconGrid();
 })();
 </script>
 </body>
