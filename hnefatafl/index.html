@@ -246,65 +246,6 @@ const RESTRICTED = new Set([THRONE, ...CORNERS].map((p) => key(p.r, p.c)));
 function key(r, c) { return `${r},${c}`; }
 function isRestricted(r, c) { return RESTRICTED.has(key(r, c)); }
 function isCorner(r, c) { return CORNERS.some((p) => p.r === r && p.c === c); }
-function isEdgeSquare(r, c) { return r === 0 || r === SIZE - 1 || c === 0 || c === SIZE - 1; }
-// The single point that decides "has the king reached safety" everywhere in
-// the app (real game, AI simulation, and the how-to-play diagrams' captions)
-// — so an escape-type change in RULE_VARIANTS only ever needs editing here.
-function isEscapeSquare(r, c, variant) {
-  return variant.escape === "edge" ? isEdgeSquare(r, c) : isCorner(r, c);
-}
-
-// ---------- Rule variants ----------
-// Four documented "schools" of Hnefatafl (per the taxonomy used by the
-// Abstract Play community wiki, itself summarising aagenielsen.dk/Fetlar/
-// Copenhagen sources and Mats Winther's "weak king" reading of the
-// Stockholm Historical Museum's interpretation), plus "classic" — the
-// ruleset this app actually shipped with originally (strong king, corner
-// escape, unarmed king). Classic doesn't exactly match any one of the four
-// named schools — it's closest to Imperial Contest but with corner escape
-// instead of edge — so it stays a genuine 5th option rather than being
-// folded into one of them, to avoid silently changing already-live
-// behaviour for existing players/saves.
-//
-// kingStrength: "strong" = must be surrounded on all 4 orthogonal sides (or
-//   3 + edge, once he's the last defender) to be captured. "weak" = captured
-//   exactly like an ordinary piece — sandwiched on two opposite sides.
-// kingArmed: whether the king's own move can close a capture against an
-//   attacker. (He can always be used as the passive anvil in someone else's
-//   capture, in every variant here — that's not in dispute in any source
-//   checked.)
-// escape: "corner" = must reach one of the 4 corners. "edge" = reaching any
-//   edge square is enough.
-// movement: "slide" = every piece moves like a rook. "kingSingleStep" =
-//   the king moves exactly one square at a time; everyone else still
-//   slides. (The source for Papillon's Escape says specifically "the king
-//   is only allowed [to] make single steps" — read here as king-only, not
-//   every piece; worth double-checking against a primary source if this
-//   variant gets serious use, the wording was ambiguous.)
-const RULE_VARIANTS = {
-  classic: {
-    key: "classic", name: "Classic", subtitle: "SCVD's original ruleset",
-    kingStrength: "strong", kingArmed: false, escape: "corner", movement: "slide",
-  },
-  vikingGame: {
-    key: "vikingGame", name: "Copenhagen", subtitle: "Strong armed king · corner escape",
-    kingStrength: "strong", kingArmed: true, escape: "corner", movement: "slide",
-  },
-  historical: {
-    key: "historical", name: "Historical", subtitle: "Weak armed king · edge escape",
-    kingStrength: "weak", kingArmed: true, escape: "edge", movement: "slide",
-  },
-  imperialContest: {
-    key: "imperialContest", name: "Imperial Contest", subtitle: "Strong unarmed king · edge escape",
-    kingStrength: "strong", kingArmed: false, escape: "edge", movement: "slide",
-  },
-  papillon: {
-    key: "papillon", name: "Papillon's Escape", subtitle: "King moves one square at a time",
-    kingStrength: "strong", kingArmed: true, escape: "corner", movement: "kingSingleStep",
-  },
-};
-const DEFAULT_VARIANT_KEY = "classic";
-const RULE_VARIANT_KEY_STORAGE = "hnefatafl_rule_variant_v1";
 
 function initialBoard() {
   const b = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
@@ -327,25 +268,20 @@ function initialBoard() {
 
 const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 
-function legalDestinations(board, r, c, variant = RULE_VARIANTS[DEFAULT_VARIANT_KEY]) {
+function legalDestinations(board, r, c) {
   const piece = board[r][c];
   if (!piece) return [];
   const isKing = piece === "king";
-  const singleStep = isKing && variant.movement === "kingSingleStep";
   const out = [];
   for (const [dr, dc] of DIRS) {
     let nr = r + dr, nc = c + dc;
     while (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && board[nr][nc] === null) {
-      if (isRestricted(nr, nc) && !isKing) {
-        if (singleStep) break; // not reachable this move — dead end for a one-step piece
-        nr += dr; nc += dc; continue;
-      }
+      if (isRestricted(nr, nc) && !isKing) { nr += dr; nc += dc; continue; }
       // (throne/corner squares are simply skipped as landable, but a piece
       // still can't slide PAST an occupied square, and the throne being
       // empty doesn't block sliding through it — corners are dead-ends so
       // this loop just never reaches past them anyway)
       out.push([nr, nc]);
-      if (singleStep) break;
       nr += dr; nc += dc;
     }
   }
@@ -378,23 +314,7 @@ function resolveCaptures(board, r, c, side) {
   return captured;
 }
 
-// Weak-king capture: same mechanism as an ordinary piece — sandwiched
-// between two hostile squares (attacker or restricted square) on ONE
-// straight axis, not all four sides. The board edge never stands in for a
-// piece here (an edge-escape variant would make that a strange rule — the
-// edge is where he's trying to go, not a wall closing in on him).
-function isHostileToKing(board, r, c) {
-  if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) return false;
-  return board[r][c] === "att" || isRestricted(r, c);
-}
-function checkKingCapturedWeak(board, kingR, kingC) {
-  const axes = [[[-1, 0], [1, 0]], [[0, -1], [0, 1]]];
-  return axes.some(([[dr1, dc1], [dr2, dc2]]) =>
-    isHostileToKing(board, kingR + dr1, kingC + dc1) && isHostileToKing(board, kingR + dr2, kingC + dc2)
-  );
-}
-function checkKingCaptured(board, kingR, kingC, isLastDefender, variant = RULE_VARIANTS[DEFAULT_VARIANT_KEY]) {
-  if (variant.kingStrength === "weak") return checkKingCapturedWeak(board, kingR, kingC);
+function checkKingCaptured(board, kingR, kingC, isLastDefender) {
   for (const [dr, dc] of DIRS) {
     const nr = kingR + dr, nc = kingC + dc;
     if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) {
@@ -498,50 +418,37 @@ function piecesOfSide(board, side) {
   return out;
 }
 
-function allLegalMoves(board, side, variant = RULE_VARIANTS[DEFAULT_VARIANT_KEY]) {
+function allLegalMoves(board, side) {
   const moves = [];
   for (const { r, c } of piecesOfSide(board, side)) {
-    for (const [nr, nc] of legalDestinations(board, r, c, variant)) {
+    for (const [nr, nc] of legalDestinations(board, r, c)) {
       moves.push({ from: { r, c }, to: { r: nr, c: nc } });
     }
   }
   return moves;
 }
 
-// Shared king-armed gate — the ONE place that decides whether the piece
-// that just moved is allowed to close a capture. Both the human move path
-// (Play mode's movePiece) and this AI path (simulateMove, used by Challenge
-// mode's human moves too, and by minimax) call through here now. Previously
-// Play mode hard-coded "king never captures" inline while this function
-// didn't check at all — meaning Challenge mode's human moves (and the AI)
-// were quietly playing an armed-king game while Play mode played unarmed.
-// Fixed as part of wiring variants through, since it's the same knob.
-function resolveMoveCaptures(board, r, c, side, movedPiece, variant) {
-  if (movedPiece === "king" && !variant.kingArmed) return [];
-  return resolveCaptures(board, r, c, side);
-}
-
 // Pure move application for search/AI use — deliberately reuses the same
 // resolveCaptures/checkKingCaptured functions the real game uses, rather
 // than re-deriving capture logic, so the AI can never "see" a different
 // game than the one a human actually plays.
-function simulateMove(board, from, to, side, variant = RULE_VARIANTS[DEFAULT_VARIANT_KEY]) {
+function simulateMove(board, from, to, side) {
   const next = board.map((row) => row.slice());
   const piece = next[from.r][from.c];
   next[from.r][from.c] = null;
   next[to.r][to.c] = piece;
 
-  const captured = resolveMoveCaptures(next, to.r, to.c, side, piece, variant);
+  const captured = resolveCaptures(next, to.r, to.c, side);
   captured.forEach(([r, c]) => { next[r][c] = null; });
 
   let kingCaptured = false;
-  const kingEscaped = piece === "king" && isEscapeSquare(to.r, to.c, variant);
+  const kingEscaped = piece === "king" && isCorner(to.r, to.c);
   if (!kingEscaped) {
     let kingPos = null;
     for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (next[r][c] === "king") kingPos = { r, c };
     if (kingPos) {
       const remainingDef = next.flat().filter((p) => p === "def").length;
-      kingCaptured = checkKingCaptured(next, kingPos.r, kingPos.c, remainingDef === 0, variant);
+      kingCaptured = checkKingCaptured(next, kingPos.r, kingPos.c, remainingDef === 0);
     }
   }
   return { board: next, captured, kingCaptured, kingEscaped };
@@ -553,10 +460,10 @@ function findKing(board) {
 }
 
 // null = game continues, "att"/"def" = that side has already won on this board.
-function terminalWinner(board, variant) {
+function terminalWinner(board) {
   const kingPos = findKing(board);
   if (!kingPos) return "att"; // king captured
-  if (isEscapeSquare(kingPos.r, kingPos.c, variant)) return "def"; // king reached safety
+  if (isCorner(kingPos.r, kingPos.c)) return "def"; // king reached a corner
   return null;
 }
 
@@ -568,21 +475,10 @@ function kingFreedomScore(board, kingR, kingC) {
 }
 
 // Score from the DEFENDER's perspective — positive is good for defenders.
-// NOTE on variant tuning: this eval — like kingFreedomScore above it — was
-// built and weighted against the "classic" corner-escape assumption
-// (openCornerPaths specifically rewards runs at the 4 literal corners). It
-// still functions for the other variants (moves are always legal, games
-// still terminate correctly), but for edge-escape variants (historical,
-// imperial contest) it will systematically undervalue a king who's run
-// safely to a non-corner edge square, and for weak-king variants it has no
-// special awareness that only ONE opposing pair of sides matters rather
-// than all four. The AI will play those variants noticeably weaker until
-// this gets a dedicated tuning pass — same flagged-not-glossed-over
-// situation as the attacker eval already noted below.
-function evaluateForDefender(board, variant) {
+function evaluateForDefender(board) {
   const kingPos = findKing(board);
   if (!kingPos) return -100000; // king already gone
-  if (isEscapeSquare(kingPos.r, kingPos.c, variant)) return 100000; // king already escaped
+  if (isCorner(kingPos.r, kingPos.c)) return 100000; // king already escaped
 
   let att = 0, def = 0;
   for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
@@ -596,8 +492,8 @@ function evaluateForDefender(board, variant) {
   return material + freedom;
 }
 
-function evaluateBoard(board, aiSide, variant) {
-  const score = evaluateForDefender(board, variant);
+function evaluateBoard(board, aiSide) {
+  const score = evaluateForDefender(board);
   return aiSide === "def" ? score : -score;
 }
 
@@ -608,12 +504,12 @@ function evaluateBoard(board, aiSide, variant) {
 // each sliding multiple squares, in a game with no piece-jumping to limit
 // destinations). Drop to 2 first if a real device feels sluggish; that's
 // the whole tuning lever.
-function minimax(board, depth, alpha, beta, sideToMove, aiSide, variant) {
-  const term = terminalWinner(board, variant);
+function minimax(board, depth, alpha, beta, sideToMove, aiSide) {
+  const term = terminalWinner(board);
   if (term) return term === aiSide ? 100000 + depth : -100000 - depth;
-  if (depth === 0) return evaluateBoard(board, aiSide, variant);
+  if (depth === 0) return evaluateBoard(board, aiSide);
 
-  const moves = allLegalMoves(board, sideToMove, variant);
+  const moves = allLegalMoves(board, sideToMove);
   if (moves.length === 0) {
     // No legal moves for the side to move — treated as a loss for them,
     // same convention the real game already uses for a dead position.
@@ -624,8 +520,8 @@ function minimax(board, depth, alpha, beta, sideToMove, aiSide, variant) {
   let best = maximizing ? -Infinity : Infinity;
   const nextSide = sideToMove === "att" ? "def" : "att";
   for (const move of moves) {
-    const { board: next } = simulateMove(board, move.from, move.to, sideToMove, variant);
-    const val = minimax(next, depth - 1, alpha, beta, nextSide, aiSide, variant);
+    const { board: next } = simulateMove(board, move.from, move.to, sideToMove);
+    const val = minimax(next, depth - 1, alpha, beta, nextSide, aiSide);
     if (maximizing) {
       if (val > best) best = val;
       if (val > alpha) alpha = val;
@@ -640,14 +536,14 @@ function minimax(board, depth, alpha, beta, sideToMove, aiSide, variant) {
 
 const AI_DEPTH = 3;
 
-function chooseAiMove(board, aiSide, variant = RULE_VARIANTS[DEFAULT_VARIANT_KEY]) {
-  const moves = allLegalMoves(board, aiSide, variant);
+function chooseAiMove(board, aiSide) {
+  const moves = allLegalMoves(board, aiSide);
   if (moves.length === 0) return null;
   const nextSide = aiSide === "att" ? "def" : "att";
   let bestMove = moves[0], bestVal = -Infinity;
   for (const move of moves) {
-    const { board: next } = simulateMove(board, move.from, move.to, aiSide, variant);
-    const val = minimax(next, AI_DEPTH - 1, -Infinity, Infinity, nextSide, aiSide, variant);
+    const { board: next } = simulateMove(board, move.from, move.to, aiSide);
+    const val = minimax(next, AI_DEPTH - 1, -Infinity, Infinity, nextSide, aiSide);
     if (val > bestVal) { bestVal = val; bestMove = move; }
   }
   return bestMove;
@@ -691,380 +587,6 @@ function clearChallengeSave() {
   try { localStorage.removeItem(CHALLENGE_SAVE_KEY); } catch (e) { /* ignore */ }
 }
 
-// ---------- Online play (Phase 1: play-once invite link) ----------
-// Talks to a SEPARATE Cloudflare Worker (ancient-games-online-worker.js) —
-// deliberately not the Stripe worker, no shared code or KV. See that
-// file's header comment for the full security model. Free, unmetered, no
-// account required for phase 1 — the invite token itself is the only
-// gate, matching the "fog of war" design agreed on: nothing here is
-// discoverable, only reachable by whoever was actually sent the link.
-//
-// TODO before shipping: replace with the real deployed Worker URL once
-// it's live (Workers → Deploy, then the *.workers.dev URL or a custom
-// route). Everything below is written against the API contract that
-// Worker implements, but it obviously can't reach a placeholder host.
-const ONLINE_API_BASE = "https://ancient-games-online.emblen-scott.workers.dev";
-const ONLINE_GAME_STORAGE_KEY = "hnefatafl_online_game_v1";
-
-function loadOnlineGameRecord() {
-  try {
-    const raw = localStorage.getItem(ONLINE_GAME_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
-}
-function saveOnlineGameRecord(rec) {
-  try { localStorage.setItem(ONLINE_GAME_STORAGE_KEY, JSON.stringify(rec)); } catch (e) { /* ignore */ }
-}
-function clearOnlineGameRecord() {
-  try { localStorage.removeItem(ONLINE_GAME_STORAGE_KEY); } catch (e) { /* ignore */ }
-}
-function getInviteTokenFromUrl() {
-  try { return new URLSearchParams(window.location.search).get("invite"); } catch (e) { return null; }
-}
-function stripInviteFromUrl() {
-  try {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("invite");
-    window.history.replaceState({}, "", url.toString());
-  } catch (e) { /* ignore */ }
-}
-async function onlineApiGet(path) {
-  const res = await fetch(`${ONLINE_API_BASE}${path}`);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-  return data;
-}
-async function onlineApiPost(path, body, secret) {
-  const headers = { "Content-Type": "application/json" };
-  if (secret) headers["X-Player-Secret"] = secret;
-  const res = await fetch(`${ONLINE_API_BASE}${path}`, { method: "POST", headers, body: JSON.stringify(body || {}) });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-  return data;
-}
-
-// Deliberately plainer visual treatment than Play/Challenge for phase 1 —
-// no double-rope frame, no runic border, no share-card canvas render. Same
-// piece colours and restricted-square glyphs so it doesn't look like a
-// different app, just a simpler board chrome. Worth revisiting once the
-// feature's proven itself with real friend-pairs rather than polishing it
-// up front.
-function OnlineGameView({ t, ruleVariant, isPro, onlineCount, onGateNeeded, onGameFinished }) {
-  const [phase, setPhase] = useState("loading"); // loading | menu | invitePending | joinPreview | active
-  const [myRecord, setMyRecord] = useState(() => loadOnlineGameRecord());
-  const [game, setGame] = useState(null);
-  const [inviteUrl, setInviteUrl] = useState("");
-  const [joinPreview, setJoinPreview] = useState(null);
-  const [joinToken, setJoinToken] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [copyLabel, setCopyLabel] = useState("Copy Link");
-
-  // Counts a completed game exactly once, and only a genuine transition
-  // into "finished" — never a resumed game that was already finished when
-  // first loaded (that's a reconnect, not a new result; same "reset never
-  // penalises" spirit as the Play/Challenge counters). prevFinishedRef
-  // starts at null specifically so the very first state this component
-  // ever sees (fresh load OR resume) just sets the baseline without
-  // counting, regardless of which phase of the game it walks in on.
-  const prevFinishedRef = useRef(null);
-  function setGameState(newState) {
-    setGame(newState);
-    if (!newState) return;
-    const isFinished = newState.status === "finished";
-    if (prevFinishedRef.current === null) {
-      prevFinishedRef.current = isFinished;
-      return;
-    }
-    if (isFinished && !prevFinishedRef.current) {
-      prevFinishedRef.current = true;
-      if (typeof onGameFinished === "function") onGameFinished();
-    } else {
-      prevFinishedRef.current = isFinished;
-    }
-  }
-
-  // ---- Initial routing: resume a saved game, or preview an invite link ----
-  useEffect(() => {
-    (async () => {
-      if (myRecord && myRecord.gameId) {
-        try {
-          const state = await onlineApiGet(`/games/${myRecord.gameId}/state`);
-          setGameState(state);
-          setPhase(state.status === "waiting" ? "invitePending" : "active");
-          return;
-        } catch (e) {
-          // Saved game is gone/stale (expired, server reset, etc.) — don't
-          // get stuck, just clear it and fall through to the normal flow.
-          clearOnlineGameRecord();
-          setMyRecord(null);
-        }
-      }
-      const token = getInviteTokenFromUrl();
-      if (token) {
-        try {
-          const preview = await onlineApiGet(`/invite/${token}`);
-          setJoinToken(token);
-          setJoinPreview(preview);
-          setPhase("joinPreview");
-          return;
-        } catch (e) {
-          setErrorMsg("That invite link isn't valid anymore — ask your friend to send a new one.");
-          stripInviteFromUrl();
-        }
-      }
-      setPhase("menu");
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ---- Polling while waiting for a guest, or while a game is active ----
-  useEffect(() => {
-    if (phase !== "invitePending" && phase !== "active") return;
-    if (!myRecord?.gameId) return;
-    const timer = setInterval(async () => {
-      try {
-        const state = await onlineApiGet(`/games/${myRecord.gameId}/state`);
-        setGameState(state);
-        if (phase === "invitePending" && state.status === "active") setPhase("active");
-      } catch (e) { /* transient network hiccup — just try again next tick */ }
-    }, 5000); // 5s not 3s — halves read volume against Cloudflare's KV free-tier daily cap for barely any perceptible lag on a turn-based game
-    return () => clearInterval(timer);
-  }, [phase, myRecord]);
-
-  async function createInvite() {
-    if (!isPro && onlineCount >= FREE_GAMES_PER_MODE_PER_DAY) {
-      onGateNeeded && onGateNeeded();
-      return;
-    }
-    setBusy(true);
-    setErrorMsg("");
-    try {
-      const res = await onlineApiPost("/invite/create", { variant: ruleVariant.key });
-      const rec = { gameId: res.gameId, secret: res.hostSecret, side: "att", variant: res.variant };
-      saveOnlineGameRecord(rec);
-      setMyRecord(rec);
-      setInviteUrl(res.url);
-      prevFinishedRef.current = null; // fresh game — re-baseline the finish counter
-      setPhase("invitePending");
-    } catch (e) {
-      setErrorMsg(e.message || "Couldn't create an invite right now.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function joinGame() {
-    if (!joinToken) return;
-    if (!isPro && onlineCount >= FREE_GAMES_PER_MODE_PER_DAY) {
-      onGateNeeded && onGateNeeded();
-      return;
-    }
-    setBusy(true);
-    setErrorMsg("");
-    try {
-      const res = await onlineApiPost(`/invite/${joinToken}/redeem`, {});
-      const rec = { gameId: res.gameId, secret: res.guestSecret, side: res.guestSide, variant: res.variant };
-      saveOnlineGameRecord(rec);
-      setMyRecord(rec);
-      stripInviteFromUrl();
-      prevFinishedRef.current = null; // fresh game — re-baseline the finish counter
-      const state = await onlineApiGet(`/games/${res.gameId}/state`);
-      setGameState(state);
-      setPhase("active");
-    } catch (e) {
-      setErrorMsg(e.message || "Couldn't join that game — the link may have just been used.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function leaveGame() {
-    clearOnlineGameRecord();
-    setMyRecord(null);
-    setGame(null);
-    setSelected(null);
-    prevFinishedRef.current = null;
-    setPhase("menu");
-  }
-
-  async function shareInvite() {
-    try {
-      if (navigator.share) await navigator.share({ title: "Hnefatafl", text: "Join me for a game of Hnefatafl:", url: inviteUrl });
-      else await copyInvite();
-    } catch (e) { /* user cancelled the share sheet — not an error */ }
-  }
-  async function copyInvite() {
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopyLabel("Copied!");
-      setTimeout(() => setCopyLabel("Copy Link"), 1800);
-    } catch (e) { /* clipboard permission denied — link is still shown on screen to copy manually */ }
-  }
-
-  const variant = RULE_VARIANTS[game?.variant] || ruleVariant;
-  const legalDestSet = useMemo(() => {
-    if (!selected || !game || game.turn !== myRecord?.side) return new Set();
-    return new Set(legalDestinations(game.board, selected.r, selected.c, variant).map(([r, c]) => key(r, c)));
-  }, [selected, game, myRecord, variant]);
-
-  async function handleCellClick(r, c) {
-    if (!game || game.status !== "active" || game.turn !== myRecord?.side) return;
-    const piece = game.board[r][c];
-    const mySideOwnsPiece = piece === myRecord.side || (piece === "king" && myRecord.side === "def");
-
-    if (selected) {
-      if (legalDestSet.has(key(r, c))) {
-        setBusy(true);
-        setErrorMsg("");
-        try {
-          const updated = await onlineApiPost(`/games/${myRecord.gameId}/move`, { from: selected, to: { r, c } }, myRecord.secret);
-          setGameState(updated);
-        } catch (e) {
-          setErrorMsg(e.message || "That move didn't go through — the board may have just changed.");
-        } finally {
-          setSelected(null);
-          setBusy(false);
-        }
-        return;
-      }
-      if (mySideOwnsPiece) { setSelected({ r, c }); return; }
-      setSelected(null);
-      return;
-    }
-    if (mySideOwnsPiece) setSelected({ r, c });
-  }
-
-  const wrap = { display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 460 };
-
-  if (phase === "loading") {
-    return <div style={{ ...wrap, color: t.muted, fontSize: 13, padding: 30 }}>Loading…</div>;
-  }
-
-  if (phase === "menu") {
-    const remaining = Math.max(0, FREE_GAMES_PER_MODE_PER_DAY - onlineCount);
-    return (
-      <div style={wrap}>
-        <div style={{ fontSize: 14, color: t.text, textAlign: "center", lineHeight: 1.6, marginBottom: 10 }}>
-          Send a friend a private link and play a game together — no account needed. Only someone with the exact link can join; there's no public lobby or search.
-        </div>
-        <div style={{ fontSize: 12, color: t.muted, textAlign: "center", marginBottom: 16 }}>
-          {isPro ? "Unlimited online games — thanks for going Pro." : `${remaining} of ${FREE_GAMES_PER_MODE_PER_DAY} free online games left today.`}
-        </div>
-        <button onClick={createInvite} disabled={busy} style={{ ...btnStyle(t, busy, true), padding: "12px 22px", fontSize: 14 }}>
-          {busy ? "Creating…" : "🤝 Invite a Friend"}
-        </button>
-        {errorMsg && <div style={{ color: "#ff6b5b", fontSize: 12, marginTop: 12, textAlign: "center" }}>{errorMsg}</div>}
-      </div>
-    );
-  }
-
-  if (phase === "joinPreview") {
-    return (
-      <div style={wrap}>
-        <div style={{ fontSize: 15, color: t.text, textAlign: "center", lineHeight: 1.6, marginBottom: 16 }}>
-          You've been invited to a game of Hnefatafl{joinPreview?.variant ? ` (${RULE_VARIANTS[joinPreview.variant]?.name || joinPreview.variant} rules)` : ""}.
-        </div>
-        <button onClick={joinGame} disabled={busy} style={{ ...btnStyle(t, busy, true), padding: "12px 22px", fontSize: 14 }}>
-          {busy ? "Joining…" : "⚔️ Join Game"}
-        </button>
-        {errorMsg && <div style={{ color: "#ff6b5b", fontSize: 12, marginTop: 12, textAlign: "center" }}>{errorMsg}</div>}
-      </div>
-    );
-  }
-
-  if (phase === "invitePending") {
-    return (
-      <div style={wrap}>
-        <div style={{ fontSize: 14, color: t.text, textAlign: "center", marginBottom: 14 }}>
-          Waiting for your friend to open the link and join…
-        </div>
-        <div style={{
-          width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.panelBorder}`,
-          background: t.panel, color: t.muted, fontSize: 12, wordBreak: "break-all", marginBottom: 10, textAlign: "center",
-        }}>
-          {inviteUrl}
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={shareInvite} style={{ ...btnStyle(t, false), fontSize: 13 }}>📤 Share</button>
-          <button onClick={copyInvite} style={{ ...btnStyle(t, false), fontSize: 13 }}>{copyLabel}</button>
-          <button onClick={leaveGame} style={{ ...btnStyle(t, false), fontSize: 13 }}>Cancel</button>
-        </div>
-      </div>
-    );
-  }
-
-  // phase === "active" (also covers a just-finished game, still shown on the board)
-  if (!game) return <div style={{ ...wrap, color: t.muted, fontSize: 13, padding: 30 }}>Loading…</div>;
-
-  const mySide = myRecord?.side;
-  const myTurn = game.status === "active" && game.turn === mySide;
-  const CELL = 30;
-  const BOARD_PX = CELL * SIZE;
-
-  return (
-    <div style={wrap}>
-      <div style={{ fontSize: 13, color: t.text, textAlign: "center", marginBottom: 10 }}>
-        You are playing <strong>{mySide === "att" ? "Muscovites" : "Swedes"}</strong>.{" "}
-        {game.status === "finished"
-          ? (game.winner === mySide ? "You won!" : "Your friend won.")
-          : myTurn ? "Your move." : "Waiting for your friend's move…"}
-      </div>
-
-      <div style={{
-        position: "relative", width: BOARD_PX, height: BOARD_PX, background: t.holeEmpty,
-        border: `2px solid ${t.panelBorder}`, borderRadius: 6, display: "grid",
-        gridTemplateColumns: `repeat(${SIZE}, ${CELL}px)`, gridTemplateRows: `repeat(${SIZE}, ${CELL}px)`,
-      }}>
-        {game.board.map((row, r) => row.map((piece, c) => {
-          const restricted = isRestricted(r, c);
-          const isDest = legalDestSet.has(key(r, c));
-          const isSelected = selected && selected.r === r && selected.c === c;
-          const lastMove = game.moveHistory?.[game.moveHistory.length - 1];
-          const isLastMove = lastMove && ((lastMove.from.r === r && lastMove.from.c === c) || (lastMove.to.r === r && lastMove.to.c === c));
-          const pieceIsKing = piece === "king";
-          const pieceSide = piece === "king" ? "def" : piece;
-          const size = 24;
-          return (
-            <div
-              key={`${r}-${c}`}
-              onClick={() => handleCellClick(r, c)}
-              style={{
-                width: CELL, height: CELL, display: "flex", alignItems: "center", justifyContent: "center",
-                background: restricted ? t.restricted : "transparent",
-                boxShadow: isDest ? `inset 0 0 0 2px ${t.accent}` : isLastMove ? "inset 0 0 0 2px #e8c468" : "none",
-                cursor: myTurn ? "pointer" : "default",
-              }}
-            >
-              {restricted && !piece && <span style={{ fontSize: size * 0.5, opacity: 0.55 }}>{isCorner(r, c) ? "◆" : "♛"}</span>}
-              {piece && (
-                <div style={{
-                  width: pieceIsKing ? size * 1.15 : size, height: pieceIsKing ? size * 1.15 : size, borderRadius: "50%",
-                  background: pieceIsKing
-                    ? `radial-gradient(circle at 35% 30%, ${KING_FROM}, ${KING_TO})`
-                    : pieceSide === "att"
-                    ? `radial-gradient(circle at 35% 30%, ${t.pegFrom}, ${t.pegTo})`
-                    : `radial-gradient(circle at 35% 30%, ${DEF_FROM}, ${DEF_TO})`,
-                  boxShadow: isSelected ? `0 0 0 2px ${t.accent}` : "0 1px 2px rgba(0,0,0,0.5)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  {pieceIsKing && <span style={{ fontSize: size * 0.55 }}>♛</span>}
-                </div>
-              )}
-            </div>
-          );
-        }))}
-      </div>
-
-      {errorMsg && <div style={{ color: "#ff6b5b", fontSize: 12, marginTop: 10, textAlign: "center" }}>{errorMsg}</div>}
-      <button onClick={leaveGame} style={{ ...btnStyle(t, false), fontSize: 12, marginTop: 14 }}>
-        {game.status === "finished" ? "Leave Game" : "Forfeit & Leave"}
-      </button>
-    </div>
-  );
-}
-
 // ---------- Freemium daily quota ----------
 // 3 completed games per day, Play and Challenge tracked separately (6
 // total). Resets don't count — only a real win/loss increments the
@@ -1086,14 +608,10 @@ function loadFreemiumState() {
   try {
     const raw = localStorage.getItem(FREEMIUM_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    if (!parsed || parsed.date !== today) return { date: today, playCount: 0, challengeCount: 0, onlineCount: 0 };
-    // onlineCount didn't exist before online mode shipped — old saved state
-    // from before this update won't have it, so default it in rather than
-    // leave it undefined (which would make every >= comparison false and
-    // silently grant unlimited online games to existing installs).
-    return { onlineCount: 0, ...parsed };
+    if (!parsed || parsed.date !== today) return { date: today, playCount: 0, challengeCount: 0 };
+    return parsed;
   } catch (e) {
-    return { date: today, playCount: 0, challengeCount: 0, onlineCount: 0 };
+    return { date: today, playCount: 0, challengeCount: 0 };
   }
 }
 function writeFreemiumState(state) {
@@ -1134,7 +652,7 @@ function writeProRecord(record) {
 
 // Shared paywall card — same copy shape for both modes, just swap which
 // counter it's reporting on.
-function FreemiumGate({ t, modeLabel, onUnlock, unlocking, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, restoreCode, setRestoreCode, onSubmitRestoreCode, showRestoreForm, setShowRestoreForm }) {
+function FreemiumGate({ t, modeLabel, onUnlock, unlocking, unlockNotice }) {
   return (
     <div style={{ textAlign: "center", maxWidth: 340, padding: "10px 10px 30px" }}>
       <div style={{ fontSize: 12, letterSpacing: 2, color: t.muted, fontWeight: 700, marginBottom: 10 }}>
@@ -1142,48 +660,16 @@ function FreemiumGate({ t, modeLabel, onUnlock, unlocking, restoreEmail, setRest
       </div>
       <div style={{ fontSize: 15, color: t.text, lineHeight: 1.7, marginBottom: 20 }}>
         You've played your {FREE_GAMES_PER_MODE_PER_DAY} free {modeLabel} games today. Come back tomorrow for
-        {" "}{FREE_GAMES_PER_MODE_PER_DAY} more — or unlock unlimited play for a one-time <strong>$4 USD</strong>.
+        {" "}{FREE_GAMES_PER_MODE_PER_DAY} more — or unlock unlimited play for a one-time <strong>$2</strong>.
         No subscription, no auto-renewal.
       </div>
       <button onClick={onUnlock} disabled={unlocking} style={{ ...btnStyle(t, unlocking, true), padding: "12px 26px", fontSize: 15 }}>
-        {unlocking ? "Redirecting to checkout…" : "🔓 Unlock Unlimited — $4 USD"}
+        {unlocking ? "Redirecting to checkout…" : "🔓 Unlock Unlimited — $2"}
       </button>
-
-      <div style={{ marginTop: 18 }}>
-        <button onClick={() => setShowRestoreForm(!showRestoreForm)} style={{ background: "none", border: "none", color: t.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>
-          Already purchased? Restore
-        </button>
+      {unlockNotice && <div style={{ fontSize: 12, color: t.muted, marginTop: 10, maxWidth: 280 }}>{unlockNotice}</div>}
+      <div style={{ fontSize: 11, color: t.muted, marginTop: 16 }}>
+        Already purchased? Use "Restore Purchase" up in the header, above the board.
       </div>
-
-      {showRestoreForm && (
-        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-            <div style={{ fontSize: 11, color: t.muted }}>Don't have your code? We'll email it to you:</div>
-            <input
-              type="email"
-              value={restoreEmail}
-              onChange={(e) => setRestoreEmail(e.target.value)}
-              placeholder="Email used at purchase"
-              style={{ width: 220, padding: "8px 12px", borderRadius: 8, border: `1px solid ${t.panelBorder}`, background: t.panel, color: t.text, fontSize: 13 }}
-            />
-            <button onClick={onSubmitRestore} style={{ ...btnStyle(t, false), fontSize: 13 }}>Send my code</button>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-            <div style={{ fontSize: 11, color: t.muted }}>Already got a code? Enter it here:</div>
-            <input
-              type="text"
-              value={restoreCode}
-              onChange={(e) => setRestoreCode(e.target.value)}
-              placeholder="Unlock code from your email"
-              style={{ width: 220, padding: "8px 12px", borderRadius: 8, border: `1px solid ${t.panelBorder}`, background: t.panel, color: t.text, fontSize: 13, fontFamily: "'Courier New', monospace" }}
-            />
-            <button onClick={onSubmitRestoreCode} style={{ ...btnStyle(t, false, true), fontSize: 13 }}>Unlock with this code</button>
-          </div>
-
-          {restoreStatus && <div style={{ fontSize: 12, color: t.muted, maxWidth: 260 }}>{restoreStatus}</div>}
-        </div>
-      )}
     </div>
   );
 }
@@ -1573,253 +1059,15 @@ const HNEFATAFL_CRAWL = [
   "He wrote it all down. And so a game older than the Vikings themselves... survives.",
 ];
 
-// Tiny non-interactive board cell for the how-to-play diagrams — reuses the
-// exact same square/piece colour tokens as the real board (t.holeEmpty,
-// t.restricted, t.pegFrom/pegTo, DEF_FROM/DEF_TO, KING_FROM/KING_TO) so the
-// diagrams actually look like this game, not a generic illustration.
-function MiniCell({ t, piece, restricted, cornerGlyph, dim, ring, size = 34 }) {
-  const pieceIsKing = piece === "king";
-  const gradient = pieceIsKing
-    ? `radial-gradient(circle at 35% 30%, ${KING_FROM}, ${KING_TO})`
-    : piece === "att"
-    ? `radial-gradient(circle at 35% 30%, ${t.pegFrom}, ${t.pegTo})`
-    : piece === "def"
-    ? `radial-gradient(circle at 35% 30%, ${DEF_FROM}, ${DEF_TO})`
-    : null;
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: 5,
-      background: restricted ? t.restricted : t.holeEmpty,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      boxShadow: ring ? `inset 0 0 0 2px ${t.accent}` : `inset 0 0 0 1px ${t.panelBorder}`,
-      position: "relative", flexShrink: 0,
-    }}>
-      {restricted && !piece && <span style={{ fontSize: size * 0.5, opacity: 0.55 }}>{cornerGlyph ? "◆" : "♛"}</span>}
-      {piece && (
-        <div style={{
-          width: pieceIsKing ? size * 0.78 : size * 0.7, height: pieceIsKing ? size * 0.78 : size * 0.7,
-          borderRadius: "50%", background: gradient, opacity: dim ? 0.3 : 1,
-          boxShadow: "0 1px 2px rgba(0,0,0,0.5)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          {pieceIsKing && <span style={{ fontSize: size * 0.42 }}>♛</span>}
-          {dim && <span style={{ position: "absolute", fontSize: size * 0.6, color: "#ff6b5b", fontWeight: 900 }}>✕</span>}
-        </div>
-      )}
-    </div>
-  );
-}
-const DiagramCaption = ({ t, children }) => (
-  <div style={{ fontSize: 11, color: t.muted, textAlign: "center", marginTop: 6, lineHeight: 1.4, maxWidth: 140 }}>{children}</div>
-);
-
-// Shared 3x3 grid renderer — every capture diagram below is the same shape:
-// the piece being captured sits in the centre, and only the 4 orthogonal
-// neighbours are ever relevant. Keeping all three examples on this identical
-// grid (rather than a different layout per rule) is what makes "captures
-// only happen in a straight line, never diagonally" visually obvious —
-// the untouched diagonal corners are doing that work in every diagram.
-function Grid3x3({ t, cells }) {
-  return (
-    <div style={{ display: "inline-flex", flexDirection: "column", gap: 3 }}>
-      {cells.map((row, i) => (
-        <div key={i} style={{ display: "flex", gap: 3 }}>
-          {row.map((cell, j) => <MiniCell key={j} t={t} {...cell} />)}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// Two capture examples on the identical grid: a standard two-piece sandwich,
-// and a single piece using a hostile corner/throne as its "second piece" —
-// per resolveCaptures() above, a restricted square is just as hostile as an
-// enemy piece for this purpose.
-function CaptureDiagram({ t }) {
-  const twoPieceCells = [
-    [{}, {}, {}],
-    [{ piece: "att", ring: true }, { piece: "def", dim: true }, { piece: "att", ring: true }],
-    [{}, {}, {}],
-  ];
-  const hostileSquareCells = [
-    [{}, { restricted: true, cornerGlyph: true, ring: true }, {}],
-    [{}, { piece: "def", dim: true }, {}],
-    [{}, { piece: "att", ring: true }, {}],
-  ];
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "center", marginTop: 8 }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <Grid3x3 t={t} cells={twoPieceCells} />
-        <DiagramCaption t={t}>Two Muscovites, directly in line — never diagonally.</DiagramCaption>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <Grid3x3 t={t} cells={hostileSquareCells} />
-        <DiagramCaption t={t}>A corner or the empty throne counts as the second piece — one Muscovite is enough.</DiagramCaption>
-      </div>
-    </div>
-  );
-}
-
-// King-capture example — the one diagram that actually changes shape
-// between variants, since strong-king and weak-king are genuinely
-// different mechanics (checkKingCaptured / checkKingCapturedWeak above),
-// not just a different label on the same rule.
-function KingCaptureDiagram({ t, variant }) {
-  const strongCells = [
-    [{}, { piece: "att", ring: true }, {}],
-    [{ piece: "att", ring: true }, { piece: "king" }, { piece: "att", ring: true }],
-    [{}, { piece: "att", ring: true }, {}],
-  ];
-  const weakCells = [
-    [{}, {}, {}],
-    [{ piece: "att", ring: true }, { piece: "king" }, { piece: "att", ring: true }],
-    [{}, {}, {}],
-  ];
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: 8 }}>
-      <Grid3x3 t={t} cells={variant.kingStrength === "weak" ? weakCells : strongCells} />
-      <DiagramCaption t={t}>
-        {variant.kingStrength === "weak"
-          ? "Captured exactly like an ordinary piece — two hostile squares on one straight line. A corner or the empty throne can stand in for one attacker here too."
-          : "Boxed in on all 4 sides — Muscovites win. Throne/corners count the same as an attacker here."}
-      </DiagramCaption>
-    </div>
-  );
-}
-
-// Quick-reference rules modal — plain-language summary of the exact logic in
-// legalDestinations / resolveCaptures / checkKingCaptured above, kept in sync
-// with that code rather than a generic description of "Hnefatafl rules" in
-// the abstract (board size, last-stand exception, etc. are all specific
-// choices this implementation makes).
-function HowToPlayModal({ t, onClose, variant }) {
-  const Section = ({ title, children }) => (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, color: t.accent, textTransform: "uppercase", marginBottom: 6 }}>
-        {title}
-      </div>
-      <div style={{ fontSize: 14, lineHeight: 1.65, color: t.text }}>{children}</div>
-    </div>
-  );
-  const escapeWord = variant.escape === "edge" ? "edge square" : "corner";
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 2500,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 16,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: t.bg, border: `1px solid ${t.panelBorder}`, borderRadius: 14,
-          maxWidth: 460, width: "100%", maxHeight: "82vh", overflowY: "auto",
-          padding: "22px 22px 20px", boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
-          position: "relative",
-        }}
-      >
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          style={{
-            position: "absolute", top: 14, right: 14, width: 28, height: 28, borderRadius: 999,
-            border: `1px solid ${t.panelBorder}`, background: t.panel, color: t.muted,
-            fontSize: 15, lineHeight: "26px", cursor: "pointer", padding: 0,
-          }}
-        >
-          ✕
-        </button>
-
-        <div style={{ fontSize: 11, letterSpacing: 3, color: t.muted, fontWeight: 700, marginBottom: 4 }}>
-          QUICK REFERENCE
-        </div>
-        <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 4px", textTransform: "uppercase", letterSpacing: 0.5 }}>
-          How to Play
-        </h2>
-        <div style={{
-          display: "inline-block", fontSize: 11, fontWeight: 700, color: t.accent,
-          background: t.accentSoft, border: `1px solid ${t.panelBorder}`, borderRadius: 999,
-          padding: "3px 10px", marginBottom: 16,
-        }}>
-          Ruleset: {variant.name} · {variant.subtitle}
-        </div>
-
-        <Section title="The Sides">
-          <strong>Swedes</strong> (teal) defend the King, who starts on the throne at the centre of the board.{" "}
-          <strong>Muscovites</strong> (gold) surround the board on all four edges and attack. Muscovites always move first.
-        </Section>
-
-        <Section title="Movement">
-          Every piece moves like a rook — any number of empty squares, straight up, down, left, or right. No diagonals, and no jumping over other pieces.
-          {variant.movement === "kingSingleStep" && (
-            <> In this ruleset the <strong>King moves only one square at a time</strong> — everyone else still slides freely.</>
-          )}
-        </Section>
-
-        <Section title="The Throne & Corners">
-          The centre throne and the four corners are restricted squares. Only the King may ever land on them — everyone else can pass over the empty throne but can't stop there or on a corner.
-        </Section>
-
-        <Section title="Capturing">
-          Sandwich an enemy piece between two of your own — or between one of your pieces and a hostile restricted square (empty throne or a corner) — and it's captured. You must move into position to close the trap; walking into a sandwich yourself is always safe.
-          <CaptureDiagram t={t} />
-        </Section>
-
-        <Section title="The King">
-          {variant.kingArmed
-            ? "The King fights alongside his Swedes and can act as one side of a sandwich against a Muscovite. "
-            : "The King cannot capture Muscovites himself — but he can still be used as the anchor when a Swede closes a trap next to him. "}
-          {variant.kingStrength === "weak"
-            ? "He's captured exactly like an ordinary piece here — no need to surround all four sides."
-            : <>He's captured when surrounded on all 4 sides by attackers and/or hostile squares. The board edge normally shields him — <em>except</em> when he's the very last defender standing, at which point the edge no longer counts as safe either.</>}
-          <KingCaptureDiagram t={t} variant={variant} />
-        </Section>
-
-        <Section title="Winning">
-          Swedes win the instant the King reaches any {escapeWord}. Muscovites win by capturing the King.
-        </Section>
-      </div>
-    </div>
-  );
-}
-
 function Hnefatafl() {
   const [themeKey, setThemeKey] = useState("dark");
   const t = THEMES[themeKey];
   const [showIntro, setShowIntro] = useState(() => {
     try { return localStorage.getItem(INTRO_SEEN_KEY) !== "1"; } catch (e) { return true; }
   });
-  const [showHowTo, setShowHowTo] = useState(false);
   function dismissIntro() {
     try { localStorage.setItem(INTRO_SEEN_KEY, "1"); } catch (e) { /* ignore */ }
     setShowIntro(false);
-  }
-
-  // ---------- Rule variant ----------
-  // One global "house rules" setting, shared by Play and Challenge (the
-  // rules of the game aren't really a per-mode thing). Changing it mid-game
-  // resets whichever mode is currently open, via resetPlay/resetChallenge
-  // below — the OTHER mode's saved-but-not-open game is left alone and will
-  // just pick up the new variant next time it's opened. That's a known,
-  // deliberate simplification rather than an oversight: fully quarantining
-  // each mode's save to the variant it was started under would mean storing
-  // and migrating a variant key per save slot, which isn't worth the
-  // complexity for a rules-flavour toggle.
-  const [ruleVariantKey, setRuleVariantKeyState] = useState(() => {
-    try {
-      const saved = localStorage.getItem(RULE_VARIANT_KEY_STORAGE);
-      return saved && RULE_VARIANTS[saved] ? saved : DEFAULT_VARIANT_KEY;
-    } catch (e) { return DEFAULT_VARIANT_KEY; }
-  });
-  const ruleVariant = RULE_VARIANTS[ruleVariantKey];
-  function setRuleVariantKey(nextKey) {
-    setRuleVariantKeyState(nextKey);
-    try { localStorage.setItem(RULE_VARIANT_KEY_STORAGE, nextKey); } catch (e) { /* ignore */ }
-    if (mode === "play") reset();
-    else challengeReset();
   }
 
   // ---------- Freemium quota + real purchase flow ----------
@@ -1827,127 +1075,117 @@ function Hnefatafl() {
   const [freemium, setFreemium] = useState(() => loadFreemiumState());
   const [playGateActive, setPlayGateActive] = useState(false);
   const [challengeGateActive, setChallengeGateActive] = useState(false);
-  const [onlineGateActive, setOnlineGateActive] = useState(false);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [unlockNotice, setUnlockNotice] = useState(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoreEmail, setRestoreEmail] = useState("");
-  const [restoreStatus, setRestoreStatus] = useState("");
-  const [showRestoreForm, setShowRestoreForm] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreSent, setRestoreSent] = useState(false);
+  const [manualTokenOpen, setManualTokenOpen] = useState(false);
+  const [manualToken, setManualToken] = useState("");
+
+  // Single shared activation path — used right after a Stripe redirect AND
+  // when a restored code is pasted in manually, so both cases get the same
+  // webhook-lag retry handling rather than the manual path being a
+  // weaker one-shot attempt. Same shape as Jumpin' Pin's activateToken.
+  const activateToken = useCallback(async (token) => {
+    setUnlockNotice("Checking your purchase…");
+    try {
+      let verified = false;
+      const deviceId = getOrCreateDeviceId();
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const statusRes = await fetch(`${WORKER_URL}/check-status?token=${token}`);
+        const statusData = await statusRes.json().catch(() => ({}));
+        if (statusData.status === "paid") { verified = true; break; }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      if (!verified) {
+        setUnlockNotice("Couldn't confirm that purchase yet — try Restore Purchase in a minute.");
+        return;
+      }
+      const actRes = await fetch(`${WORKER_URL}/activate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, deviceId }),
+      });
+      if (actRes.ok) {
+        writeProRecord({ token, deviceId, confirmedAt: Date.now() });
+        setIsPro(true);
+        setPlayGateActive(false);
+        setChallengeGateActive(false);
+        setUnlockNotice(null);
+        setManualTokenOpen(false);
+        setManualToken("");
+      } else {
+        const data = await actRes.json().catch(() => ({}));
+        setUnlockNotice(data.error || "That code didn't check out — double check it and try again.");
+      }
+    } catch (e) {
+      setUnlockNotice("Something went wrong checking your purchase — try again shortly.");
+    }
+  }, []);
 
   async function startCheckout() {
     setCheckoutBusy(true);
+    setUnlockNotice(null);
     try {
       const res = await fetch(`${WORKER_URL}/create-checkout`, { method: "POST" });
       const data = await res.json();
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
+        setUnlockNotice("Couldn't start checkout — try again shortly.");
         setCheckoutBusy(false);
       }
     } catch (e) {
+      setUnlockNotice("Couldn't reach the store — check your connection and try again.");
       setCheckoutBusy(false);
     }
   }
 
   async function submitRestoreEmail() {
-    if (!restoreEmail.includes("@")) { setRestoreStatus("Enter a valid email."); return; }
-    setRestoreStatus("Sending…");
+    if (!restoreEmail.includes("@")) return;
+    setRestoreBusy(true);
     try {
       await fetch(`${WORKER_URL}/resend-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: restoreEmail }),
       });
-      setRestoreStatus("If that email has a purchase on file, a code is on its way.");
+      setRestoreSent(true);
     } catch (e) {
-      setRestoreStatus("Something went wrong — try again.");
+      setRestoreSent(true); // same message either way — matches the worker's deliberately vague response
+    } finally {
+      setRestoreBusy(false);
     }
   }
 
-  // The other half of restore — actually redeeming a code once it's in
-  // hand (from the email above, or from an earlier one). This was missing
-  // entirely before: the email flow existed but had nowhere to land.
-  const [restoreCode, setRestoreCode] = useState("");
-  async function submitRestoreCode() {
-    if (!restoreCode.trim()) { setRestoreStatus("Enter the code from your email."); return; }
-    setRestoreStatus("Activating…");
-    try {
-      const deviceId = getOrCreateDeviceId();
-      const res = await fetch(`${WORKER_URL}/activate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: restoreCode.trim(), deviceId }),
-      });
-      if (res.ok) {
-        writeProRecord({ token: restoreCode.trim(), deviceId, confirmedAt: Date.now() });
-        setIsPro(true);
-        setPlayGateActive(false);
-        setChallengeGateActive(false);
-        setRestoreStatus("Unlocked — enjoy unlimited play!");
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setRestoreStatus(data.error || "That code didn't work — check it and try again.");
-      }
-    } catch (e) {
-      setRestoreStatus("Something went wrong — try again.");
-    }
-  }
-
-  // Handles the return trip from Stripe Checkout. success_url includes
-  // ?token=...&paid=1 — poll /check-status a few times since the webhook
-  // that actually flips the token to "paid" can lag a couple of seconds
-  // behind the redirect (same webhook-lag pattern as Jumpin' Pin).
+  // On load: pick up ?token=...&paid=1 from a Stripe redirect, or re-check
+  // a previously stored token that hasn't confirmed yet (e.g. tab closed
+  // mid-flow). Skips re-verifying once isPro is already true locally.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
+    const redirectToken = params.get("token");
     const paid = params.get("paid");
-    if (!token || paid !== "1") return;
-
-    let cancelled = false;
-    async function pollAndActivate() {
-      const deviceId = getOrCreateDeviceId();
-      for (let attempt = 0; attempt < 8 && !cancelled; attempt++) {
-        try {
-          const statusRes = await fetch(`${WORKER_URL}/check-status?token=${token}`);
-          const statusData = await statusRes.json();
-          if (statusData.status === "paid") {
-            const activateRes = await fetch(`${WORKER_URL}/activate`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token, deviceId }),
-            });
-            if (activateRes.ok) {
-              writeProRecord({ token, deviceId, confirmedAt: Date.now() });
-              setIsPro(true);
-              setPlayGateActive(false);
-              setChallengeGateActive(false);
-            }
-            break;
-          }
-        } catch (e) { /* keep retrying, transient network hiccups are expected */ }
-        if (!cancelled) await new Promise((r) => setTimeout(r, 1500));
-      }
-      window.history.replaceState({}, "", window.location.pathname); // drop the query params so a refresh doesn't re-poll
+    if (redirectToken && paid === "1") {
+      window.history.replaceState({}, "", window.location.pathname);
+      activateToken(redirectToken);
+      return;
     }
-    pollAndActivate();
-    return () => { cancelled = true; };
+    const stored = loadProRecord();
+    if (stored?.token && !isPro) {
+      activateToken(stored.token);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function devResetQuota() {
-    const fresh = { date: todayLocalKey(), playCount: 0, challengeCount: 0, onlineCount: 0 };
+    const fresh = { date: todayLocalKey(), playCount: 0, challengeCount: 0 };
     writeFreemiumState(fresh);
     setFreemium(fresh);
     setPlayGateActive(false);
     setChallengeGateActive(false);
-    setOnlineGateActive(false);
   }
-  // Dev-only escape hatch, console-accessible instead of an on-screen
-  // button. The old version was a plain visible pill any real user could
-  // tap to fully bypass the $2 Pro paywall on Play/Challenge/Online —
-  // worth catching now rather than after it's been quietly used. To reset
-  // your own quota while testing, open DevTools console on the live site
-  // and run: __hnefataflDevReset()
-  useEffect(() => { window.__hnefataflDevReset = devResetQuota; });
 
   // ---------- Share / brag card ----------
   const [shareStatus, setShareStatus] = useState("");
@@ -2032,7 +1270,7 @@ function Hnefatafl() {
 
   const legalDestSet = useMemo(() => {
     if (!selected) return new Set();
-    return new Set(legalDestinations(board, selected.r, selected.c, ruleVariant).map(([r, c]) => key(r, c)));
+    return new Set(legalDestinations(board, selected.r, selected.c).map(([r, c]) => key(r, c)));
   }, [selected, board]);
 
   function triggerGlow(side) {
@@ -2065,11 +1303,12 @@ function Hnefatafl() {
     next[tr][tc] = piece;
 
     const side = piece === "king" ? "def" : piece;
-    // Whether the king's own move can close a capture is a per-variant
-    // setting now (RULE_VARIANTS[key].kingArmed) — see resolveMoveCaptures.
-    // He can still be used as the ally/anvil when a regular defender closes
-    // a capture against him, in every variant, regardless of that setting.
-    const captured = resolveMoveCaptures(next, tr, tc, side, piece, ruleVariant);
+    // The unarmed-king variant: this is one of the genuinely disputed rules
+    // across historical sources — some traditions let the king fight,
+    // others don't. Going with "unarmed" here: the king can still be used
+    // as the ally/anvil when a regular defender closes a capture against
+    // him, but moving the king himself never captures anything directly.
+    const captured = piece === "king" ? [] : resolveCaptures(next, tr, tc, side);
     captured.forEach(([r, c]) => { next[r][c] = null; });
     if (captured.length > 0) {
       setCapturePopSide(side);
@@ -2082,9 +1321,9 @@ function Hnefatafl() {
     setLastMove({ from: { r: fr, c: fc }, to: { r: tr, c: tc } });
     setMoveCount((m) => m + 1);
 
-    if (piece === "king" && isEscapeSquare(tr, tc, ruleVariant)) {
+    if (piece === "king" && isCorner(tr, tc)) {
       setWinner("def");
-      setMessage(ruleVariant.escape === "edge" ? "The king reaches the edge — defenders win!" : "The king reaches the corner — defenders win!");
+      setMessage("The king reaches the corner — defenders win!");
       return;
     }
     if (piece === "att") {
@@ -2096,10 +1335,10 @@ function Hnefatafl() {
       })();
       const remainingDef = next.flat().filter((p) => p === "def").length;
       const isLastStand = remainingDef === 0; // king is the only defender left on the board
-      if (newKingPos && checkKingCaptured(next, newKingPos.r, newKingPos.c, isLastStand, ruleVariant)) {
+      if (newKingPos && checkKingCaptured(next, newKingPos.r, newKingPos.c, isLastStand)) {
         setWinner("att");
         setMessage(
-          isLastStand && ruleVariant.kingStrength === "strong"
+          isLastStand
             ? "The king's last stand — surrounded alone, even the edge can't save him. Muscovites win!"
             : "The king is surrounded — attackers win!"
         );
@@ -2147,7 +1386,7 @@ function Hnefatafl() {
     setMessage("Muscovites move first — tap a dark piece.");
   }, [isPro, freemium.playCount]);
 
-  const [mode, setMode] = useState(() => (getInviteTokenFromUrl() ? "online" : "challenge")); // "play" | "challenge" | "online" — Challenge is the default landing mode, unless an invite link brought you here
+  const [mode, setMode] = useState("challenge"); // "play" | "challenge" — Challenge is the default landing mode
 
   // Pro tone picker — same interaction as Jumpin' Pin: tapping a locked
   // tone shows a brief upsell toast instead of switching, rather than
@@ -2188,13 +1427,13 @@ function Hnefatafl() {
 
   const challengeLegalDestSet = useMemo(() => {
     if (!challengeSelected) return new Set();
-    return new Set(legalDestinations(challengeBoard, challengeSelected.r, challengeSelected.c, ruleVariant).map(([r, c]) => key(r, c)));
+    return new Set(legalDestinations(challengeBoard, challengeSelected.r, challengeSelected.c).map(([r, c]) => key(r, c)));
   }, [challengeSelected, challengeBoard]);
 
   // Shared by both the human's click and the AI's chosen move, so the two
   // paths can never diverge on capture/win handling.
   function commitChallengeMove(from, to, side) {
-    const { board: next, captured, kingCaptured, kingEscaped } = simulateMove(challengeBoard, from, to, side, ruleVariant);
+    const { board: next, captured, kingCaptured, kingEscaped } = simulateMove(challengeBoard, from, to, side);
     setChallengeBoard(next);
     setChallengeSelected(null);
     setChallengeLastMove({ from, to });
@@ -2202,7 +1441,7 @@ function Hnefatafl() {
 
     if (kingEscaped) {
       setChallengeWinner("def");
-      setChallengeMessage(ruleVariant.escape === "edge" ? "The king escapes to the edge — defenders win!" : "The king escapes to a corner — defenders win!");
+      setChallengeMessage("The king escapes to a corner — defenders win!");
       return;
     }
     if (kingCaptured) {
@@ -2243,7 +1482,7 @@ function Hnefatafl() {
     if (challengeTurn === humanSide) return;
     setAiThinking(true);
     const timer = setTimeout(() => {
-      const move = chooseAiMove(challengeBoard, challengeTurn, ruleVariant);
+      const move = chooseAiMove(challengeBoard, challengeTurn);
       if (move) commitChallengeMove(move.from, move.to, challengeTurn);
       setAiThinking(false);
     }, 400); // small delay so "AI is thinking..." is actually visible, not just a flash
@@ -2309,8 +1548,6 @@ function Hnefatafl() {
           onDone={dismissIntro}
         />
       )}
-
-      {showHowTo && <HowToPlayModal t={t} variant={ruleVariant} onClose={() => setShowHowTo(false)} />}
 
       <style>{`
         @keyframes msgPop {
@@ -2403,46 +1640,112 @@ function Hnefatafl() {
         <span style={{ width: 1, height: 20, background: t.panelBorder }} />
         <button onClick={() => setMode("play")} style={pillStyle(t, mode === "play")}>Play</button>
         <button onClick={() => setMode("challenge")} style={pillStyle(t, mode === "challenge")}>🤖 Challenge</button>
-        <button onClick={() => setMode("online")} style={pillStyle(t, mode === "online")}>🤝 Online</button>
+        {/* Sandbox removed — this slot is reserved for "Challenge a Friend to a Game" once that's built */}
         <span style={{ width: 1, height: 20, background: t.panelBorder }} />
         <button onClick={() => setShowIntro(true)} style={pillStyle(t, false)} title="Watch the intro again">
           🎬
         </button>
-        <button onClick={() => setShowHowTo(true)} style={pillStyle(t, false)} title="How to play">
-          📖 How to Play
+        <button onClick={devResetQuota} style={pillStyle(t, false)} title="DEV ONLY — reset today's freemium quota">
+          🔧 {freemium.playCount}/{FREE_GAMES_PER_MODE_PER_DAY} · {freemium.challengeCount}/{FREE_GAMES_PER_MODE_PER_DAY}{isPro ? " · PRO" : ""}
         </button>
-        {isPro ? (
-          <button disabled style={pillStyle(t, true)}>✓ Pro</button>
-        ) : (
-          <button onClick={startCheckout} disabled={checkoutBusy} style={pillStyle(t, false)}>
-            {checkoutBusy ? "Redirecting…" : "💳 Purchase Pro — $4 USD"}
-          </button>
-        )}
       </div>
 
-      {/* Rule variant picker — one global setting shared by Play and
-          Challenge. Native <select> rather than a pill row: 5 options in
-          pills either wraps to two lines or forces horizontal scroll on a
-          narrow phone, and this isn't a frequently-tapped control the way
-          mode/theme are. Switching resets the currently-open mode's game
-          (see setRuleVariantKey above) since mid-game rules changes would
-          be confusing. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-        <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: 0.5 }}>Rules:</span>
-        <select
-          value={ruleVariantKey}
-          onChange={(e) => setRuleVariantKey(e.target.value)}
-          style={{
-            flex: "0 1 auto", maxWidth: 260, padding: "6px 10px", borderRadius: 999,
-            border: `1px solid ${t.panelBorder}`, background: t.panel, color: t.text,
-            fontSize: 12, fontWeight: 700, cursor: "pointer",
-          }}
+      {/* Pro unlock / restore — always visible regardless of gate status,
+          not buried inside the paywall screen. Losing Pro access (a cache
+          clear, a new device) has nothing to do with hitting today's free-
+          game limit, so recovery needs to be reachable either way. Same
+          shape as Jumpin' Pin's unlock/restore block. */}
+      {isPro ? (
+        <div style={{ fontSize: 10, color: t.accent, marginBottom: 14, fontWeight: 700, textAlign: "center" }}>
+          ✓ Pro unlocked
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 14 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={startCheckout} disabled={checkoutBusy} style={btnStyle(t, checkoutBusy, true)}>
+              {checkoutBusy ? "Redirecting…" : "💳 Unlock Pro — $2"}
+            </button>
+            <button
+              onClick={() => { setRestoreOpen(true); setRestoreSent(false); }}
+              style={{ ...btnStyle(t, false), fontSize: 11, padding: "9px 10px" }}
+            >
+              Restore Purchase
+            </button>
+          </div>
+          {unlockNotice && (
+            <div style={{ fontSize: 10, color: t.muted, textAlign: "center", maxWidth: 260 }}>{unlockNotice}</div>
+          )}
+          <button
+            onClick={() => setManualTokenOpen((v) => !v)}
+            style={{ background: "none", border: "none", color: t.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
+          >
+            have a code already?
+          </button>
+          {manualTokenOpen && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={manualToken}
+                onChange={(e) => setManualToken(e.target.value)}
+                placeholder="paste code"
+                style={{ fontSize: 11, padding: "7px 10px", borderRadius: 8, border: `1px solid ${t.panelBorder}`, background: t.panel, color: t.text, width: 160 }}
+              />
+              <button
+                onClick={() => activateToken(manualToken.trim())}
+                disabled={!manualToken.trim()}
+                style={{ ...btnStyle(t, !manualToken.trim()), fontSize: 11, padding: "7px 12px" }}
+              >
+                Apply
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {restoreOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          onClick={() => setRestoreOpen(false)}
         >
-          {Object.values(RULE_VARIANTS).map((v) => (
-            <option key={v.key} value={v.key}>{v.name} — {v.subtitle}</option>
-          ))}
-        </select>
-      </div>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 320, width: "100%", background: t.panel, border: `1px solid ${t.panelBorder}`, borderRadius: 14, padding: 22, color: t.text }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>Restore Purchase</div>
+            {restoreSent ? (
+              <div style={{ fontSize: 12, color: t.muted, lineHeight: 1.6 }}>
+                If that email has a Hnefatafl purchase on file, a code is on its way — check your inbox and
+                paste it in via "have a code already?" below.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, color: t.muted, marginBottom: 12, lineHeight: 1.5 }}>
+                  Enter the email you used at checkout — we'll send your unlock code to it.
+                </div>
+                <input
+                  type="email"
+                  value={restoreEmail}
+                  onChange={(e) => setRestoreEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.panelBorder}`, background: t.bg, color: t.text, marginBottom: 12 }}
+                />
+                <button
+                  onClick={submitRestoreEmail}
+                  disabled={restoreBusy || !restoreEmail.includes("@")}
+                  style={{ ...btnStyle(t, restoreBusy || !restoreEmail.includes("@"), true), width: "100%", justifyContent: "center" }}
+                >
+                  {restoreBusy ? "Sending…" : "Send my code"}
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setRestoreOpen(false)}
+              style={{ marginTop: 10, width: "100%", background: "none", border: "none", color: t.muted, fontSize: 11, cursor: "pointer" }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Pro tone picker — same tones, colours, and lock/upsell behaviour
           as Jumpin' Pin, for a consistent feel across the series. */}
@@ -2484,15 +1787,7 @@ function Hnefatafl() {
           modeLabel="Play"
           onUnlock={startCheckout}
           unlocking={checkoutBusy}
-          restoreEmail={restoreEmail}
-          setRestoreEmail={setRestoreEmail}
-          restoreStatus={restoreStatus}
-          onSubmitRestore={submitRestoreEmail}
-          restoreCode={restoreCode}
-          setRestoreCode={setRestoreCode}
-          onSubmitRestoreCode={submitRestoreCode}
-          showRestoreForm={showRestoreForm}
-          setShowRestoreForm={setShowRestoreForm}
+          unlockNotice={unlockNotice}
         />
       )}
 
@@ -2620,15 +1915,7 @@ function Hnefatafl() {
           modeLabel="Challenge"
           onUnlock={startCheckout}
           unlocking={checkoutBusy}
-          restoreEmail={restoreEmail}
-          setRestoreEmail={setRestoreEmail}
-          restoreStatus={restoreStatus}
-          onSubmitRestore={submitRestoreEmail}
-          restoreCode={restoreCode}
-          setRestoreCode={setRestoreCode}
-          onSubmitRestoreCode={submitRestoreCode}
-          showRestoreForm={showRestoreForm}
-          setShowRestoreForm={setShowRestoreForm}
+          unlockNotice={unlockNotice}
         />
       )}
 
@@ -2753,31 +2040,6 @@ function Hnefatafl() {
         next tuning pass. Same rules and capture logic as Play mode.
       </div>
       </>
-      )}
-
-      {mode === "online" && onlineGateActive && (
-        <FreemiumGate
-          t={t} modeLabel="online" onUnlock={startCheckout} unlocking={checkoutBusy}
-          restoreEmail={restoreEmail} setRestoreEmail={setRestoreEmail} restoreStatus={restoreStatus}
-          onSubmitRestore={onSubmitRestore} restoreCode={restoreCode} setRestoreCode={setRestoreCode}
-          onSubmitRestoreCode={onSubmitRestoreCode} showRestoreForm={showRestoreForm} setShowRestoreForm={setShowRestoreForm}
-        />
-      )}
-      {mode === "online" && !onlineGateActive && (
-        <OnlineGameView
-          t={t}
-          ruleVariant={ruleVariant}
-          isPro={isPro}
-          onlineCount={freemium.onlineCount}
-          onGateNeeded={() => setOnlineGateActive(true)}
-          onGameFinished={() => {
-            setFreemium((prev) => {
-              const next = { ...prev, onlineCount: prev.onlineCount + 1 };
-              writeFreemiumState(next);
-              return next;
-            });
-          }}
-        />
       )}
 
     </div>
