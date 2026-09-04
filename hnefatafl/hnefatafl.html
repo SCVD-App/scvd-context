@@ -1,0 +1,2060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Hnefatafl</title>
+<meta name="theme-color" content="#10181c"/>
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
+<link rel="icon" href="icon-512.png" type="image/png" sizes="512x512">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Runic&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: #10181c; min-height: 100vh; overflow-x: hidden; }
+body { display: flex; justify-content: center; }
+#root { width: 100%; max-width: 600px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useCallback, useEffect, useRef } = React;
+
+// ---------- Theme (same palette as the rest of the series) ----------
+const THEMES = {
+  light: {
+    tier: "free",
+    name: "Light",
+    bg: "#f2ecd9", panel: "#e9e0c8", panelBorder: "#cdbf9c",
+    holeEmpty: "#c8b78e", restricted: "#b89f6e",
+    pegFrom: "#f4dd96", pegTo: "#8a6d1a",
+    accent: "#1f9a78", accentSoft: "#d8ead4",
+    text: "#2a2416", muted: "#7a6f57",
+    swatch: "#e9e0c8",
+  },
+  dark: {
+    tier: "free",
+    name: "Dark",
+    bg: "#10181c", panel: "#1b262b", panelBorder: "#2c3a40",
+    holeEmpty: "#081012", restricted: "#3a2a17",
+    pegFrom: "#e8c468", pegTo: "#8a6d1a",
+    accent: "#35d0a0", accentSoft: "#123028",
+    text: "#ece7da", muted: "#8b9a97",
+    swatch: "#1b262b",
+  },
+  // Pro tones — same names and exact colour values as Jumpin' Pin, for a
+  // consistent feel across the whole Ancient Games series. `restricted`
+  // is the one field with no Jumpin' Pin equivalent (peg solitaire has no
+  // throne/corner squares) — derived per tone using the same relationship
+  // Hnefatafl's own light/dark themes already use (a warm accent colour
+  // distinct from the empty-hole colour, not a copy of another field).
+  sandbar: {
+    tier: "pro",
+    name: "Sandbar Gold",
+    bg: "#241a10", panel: "#3a2a17", panelBorder: "#5c4322",
+    holeEmpty: "#160f08", restricted: "#4a3319",
+    pegFrom: "#ffd98a", pegTo: "#c17a1f",
+    accent: "#ff9d4d", accentSoft: "#4a2f14",
+    text: "#fbe9d0", muted: "#c2a37c",
+    swatch: "linear-gradient(135deg,#ffd98a,#c17a1f)",
+  },
+  channel: {
+    tier: "pro",
+    name: "Deep Channel",
+    bg: "#0a1020", panel: "#131c33", panelBorder: "#243256",
+    holeEmpty: "#05070f", restricted: "#1c2b4a",
+    pegFrom: "#9fd8ff", pegTo: "#2f6fa8",
+    accent: "#5fd0ff", accentSoft: "#122844",
+    text: "#e4edff", muted: "#7f8db3",
+    swatch: "linear-gradient(135deg,#9fd8ff,#2f6fa8)",
+  },
+  curves: {
+    tier: "pro",
+    name: "Chasin' Curves",
+    bg: "#0f1216", panel: "#1a1e24", panelBorder: "#c9a24a55",
+    holeEmpty: "#0a0c0f", restricted: "#3a1414",
+    pegFrom: "#e6cf9a", pegTo: "#8f1d1d",
+    accent: "#c9a24a", accentSoft: "#2a1414",
+    text: "#f2e9d8", muted: "#a89a7c",
+    swatch: "linear-gradient(135deg,#e6cf9a,#8f1d1d)",
+  },
+};
+// Defenders/King use the accent teal family (no separate "CPU colour" needed
+// here since both sides are human) — attackers stay in the gold/bronze
+// family used for pieces everywhere else in the series.
+const DEF_FROM = "#7fe8c9", DEF_TO = "#1c7a5e";
+const KING_FROM = "#ffe9b0", KING_TO = "#c9962f";
+
+function pillStyle(t, active) {
+  return {
+    display: "flex", alignItems: "center", gap: 5, padding: "6px 12px",
+    borderRadius: 999, border: active ? `1px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+    background: active ? t.accentSoft : t.panel, color: active ? t.accent : t.muted,
+    fontSize: 12, fontWeight: 700, cursor: "pointer",
+  };
+}
+function btnStyle(t, disabled, active) {
+  return {
+    display: "flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 10,
+    border: active ? `1px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+    background: active ? t.accentSoft : t.panel,
+    color: disabled ? t.muted : active ? t.accent : t.text,
+    fontSize: 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.5 : 1,
+  };
+}
+
+// ---------- Board frame — double border, Viking-era formal treatment ----------
+// Outer band is a diagonal-striped "twisted rope" (a simple CSS stand-in for
+// Norse interlace carving, no image asset or webfont needed), inner band is
+// a thin bright-gold rule. Both reuse the existing KING_FROM/KING_TO gold
+// already used for the king piece, so the frame reads as "the same gold",
+// not a new colour introduced just for this.
+function frameOuterStyle() {
+  return {
+    position: "relative",
+    padding: 6,
+    borderRadius: 12,
+    background: `repeating-linear-gradient(135deg, ${KING_TO} 0px, ${KING_TO} 3px, #3a2c0c 3px, #3a2c0c 7px)`,
+    boxShadow: "0 10px 28px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(0,0,0,0.5)",
+  };
+}
+function frameInnerStyle(t) {
+  return {
+    position: "relative",
+    padding: 3,
+    borderRadius: 8,
+    background: t.bg,
+    boxShadow: `inset 0 0 0 2px ${KING_FROM}, inset 0 0 12px rgba(0,0,0,0.22)`,
+  };
+}
+function cornerGlyphStyle(pos) {
+  const base = { position: "absolute", fontSize: 13, color: KING_FROM, opacity: 0.9, textShadow: "0 0 6px rgba(0,0,0,0.6)", pointerEvents: "none", lineHeight: 1, zIndex: 2 };
+  if (pos === "tl") return { ...base, top: 1, left: 3 };
+  if (pos === "tr") return { ...base, top: 1, right: 3 };
+  if (pos === "bl") return { ...base, bottom: 1, left: 3 };
+  return { ...base, bottom: 1, right: 3 };
+}
+function BoardFrame({ t, children }) {
+  return (
+    <div style={frameOuterStyle()}>
+      <span style={cornerGlyphStyle("tl")}>❖</span>
+      <span style={cornerGlyphStyle("tr")}>❖</span>
+      <span style={cornerGlyphStyle("bl")}>❖</span>
+      <span style={cornerGlyphStyle("br")}>❖</span>
+      <div style={frameInnerStyle(t)}>{children}</div>
+    </div>
+  );
+}
+
+// ---------- Runic border — "Fortune Favours The Brave" + SCVD.app ----------
+// Younger Futhark (the 16-rune Viking-age script, as opposed to the older
+// 24-rune Elder Futhark) transliterated via the standard Latin-to-Futhark
+// correspondence table. Several English letters share one rune in this
+// system (e.g. B/P both -> ᛒ, U/V/W/Y all -> ᚢ) — that's not a mapping
+// error, it's genuinely how the Vikings wrote too, a real limitation of a
+// 16-symbol alphabet. ᛫ is the runic single-punctuation dot, the actual
+// historical word-divider used on real inscriptions.
+// Requires the Noto Sans Runic webfont (linked in <head>) — most devices
+// don't ship Runic glyph coverage, so without the font these render as
+// tofu boxes rather than the intended runes.
+function runicGridStyle() {
+  return {
+    display: "grid",
+    gridTemplateColumns: "18px 1fr 18px",
+    gridTemplateRows: "auto auto auto",
+    alignItems: "center",
+    justifyItems: "center",
+  };
+}
+function runicTextStyle(vertical) {
+  return {
+    fontFamily: "'Noto Sans Runic', serif",
+    fontSize: 13,
+    letterSpacing: 2,
+    color: KING_FROM,
+    opacity: 0.85,
+    textShadow: "0 0 6px rgba(0,0,0,0.5)",
+    writingMode: vertical ? "vertical-rl" : "horizontal-tb",
+    whiteSpace: "nowrap",
+    userSelect: "none",
+    padding: vertical ? "6px 0" : "0 6px",
+  };
+}
+function RunicFrame({ children }) {
+  return (
+    <div style={runicGridStyle()}>
+      <div />
+      <div style={runicTextStyle(false)}>ᚠᚬᚢᚬᚢᚱᛋ</div>
+      <div />
+      <div style={runicTextStyle(true)}>ᚠᚬᚱᛏᚢᚾᛅ</div>
+      {children}
+      <div style={runicTextStyle(true)}>ᚦᛅ ᛫ ᛒᚱᚬᚢᛅ</div>
+      <div />
+      <div style={runicTextStyle(false)}>ᛋᚴᚢᛏ ᛫ ᚬᛒᛒ</div>
+      <div />
+    </div>
+  );
+}
+
+// Outer rope ring — same twisted-rope treatment as the board's own inner
+// border (frameOuterStyle), scaled up to encase the runic text as well,
+// so the runes read as "inside the frame" rather than floating loose
+// above/below/beside it.
+function outerRopeStyle() {
+  return {
+    position: "relative",
+    padding: 8,
+    borderRadius: 16,
+    background: `repeating-linear-gradient(135deg, ${KING_TO} 0px, ${KING_TO} 3px, #3a2c0c 3px, #3a2c0c 7px)`,
+    boxShadow: "0 12px 32px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.5)",
+    marginBottom: 18,
+  };
+}
+function OuterRopeFrame({ t, children }) {
+  return (
+    <div style={outerRopeStyle()}>
+      <span style={cornerGlyphStyle("tl")}>❖</span>
+      <span style={cornerGlyphStyle("tr")}>❖</span>
+      <span style={cornerGlyphStyle("bl")}>❖</span>
+      <span style={cornerGlyphStyle("br")}>❖</span>
+      <div style={{ position: "relative", borderRadius: 9, background: t.bg, padding: 3 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Board setup ----------
+// Standard 11x11 Copenhagen Hnefatafl layout. Restricted squares (throne +
+// 4 corners) are hostile for capture purposes always, and landable only by
+// the king — this is one specific, commonly-used reconstruction, not the
+// only historically argued version (board size alone ranges 7x7 to 13x13
+// across regional variants — see in-app note).
+const SIZE = 11;
+const THRONE = { r: 5, c: 5 };
+const CORNERS = [{ r: 0, c: 0 }, { r: 0, c: 10 }, { r: 10, c: 0 }, { r: 10, c: 10 }];
+const RESTRICTED = new Set([THRONE, ...CORNERS].map((p) => key(p.r, p.c)));
+function key(r, c) { return `${r},${c}`; }
+function isRestricted(r, c) { return RESTRICTED.has(key(r, c)); }
+function isCorner(r, c) { return CORNERS.some((p) => p.r === r && p.c === c); }
+
+function initialBoard() {
+  const b = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+  const attackers = [
+    [0, 3], [0, 4], [0, 5], [0, 6], [0, 7], [1, 5],
+    [10, 3], [10, 4], [10, 5], [10, 6], [10, 7], [9, 5],
+    [3, 0], [4, 0], [5, 0], [6, 0], [7, 0], [5, 1],
+    [3, 10], [4, 10], [5, 10], [6, 10], [7, 10], [5, 9],
+  ];
+  const defenders = [
+    [3, 5], [4, 4], [4, 5], [4, 6],
+    [5, 3], [5, 4], [5, 6], [5, 7],
+    [6, 4], [6, 5], [6, 6], [7, 5],
+  ];
+  attackers.forEach(([r, c]) => { b[r][c] = "att"; });
+  defenders.forEach(([r, c]) => { b[r][c] = "def"; });
+  b[5][5] = "king";
+  return b;
+}
+
+const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+function legalDestinations(board, r, c) {
+  const piece = board[r][c];
+  if (!piece) return [];
+  const isKing = piece === "king";
+  const out = [];
+  for (const [dr, dc] of DIRS) {
+    let nr = r + dr, nc = c + dc;
+    while (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && board[nr][nc] === null) {
+      if (isRestricted(nr, nc) && !isKing) { nr += dr; nc += dc; continue; }
+      // (throne/corner squares are simply skipped as landable, but a piece
+      // still can't slide PAST an occupied square, and the throne being
+      // empty doesn't block sliding through it — corners are dead-ends so
+      // this loop just never reaches past them anyway)
+      out.push([nr, nc]);
+      nr += dr; nc += dc;
+    }
+  }
+  return out;
+}
+
+function resolveCaptures(board, r, c, side) {
+  // side = the side that just moved to (r,c); captures ordinary enemy
+  // pieces (not the king — king capture is checked separately) sandwiched
+  // between the moved piece and either another friendly piece or a hostile
+  // restricted square.
+  const enemy = side === "att" ? "def" : "att";
+  const captured = [];
+  for (const [dr, dc] of DIRS) {
+    const mr = r + dr, mc = c + dc;
+    const fr = r + dr * 2, fc = c + dc * 2;
+    if (mr < 0 || mr >= SIZE || mc < 0 || mc >= SIZE) continue;
+    if (board[mr][mc] !== enemy) continue; // only ordinary enemy pieces here
+    const farInBounds = fr >= 0 && fr < SIZE && fc >= 0 && fc < SIZE;
+    // Normalise "king" to "def" for this comparison — the king fights
+    // alongside his own defenders, including as the anvil in a sandwich.
+    // Comparing the raw board value directly against `side` missed this:
+    // a regular defender closing a capture against the king (stored as
+    // "king", not "def") would never match, even though it should.
+    const farPieceSide = farInBounds ? (board[fr][fc] === "king" ? "def" : board[fr][fc]) : null;
+    const farIsFriendly = farPieceSide === side;
+    const farIsHostileSquare = farInBounds && isRestricted(fr, fc);
+    if (farIsFriendly || farIsHostileSquare) captured.push([mr, mc]);
+  }
+  return captured;
+}
+
+function checkKingCaptured(board, kingR, kingC, isLastDefender) {
+  for (const [dr, dc] of DIRS) {
+    const nr = kingR + dr, nc = kingC + dc;
+    if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) {
+      // Off the board on this side. Normally that means the king can't be
+      // fully surrounded here — the edge itself is his sanctuary. But per
+      // the Fetlar rules' last-stand exception, once he's the only
+      // defending piece left, the board edge no longer shields him: it
+      // simply counts as satisfied, same as a hostile square would.
+      if (isLastDefender) continue;
+      return false;
+    }
+    const occ = board[nr][nc];
+    const hostile = occ === "att" || isRestricted(nr, nc);
+    if (!hostile) return false;
+  }
+  return true;
+}
+
+// ---------- King freedom scoring ----------
+// Ported directly from the AI evaluation-function design — same functions,
+// tested there against real positions. Used here to detect the moment the
+// king tips from "contained" to "loose," for the berserker visual — the
+// exact threshold the eventual AI's opening strategy will be built to
+// prevent from ever being reached.
+function openCorridors(board, kingR, kingC) {
+  let count = 0;
+  for (const [dr, dc] of DIRS) {
+    let r = kingR + dr, c = kingC + dc, clear = true;
+    while (r >= 0 && r < SIZE && c >= 0 && c < SIZE) {
+      if (board[r][c] !== null) { clear = false; break; }
+      r += dr; c += dc;
+    }
+    if (clear) count++;
+  }
+  return count;
+}
+function maxCorridorLength(board, kingR, kingC) {
+  let best = 0;
+  for (const [dr, dc] of DIRS) {
+    let r = kingR + dr, c = kingC + dc, len = 0;
+    while (r >= 0 && r < SIZE && c >= 0 && c < SIZE && board[r][c] === null) {
+      len++; r += dr; c += dc;
+    }
+    best = Math.max(best, len);
+  }
+  return best;
+}
+function openCornerPaths(board, kingR, kingC) {
+  const corners = [[0, 0], [0, 10], [10, 0], [10, 10]];
+  let open = 0;
+  for (const [cr, cc] of corners) {
+    const sameRow = kingR === cr, sameCol = kingC === cc;
+    if (!sameRow && !sameCol) continue;
+    const dr = Math.sign(cr - kingR), dc = Math.sign(cc - kingC);
+    let r = kingR + dr, c = kingC + dc, clear = true;
+    while (r !== cr || c !== cc) {
+      if (board[r][c] !== null) { clear = false; break; }
+      r += dr; c += dc;
+    }
+    if (clear) open++;
+  }
+  return open;
+}
+// A real threshold, not an arbitrary one: the king is "loose" once he has
+// an actual near-lethal opening (a genuinely open run at a corner) OR is
+// simply free to move a long way in most directions at once.
+function isKingLoose(board, kingR, kingC) {
+  if (!kingR && kingR !== 0) return false;
+  if (openCornerPaths(board, kingR, kingC) >= 1) return true;
+  if (openCorridors(board, kingR, kingC) >= 3 && maxCorridorLength(board, kingR, kingC) >= 4) return true;
+  return false;
+}
+
+// ---------- AI opponent ----------
+// Move generation, position simulation, evaluation and search — the pieces
+// scoped-but-not-built in hnefatafl-ai-eval-design.md, now wired up.
+//
+// The defender-side freedom scoring below (kingFreedomScore) is a
+// reconstruction built from the exact same tested functions above
+// (openCorridors/maxCorridorLength/openCornerPaths — not reimplemented,
+// literally the same functions), weighted to land on the two anchor points
+// described in the design doc: a boxed-in start position scores 0, and a
+// fully-open corner-run position scores roughly 160. If you've still got
+// the original doc's exact formula, paste it and I'll swap this for the
+// byte-identical version — this is a faithful reconstruction, not
+// guaranteed identical to what you tested that session.
+//
+// Attacker-side scoring (corridorsClosed/cornerLanesHeld/sentrySafety) was
+// only sketched conceptually in the design doc, never coded — rather than
+// invent those from scratch, the attacker's incentive here is simply to
+// minimise the defender's freedom score (the mirror image of the
+// defender's goal). A dedicated attacker eval is a good next tuning pass,
+// not a gap in this build.
+
+function piecesOfSide(board, side) {
+  const out = [];
+  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+    const p = board[r][c];
+    if (p === side || (side === "def" && p === "king")) out.push({ r, c });
+  }
+  return out;
+}
+
+function allLegalMoves(board, side) {
+  const moves = [];
+  for (const { r, c } of piecesOfSide(board, side)) {
+    for (const [nr, nc] of legalDestinations(board, r, c)) {
+      moves.push({ from: { r, c }, to: { r: nr, c: nc } });
+    }
+  }
+  return moves;
+}
+
+// Pure move application for search/AI use — deliberately reuses the same
+// resolveCaptures/checkKingCaptured functions the real game uses, rather
+// than re-deriving capture logic, so the AI can never "see" a different
+// game than the one a human actually plays.
+function simulateMove(board, from, to, side) {
+  const next = board.map((row) => row.slice());
+  const piece = next[from.r][from.c];
+  next[from.r][from.c] = null;
+  next[to.r][to.c] = piece;
+
+  const captured = resolveCaptures(next, to.r, to.c, side);
+  captured.forEach(([r, c]) => { next[r][c] = null; });
+
+  let kingCaptured = false;
+  const kingEscaped = piece === "king" && isCorner(to.r, to.c);
+  if (!kingEscaped) {
+    let kingPos = null;
+    for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (next[r][c] === "king") kingPos = { r, c };
+    if (kingPos) {
+      const remainingDef = next.flat().filter((p) => p === "def").length;
+      kingCaptured = checkKingCaptured(next, kingPos.r, kingPos.c, remainingDef === 0);
+    }
+  }
+  return { board: next, captured, kingCaptured, kingEscaped };
+}
+
+function findKing(board) {
+  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (board[r][c] === "king") return { r, c };
+  return null;
+}
+
+// null = game continues, "att"/"def" = that side has already won on this board.
+function terminalWinner(board) {
+  const kingPos = findKing(board);
+  if (!kingPos) return "att"; // king captured
+  if (isCorner(kingPos.r, kingPos.c)) return "def"; // king reached a corner
+  return null;
+}
+
+function kingFreedomScore(board, kingR, kingC) {
+  const corners = openCornerPaths(board, kingR, kingC);   // 0-4, worth 50 each — matches the doc's "50pts" anchor
+  const corridors = openCorridors(board, kingR, kingC);   // 0-4
+  const maxLen = maxCorridorLength(board, kingR, kingC);  // 0-10ish
+  return corners * 50 + corridors * maxLen * 3;
+}
+
+// Score from the DEFENDER's perspective — positive is good for defenders.
+function evaluateForDefender(board) {
+  const kingPos = findKing(board);
+  if (!kingPos) return -100000; // king already gone
+  if (isCorner(kingPos.r, kingPos.c)) return 100000; // king already escaped
+
+  let att = 0, def = 0;
+  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+    const p = board[r][c];
+    if (p === "att") att++; else if (p === "def") def++;
+  }
+  // Material weighted 2:1 in defenders' favour, matching the doc's
+  // "2pts per surviving defender" anchor against attacker material.
+  const material = def * 2 - att;
+  const freedom = kingFreedomScore(board, kingPos.r, kingPos.c);
+  return material + freedom;
+}
+
+function evaluateBoard(board, aiSide) {
+  const score = evaluateForDefender(board);
+  return aiSide === "def" ? score : -score;
+}
+
+// Depth-limited minimax with alpha-beta pruning. AI_DEPTH below is the one
+// difficulty knob for now (per the plan: one solid strength first, tune
+// later) — 3 plies is a deliberately conservative starting point given the
+// branching factor concern flagged in the design doc (up to 37 pieces,
+// each sliding multiple squares, in a game with no piece-jumping to limit
+// destinations). Drop to 2 first if a real device feels sluggish; that's
+// the whole tuning lever.
+function minimax(board, depth, alpha, beta, sideToMove, aiSide) {
+  const term = terminalWinner(board);
+  if (term) return term === aiSide ? 100000 + depth : -100000 - depth;
+  if (depth === 0) return evaluateBoard(board, aiSide);
+
+  const moves = allLegalMoves(board, sideToMove);
+  if (moves.length === 0) {
+    // No legal moves for the side to move — treated as a loss for them,
+    // same convention the real game already uses for a dead position.
+    return sideToMove === aiSide ? -100000 - depth : 100000 + depth;
+  }
+
+  const maximizing = sideToMove === aiSide;
+  let best = maximizing ? -Infinity : Infinity;
+  const nextSide = sideToMove === "att" ? "def" : "att";
+  for (const move of moves) {
+    const { board: next } = simulateMove(board, move.from, move.to, sideToMove);
+    const val = minimax(next, depth - 1, alpha, beta, nextSide, aiSide);
+    if (maximizing) {
+      if (val > best) best = val;
+      if (val > alpha) alpha = val;
+    } else {
+      if (val < best) best = val;
+      if (val < beta) beta = val;
+    }
+    if (beta <= alpha) break; // prune
+  }
+  return best;
+}
+
+const AI_DEPTH = 3;
+
+function chooseAiMove(board, aiSide) {
+  const moves = allLegalMoves(board, aiSide);
+  if (moves.length === 0) return null;
+  const nextSide = aiSide === "att" ? "def" : "att";
+  let bestMove = moves[0], bestVal = -Infinity;
+  for (const move of moves) {
+    const { board: next } = simulateMove(board, move.from, move.to, aiSide);
+    const val = minimax(next, AI_DEPTH - 1, -Infinity, Infinity, nextSide, aiSide);
+    if (val > bestVal) { bestVal = val; bestMove = move; }
+  }
+  return bestMove;
+}
+
+// ---------- Autosave ----------
+// This is a standalone file, not a claude.ai artifact, so ordinary
+// localStorage is the right tool here (the no-browser-storage rule is an
+// artifact-sandbox constraint, not a general one) — lets the game survive
+// a preview reload or an accidental tab close without losing progress.
+const SAVE_KEY = "hnefatafl_save_v1";
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+function writeSave(state) {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable — fail silently */ }
+}
+function clearSave() {
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
+}
+
+// Challenge mode save — separate slot from Play's: switching modes should
+// never disturb a different mode's in-progress game.
+const CHALLENGE_SAVE_KEY = "hnefatafl_challenge_v1";
+function loadChallengeSave() {
+  try {
+    const raw = localStorage.getItem(CHALLENGE_SAVE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function writeChallengeSave(state) {
+  try { localStorage.setItem(CHALLENGE_SAVE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+}
+function clearChallengeSave() {
+  try { localStorage.removeItem(CHALLENGE_SAVE_KEY); } catch (e) { /* ignore */ }
+}
+
+// ---------- Freemium daily quota ----------
+// 3 completed games per day, Play and Challenge tracked separately (6
+// total). Resets don't count — only a real win/loss increments the
+// counter, via a "did winner just become truthy this session" check in
+// the component, not just "is winner truthy" (which would also fire on
+// resuming an already-finished saved game). Boundary is device-local
+// midnight, not a rolling 24h window, matching how most daily-limit games
+// behave. isPro below is a DEV-ONLY bypass — same pattern as Jumpin' Pin's
+// early sessions (dev-only checkbox before real Stripe checkout existed).
+// Remove/replace with a real purchase check before any public release.
+const FREEMIUM_KEY = "hnefatafl_freemium_v1";
+const FREE_GAMES_PER_MODE_PER_DAY = 3;
+function todayLocalKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function loadFreemiumState() {
+  const today = todayLocalKey();
+  try {
+    const raw = localStorage.getItem(FREEMIUM_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || parsed.date !== today) return { date: today, playCount: 0, challengeCount: 0 };
+    return parsed;
+  } catch (e) {
+    return { date: today, playCount: 0, challengeCount: 0 };
+  }
+}
+function writeFreemiumState(state) {
+  try { localStorage.setItem(FREEMIUM_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+}
+
+// ---------- Stripe / Worker integration ----------
+// TODO: replace with the real deployed Worker URL once it exists
+// (wrangler deploy, then paste the workers.dev or custom route here).
+// Everything below is dead-simple until that URL is real — every fetch
+// will just fail, which is fine locally but means don't ship this
+// placeholder.
+const WORKER_URL = "https://hnefatafl.emblen-scott.workers.dev";
+const PRO_STORAGE_KEY = "hnefatafl_pro_v1";
+const DEVICE_ID_KEY = "hnefatafl_device_id_v1";
+
+function getOrCreateDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch (e) {
+    return "unknown-device";
+  }
+}
+function loadProRecord() {
+  try {
+    const raw = localStorage.getItem(PRO_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function writeProRecord(record) {
+  try { localStorage.setItem(PRO_STORAGE_KEY, JSON.stringify(record)); } catch (e) { /* ignore */ }
+}
+
+// Shared paywall card — same copy shape for both modes, just swap which
+// counter it's reporting on.
+function FreemiumGate({ t, modeLabel, onUnlock, unlocking, unlockNotice }) {
+  return (
+    <div style={{ textAlign: "center", maxWidth: 340, padding: "10px 10px 30px" }}>
+      <div style={{ fontSize: 12, letterSpacing: 2, color: t.muted, fontWeight: 700, marginBottom: 10 }}>
+        DAILY LIMIT REACHED · {modeLabel.toUpperCase()}
+      </div>
+      <div style={{ fontSize: 15, color: t.text, lineHeight: 1.7, marginBottom: 20 }}>
+        You've played your {FREE_GAMES_PER_MODE_PER_DAY} free {modeLabel} games today. Come back tomorrow for
+        {" "}{FREE_GAMES_PER_MODE_PER_DAY} more — or unlock unlimited play for a one-time <strong>$2</strong>.
+        No subscription, no auto-renewal.
+      </div>
+      <button onClick={onUnlock} disabled={unlocking} style={{ ...btnStyle(t, unlocking, true), padding: "12px 26px", fontSize: 15 }}>
+        {unlocking ? "Redirecting to checkout…" : "🔓 Unlock Unlimited — $2"}
+      </button>
+      {unlockNotice && <div style={{ fontSize: 12, color: t.muted, marginTop: 10, maxWidth: 280 }}>{unlockNotice}</div>}
+      <div style={{ fontSize: 11, color: t.muted, marginTop: 16 }}>
+        Already purchased? Use "Restore Purchase" up in the header, above the board.
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// SHARE / BRAG CARD — self-propagation feature, the substitute for app
+// store discoverability. Generates a shareable PNG (canvas, no image
+// asset dependency) styled to match the board's own visual language —
+// double rope border, gold Georgia type, the runic brand mark — then
+// hands it to the Web Share API with graceful fallbacks:
+//   1. navigator.share with a file attached (most mobile browsers) — the
+//      actual image goes straight into whatever app the person picks.
+//   2. navigator.share text+link only (older mobile browsers).
+//   3. Download the image + copy the link (desktop / no Web Share API).
+// Update SHARE_URL if this moves off GitHub Pages to a custom domain.
+// ══════════════════════════════════════════════════════════
+const SHARE_URL = "https://scvd-app.github.io/Hnefatafl/";
+// Appended to shared links so a recipient lands on the invite screen
+// instead of straight into the game — see InviteLanding below.
+const SHARE_URL_WITH_INVITE = `${SHARE_URL}?invite=1`;
+
+async function generateShareCardBlob({ side, statLine }) {
+  const W = 1080, H = 1350;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  const bg = ctx.createRadialGradient(W / 2, H * 0.32, 100, W / 2, H * 0.32, H * 0.95);
+  bg.addColorStop(0, "#0d1a1a");
+  bg.addColorStop(0.55, "#060b0d");
+  bg.addColorStop(1, "#030405");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  function auroraBlob(cx, cy, rx, ry, color) {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+    g.addColorStop(0, color);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 0.35;
+  auroraBlob(W * 0.2, H * 0.08, W * 0.4, H * 0.15, "rgba(53,208,160,0.35)");
+  auroraBlob(W * 0.8, H * 0.05, W * 0.35, H * 0.12, "rgba(201,150,47,0.3)");
+  ctx.globalAlpha = 1;
+
+  // Double rope-echo border (flat gold, not the diagonal stripe texture —
+  // that's a CSS trick, not worth reproducing pixel-by-pixel on canvas)
+  const margin = 36;
+  ctx.strokeStyle = "#8a6d1a";
+  ctx.lineWidth = 14;
+  ctx.strokeRect(margin, margin, W - margin * 2, H - margin * 2);
+  ctx.strokeStyle = "#e8c468";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(margin + 18, margin + 18, W - (margin + 18) * 2, H - (margin + 18) * 2);
+
+  ctx.fillStyle = "#e8c468";
+  ctx.font = "40px Georgia";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const cp = 62;
+  ctx.fillText("❖", cp, cp);
+  ctx.fillText("❖", W - cp, cp);
+  ctx.fillText("❖", cp, H - cp);
+  ctx.fillText("❖", W - cp, H - cp);
+
+  ctx.fillStyle = "#8b9a97";
+  ctx.font = "700 26px Georgia";
+  ctx.fillText("A N C I E N T   G A M E S   ·   0 4", W / 2, 190);
+
+  ctx.fillStyle = "#e8c468";
+  ctx.font = "900 88px Georgia";
+  ctx.shadowColor = "rgba(232,196,104,0.6)";
+  ctx.shadowBlur = 28;
+  ctx.fillText("HNEFATAFL", W / 2, 290);
+  ctx.shadowBlur = 0;
+
+  ctx.font = "900 128px Georgia";
+  ctx.shadowColor = "rgba(232,196,104,0.7)";
+  ctx.shadowBlur = 38;
+  ctx.fillText("VICTORY", W / 2, 520);
+  ctx.shadowBlur = 0;
+
+  const sideLabel = side === "att" ? "MUSCOVITES" : "SWEDES";
+  const icon = side === "att" ? "⚔️" : "🛡️";
+  ctx.font = "60px Arial";
+  ctx.fillText(icon, W / 2 - 170, 655);
+  ctx.fillStyle = "#f5f3ee";
+  ctx.font = "700 56px Georgia";
+  ctx.fillText(sideLabel, W / 2 + 60, 655);
+
+  if (statLine) {
+    ctx.fillStyle = "#8b9a97";
+    ctx.font = "700 32px 'Courier New', monospace";
+    ctx.fillText(statLine.toUpperCase(), W / 2, 730);
+  }
+
+  try { await document.fonts.load('700 60px "Noto Sans Runic"'); } catch (e) { /* font API not supported — draw with fallback */ }
+  ctx.fillStyle = "#e8c468";
+  ctx.font = "60px 'Noto Sans Runic', serif";
+  ctx.shadowColor = "rgba(232,196,104,0.5)";
+  ctx.shadowBlur = 18;
+  ctx.fillText("ᛋᚴᚢᛏ ᛫ ᚬᛒᛒ", W / 2, 1140);
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = "#8b9a97";
+  ctx.font = "italic 32px Georgia";
+  ctx.fillText("(scvd.app)", W / 2, 1195);
+
+  // The literal clickable URL — printed directly on the image because
+  // several chat apps (Messenger among them) drop share caption text
+  // entirely once a file is attached, no matter what's passed to
+  // navigator.share. A caption that might vanish isn't a link; text
+  // baked into the picture always survives.
+  ctx.fillStyle = "#e8c468";
+  ctx.font = "700 30px 'Courier New', monospace";
+  ctx.fillText("scvd-app.github.io/Hnefatafl", W / 2, 1240);
+
+  ctx.fillStyle = "#8b9a97";
+  ctx.font = "24px Georgia";
+  ctx.fillText("Free to play · No ads · No subscriptions", W / 2, 1275);
+
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
+
+// ---------- Standard "receipts" share message ----------
+// Same shape across every SCVD app (originated in ECEG): hook line, blank,
+// stat + badge lines, blank, CTA + link with the 🎮 emoji. Keep this exact
+// structure when porting to Ur/Nine Men's Morris — build a statLine and
+// badgeLine from whatever that game actually tracks, but don't change the
+// template shape itself.
+function buildShareText({ gameName, statLine, badgeLine, ctaLine, url }) {
+  return [
+    `I just played ${gameName} and I've got receipts.`,
+    "",
+    statLine,
+    badgeLine,
+    "",
+    ctaLine,
+    `🎮 ${url}`,
+  ].join("\n");
+}
+
+function sideTitle(side) {
+  return side === "att" ? "Muscovite Warlord" : "Shield of the North";
+}
+function performanceTitle(moveCount) {
+  if (moveCount == null) return null;
+  if (moveCount <= 14) return "Swift Conqueror";
+  if (moveCount <= 30) return "Patient Strategist";
+  return "Grinding Siege";
+}
+
+// Returns a short status string for the caller to show inline (empty
+// string means the native share sheet handled it, nothing more to say).
+async function shareVictory({ side, statLine, badgeLine }) {
+  const blob = await generateShareCardBlob({ side, statLine });
+  const fileName = "hnefatafl-victory.png";
+  const shareText = buildShareText({
+    gameName: "Hnefatafl",
+    statLine,
+    badgeLine,
+    ctaLine: "Wanna give it a try?",
+    url: SHARE_URL_WITH_INVITE,
+  });
+
+  try {
+    const file = new File([blob], fileName, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "Hnefatafl — Victory", text: shareText });
+      return "";
+    }
+  } catch (e) {
+    if (e && e.name === "AbortError") return ""; // user closed the share sheet — not an error
+  }
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: "Hnefatafl — Victory", text: shareText });
+      return "";
+    }
+  } catch (e) {
+    if (e && e.name === "AbortError") return "";
+  }
+
+  // Fallback for browsers with no Web Share API at all (mainly desktop)
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  try {
+    await navigator.clipboard.writeText(shareText);
+    return "Image saved + message copied!";
+  } catch (e) {
+    return "Image saved!";
+  }
+}
+
+// (down through the end of the IntroCrawl function) into the new file
+// unchanged, then just call it with that game's own SERIES_LABEL/GAME_TITLE/
+// GAME_TAGLINE/CRAWL_TEXT — nothing else here is Hnefatafl-specific.
+// The closing "Fortune Favours The Brave" / SCVD.app runic stinger is
+// baked into the component itself rather than passed as props, since
+// that's series branding, not per-game content — identical everywhere.
+// Star Wars-style: title card -> tilted paragraph crawl receding up and
+// away using a real perspective transform -> runic motto -> runic brand
+// mark, each phase timed via animation-delay off one master clock.
+// ══════════════════════════════════════════════════════════
+const TITLE_CARD_MS = 3500;
+const CRAWL_DURATION_MS = 26000;
+// How long before the crawl's own animation ends that the runic motto
+// starts fading in — a genuine crossfade (both visible briefly at once)
+// rather than a hard handoff, and it means the crawl gets cut before it's
+// travelled far enough to become illegible, not after.
+const CRAWL_FADE_OVERLAP_MS = 3000;
+const MOTTO_MS = 7000;
+const BRAND_MS = 4000;
+
+const CRAWL_END_MS = TITLE_CARD_MS + CRAWL_DURATION_MS;
+const MOTTO_DELAY_MS = CRAWL_END_MS - CRAWL_FADE_OVERLAP_MS;
+const BRAND_DELAY_MS = MOTTO_DELAY_MS + MOTTO_MS;
+const INTRO_TOTAL_MS = BRAND_DELAY_MS + BRAND_MS;
+// Per-game "seen" flag — each Ancient Games title should use its own key
+// (swap the "hnefatafl" segment when porting to Ur/Nine Men's Morris/
+// Senet) so watching one game's intro doesn't silently skip another's.
+const INTRO_SEEN_KEY = "ancient_games_intro_seen_hnefatafl_v1";
+
+function IntroCrawl({ seriesLabel, gameTitle, gameTagline, crawlText, onDone }) {
+  useEffect(() => {
+    const timer = setTimeout(onDone, INTRO_TOTAL_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      onClick={onDone}
+      style={{
+        position: "fixed", inset: 0, zIndex: 3000, overflow: "hidden", cursor: "pointer",
+        background: "radial-gradient(ellipse at 50% 30%, #0d1a1a 0%, #060b0d 55%, #030405 100%)",
+      }}
+    >
+      {/* Faint aurora bands — a nod to "unless you happen to live in Scandinavia" */}
+      <div style={{
+        position: "absolute", inset: 0, opacity: 0.35, pointerEvents: "none",
+        background: `
+          radial-gradient(ellipse 60% 30% at 20% 15%, rgba(53,208,160,0.25), transparent 60%),
+          radial-gradient(ellipse 50% 25% at 75% 10%, rgba(201,150,47,0.18), transparent 60%),
+          radial-gradient(ellipse 70% 35% at 50% 0%, rgba(53,208,160,0.15), transparent 65%)
+        `,
+      }} />
+
+      <button onClick={onDone} style={{
+        position: "absolute", top: 16, right: 16, zIndex: 3001,
+        background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,233,176,0.35)",
+        color: "#ece7da", fontSize: 12, fontWeight: 700, letterSpacing: 1,
+        padding: "7px 14px", borderRadius: 999, cursor: "pointer",
+      }}>
+        SKIP ▶
+      </button>
+
+      {/* Title card */}
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 30px",
+        animation: `introTitleFade ${TITLE_CARD_MS}ms ease forwards`,
+      }}>
+        <div style={{ fontSize: 12, letterSpacing: 5, color: "#8b9a97", fontWeight: 700, marginBottom: 10 }}>
+          {seriesLabel}
+        </div>
+        <div style={{ fontFamily: "Georgia, serif", fontWeight: 900, fontSize: 40, color: "#e8c468", textShadow: "0 0 28px rgba(232,196,104,0.6)", letterSpacing: 2 }}>
+          {gameTitle}
+        </div>
+        {gameTagline && (
+          <div style={{ fontSize: 13, color: "#8b9a97", marginTop: 10, maxWidth: 320 }}>{gameTagline}</div>
+        )}
+      </div>
+
+      {/* Perspective crawl — the tilted "ramp" is anchored to the actual
+          screen bottom (bottom:0 on a fixed-size panel), so its pivot
+          point is fixed in real screen space. The text then slides
+          within that already-tilted ramp via translateY, which is what
+          makes it look genuinely close-and-big at the bottom, shrinking
+          smoothly toward a vanishing point as it climbs — the earlier
+          version rotated around the text block's OWN bottom edge, which
+          sat miles below the visible area (seven paragraphs tall), so
+          the pivot was never actually anchored to the screen and the
+          text arrived already partway up and already shrunk. */}
+      <div style={{ position: "absolute", inset: 0, perspective: "450px", overflow: "hidden" }}>
+        <div style={{
+          position: "absolute", bottom: 0, left: 0, right: 0, height: "100%",
+          transformOrigin: "50% 100%", transform: "rotateX(33deg)",
+        }}>
+          <div style={{
+            position: "absolute", left: "50%", top: "100%", width: "92%", maxWidth: 560,
+            animation: `crawlUp ${CRAWL_DURATION_MS}ms linear forwards`,
+            animationDelay: `${TITLE_CARD_MS}ms`,
+            opacity: 0, transform: "translateX(-50%) translateY(0)",
+          }}>
+            {crawlText.map((para, i) => (
+              <p key={i} style={{
+                fontFamily: "Georgia, serif", fontWeight: 700, color: "#e8c468",
+                fontSize: 22, lineHeight: 1.7, textAlign: "center", marginBottom: 36,
+                textShadow: "0 0 10px rgba(232,196,104,0.35)",
+              }}>
+                {para}
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Runic motto — fades in once the crawl has cleared the screen */}
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 30px",
+        opacity: 0, animation: `mottoFade ${MOTTO_MS}ms ease forwards`,
+        animationDelay: `${MOTTO_DELAY_MS}ms`,
+      }}>
+        {[["ᚠᚬᚱᛏᚢᚾᛅ", "(Fortune)"], ["ᚠᚬᚢᚬᚢᚱᛋ", "(Favours)"], ["ᚦᛅ ᛫ ᛒᚱᚬᚢᛅ", "(The Brave)"]].map(([rune, gloss], i) => (
+          <React.Fragment key={i}>
+            <div style={{ fontFamily: "'Noto Sans Runic', serif", fontSize: 42, letterSpacing: 3, color: "#e8c468", textShadow: "0 0 16px rgba(232,196,104,0.5)", marginTop: i === 0 ? 0 : 26 }}>
+              {rune}
+            </div>
+            <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: 29, color: "#8b9a97", marginTop: 6 }}>
+              {gloss}
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Closing brand mark */}
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 30px",
+        opacity: 0, animation: `brandFade ${BRAND_MS}ms ease forwards`,
+        animationDelay: `${BRAND_DELAY_MS}ms`,
+      }}>
+        <div style={{ fontFamily: "'Noto Sans Runic', serif", fontSize: 38, letterSpacing: 4, color: "#e8c468", textShadow: "0 0 22px rgba(232,196,104,0.6)" }}>
+          ᛋᚴᚢᛏ ᛫ ᚬᛒᛒ
+        </div>
+        <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: 24, color: "#8b9a97", marginTop: 8 }}>
+          (scvd.app)
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes introTitleFade {
+          0% { opacity: 0; transform: scale(0.88); }
+          12% { opacity: 1; transform: scale(1); }
+          78% { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(1.12); }
+        }
+        @keyframes crawlUp {
+          0% { transform: translateX(-50%) translateY(0); opacity: 1; }
+          88% { opacity: 1; }
+          100% { transform: translateX(-50%) translateY(-170vh); opacity: 0; }
+        }
+        @keyframes mottoFade {
+          0% { opacity: 0; }
+          14% { opacity: 1; }
+          86% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        @keyframes brandFade {
+          0% { opacity: 0; }
+          16% { opacity: 1; }
+          82% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// Hnefatafl's own crawl copy — swap this array (and the three constants
+// above the Hnefatafl() call below) for each new Ancient Games title.
+const HNEFATAFL_CRAWL = [
+  "A long time ago — circa 750 AD — in a land far, far away (unless you happen to live in Scandinavia)...",
+  "Viking warlords settled their disputes not always with steel, but with wood and bone upon a board of siege.",
+  "One King stands alone at the centre of his kingdom, guarded only by his loyal Swedes.",
+  "From every border the Muscovites advance — sixteen strong, sworn to see him fall.",
+  "The King has one hope: to break free and reach the safety of a corner before he is surrounded.",
+  "Centuries later, a young botanist named Carl Linnaeus wandered into Lapland and, by chance, watched the Sámi play this very game — upon a board of embroidered reindeer hide.",
+  "He wrote it all down. And so a game older than the Vikings themselves... survives.",
+];
+
+function Hnefatafl() {
+  const [themeKey, setThemeKey] = useState("dark");
+  const t = THEMES[themeKey];
+  const [showIntro, setShowIntro] = useState(() => {
+    try { return localStorage.getItem(INTRO_SEEN_KEY) !== "1"; } catch (e) { return true; }
+  });
+  function dismissIntro() {
+    try { localStorage.setItem(INTRO_SEEN_KEY, "1"); } catch (e) { /* ignore */ }
+    setShowIntro(false);
+  }
+
+  // ---------- Freemium quota + real purchase flow ----------
+  const [isPro, setIsPro] = useState(() => !!loadProRecord());
+  const [freemium, setFreemium] = useState(() => loadFreemiumState());
+  const [playGateActive, setPlayGateActive] = useState(false);
+  const [challengeGateActive, setChallengeGateActive] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [unlockNotice, setUnlockNotice] = useState(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreEmail, setRestoreEmail] = useState("");
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreSent, setRestoreSent] = useState(false);
+  const [manualTokenOpen, setManualTokenOpen] = useState(false);
+  const [manualToken, setManualToken] = useState("");
+
+  // Single shared activation path — used right after a Stripe redirect AND
+  // when a restored code is pasted in manually, so both cases get the same
+  // webhook-lag retry handling rather than the manual path being a
+  // weaker one-shot attempt. Same shape as Jumpin' Pin's activateToken.
+  const activateToken = useCallback(async (token) => {
+    setUnlockNotice("Checking your purchase…");
+    try {
+      let verified = false;
+      const deviceId = getOrCreateDeviceId();
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const statusRes = await fetch(`${WORKER_URL}/check-status?token=${token}`);
+        const statusData = await statusRes.json().catch(() => ({}));
+        if (statusData.status === "paid") { verified = true; break; }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      if (!verified) {
+        setUnlockNotice("Couldn't confirm that purchase yet — try Restore Purchase in a minute.");
+        return;
+      }
+      const actRes = await fetch(`${WORKER_URL}/activate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, deviceId }),
+      });
+      if (actRes.ok) {
+        writeProRecord({ token, deviceId, confirmedAt: Date.now() });
+        setIsPro(true);
+        setPlayGateActive(false);
+        setChallengeGateActive(false);
+        setUnlockNotice(null);
+        setManualTokenOpen(false);
+        setManualToken("");
+      } else {
+        const data = await actRes.json().catch(() => ({}));
+        setUnlockNotice(data.error || "That code didn't check out — double check it and try again.");
+      }
+    } catch (e) {
+      setUnlockNotice("Something went wrong checking your purchase — try again shortly.");
+    }
+  }, []);
+
+  async function startCheckout() {
+    setCheckoutBusy(true);
+    setUnlockNotice(null);
+    try {
+      const res = await fetch(`${WORKER_URL}/create-checkout`, { method: "POST" });
+      const data = await res.json();
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        setUnlockNotice("Couldn't start checkout — try again shortly.");
+        setCheckoutBusy(false);
+      }
+    } catch (e) {
+      setUnlockNotice("Couldn't reach the store — check your connection and try again.");
+      setCheckoutBusy(false);
+    }
+  }
+
+  async function submitRestoreEmail() {
+    if (!restoreEmail.includes("@")) return;
+    setRestoreBusy(true);
+    try {
+      await fetch(`${WORKER_URL}/resend-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: restoreEmail }),
+      });
+      setRestoreSent(true);
+    } catch (e) {
+      setRestoreSent(true); // same message either way — matches the worker's deliberately vague response
+    } finally {
+      setRestoreBusy(false);
+    }
+  }
+
+  // On load: pick up ?token=...&paid=1 from a Stripe redirect, ?restore=...
+  // from an emailed magic link, or re-check a previously stored token that
+  // hasn't confirmed yet (e.g. tab closed mid-flow). Skips re-verifying
+  // once isPro is already true locally.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const redirectToken = params.get("token");
+    const paid = params.get("paid");
+    if (redirectToken && paid === "1") {
+      window.history.replaceState({}, "", window.location.pathname);
+      activateToken(redirectToken);
+      return;
+    }
+    const restoreToken = params.get("restore");
+    if (restoreToken) {
+      window.history.replaceState({}, "", window.location.pathname);
+      activateToken(restoreToken);
+      return;
+    }
+    const stored = loadProRecord();
+    if (stored?.token && !isPro) {
+      activateToken(stored.token);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function devResetQuota() {
+    const fresh = { date: todayLocalKey(), playCount: 0, challengeCount: 0 };
+    writeFreemiumState(fresh);
+    setFreemium(fresh);
+    setPlayGateActive(false);
+    setChallengeGateActive(false);
+  }
+
+  // ---------- Share / brag card ----------
+  const [shareStatus, setShareStatus] = useState("");
+  async function handleShareVictory(side, statLine, badgeLine) {
+    setShareStatus("Preparing card…");
+    try {
+      const status = await shareVictory({ side, statLine, badgeLine });
+      setShareStatus(status);
+      if (status) setTimeout(() => setShareStatus(""), 4000);
+    } catch (e) {
+      setShareStatus("Couldn't share — try again.");
+      setTimeout(() => setShareStatus(""), 4000);
+    }
+  }
+
+  const PAD = 22, MIN_CELL = 22, MAX_CELL = 42, MAX_BOARD_WIDTH = 500;
+  // Total extra width the two rope borders + runic side columns add beyond
+  // the raw board div itself (OuterRopeFrame padding + RunicFrame's west/
+  // east text columns + BoardFrame padding, each side, doubled). The old
+  // formula only ever subtracted the page's own 24px padding and had no
+  // idea this chrome existed, so on a narrow phone the whole frame ended
+  // up wider than the viewport and got silently clipped by overflow-x:
+  // hidden — the actual bug behind the missing east/west borders.
+  const FRAME_CHROME = 80;
+  const [viewportWidth, setViewportWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 390);
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const CELL = useMemo(() => {
+    const usableWidth = Math.min(viewportWidth - 24 - FRAME_CHROME, MAX_BOARD_WIDTH);
+    const raw = (usableWidth - PAD * 2) / (SIZE - 1);
+    return Math.max(MIN_CELL, Math.min(MAX_CELL, raw));
+  }, [viewportWidth]);
+  const boardSize = (SIZE - 1) * CELL + PAD * 2;
+
+  const initialSave = useMemo(() => loadSave(), []);
+  const [board, setBoard] = useState(() => initialSave?.board || initialBoard());
+  const [turn, setTurn] = useState(() => initialSave?.turn || "att");
+  const [selected, setSelected] = useState(null); // never persisted — just a UI focus, not real progress
+  const [lastMove, setLastMove] = useState(() => initialSave?.lastMove || null);
+  const [winner, setWinner] = useState(() => initialSave?.winner || null);
+  const [message, setMessage] = useState(() => initialSave?.message || "Muscovites move first — tap a dark piece.");
+  const [capturePopKey, setCapturePopKey] = useState(0);
+  const [capturePopSide, setCapturePopSide] = useState("att");
+  const [glow, setGlow] = useState(null);
+  const [moveCount, setMoveCount] = useState(() => initialSave?.moveCount || 0);
+
+  // Autosave on every real state change — deliberately excludes transient
+  // UI state like `selected` and the capture/glow pop timers.
+  useEffect(() => {
+    writeSave({ board, turn, winner, message, moveCount, lastMove });
+  }, [board, turn, winner, message, moveCount, lastMove]);
+
+  const kingPos = useMemo(() => {
+    for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (board[r][c] === "king") return { r, c };
+    return null;
+  }, [board]);
+
+  const attCount = useMemo(() => board.flat().filter((p) => p === "att").length, [board]);
+  const defCount = useMemo(() => board.flat().filter((p) => p === "def").length, [board]);
+
+  // ---------- Berserker state ----------
+  // Recomputed every time the board changes. `wasLoose` tracks the
+  // previous render's state so we only fire the big transition moment
+  // once, right when the king actually crosses the threshold — not on
+  // every render while he stays loose, and not again if he settles back
+  // down and breaks free a second time (that's a fresh moment, fires again).
+  const kingLoose = useMemo(() => {
+    if (!kingPos) return false;
+    return isKingLoose(board, kingPos.r, kingPos.c);
+  }, [board, kingPos]);
+  const [berserkPopKey, setBerserkPopKey] = useState(0);
+  const wasLooseRef = useRef(false);
+  useEffect(() => {
+    if (kingLoose && !wasLooseRef.current) {
+      setBerserkPopKey((k) => k + 1);
+    }
+    wasLooseRef.current = kingLoose;
+  }, [kingLoose]);
+
+  const legalDestSet = useMemo(() => {
+    if (!selected) return new Set();
+    return new Set(legalDestinations(board, selected.r, selected.c).map(([r, c]) => key(r, c)));
+  }, [selected, board]);
+
+  function triggerGlow(side) {
+    setGlow({ side, key: Date.now() });
+    setTimeout(() => setGlow(null), 1300);
+  }
+
+  function handleClick(r, c) {
+    if (winner) return;
+    const piece = board[r][c];
+    const mySide = turn;
+    const pieceBelongsToTurn = piece === mySide || (piece === "king" && mySide === "def");
+
+    if (selected) {
+      if (legalDestSet.has(key(r, c))) {
+        movePiece(selected.r, selected.c, r, c);
+        return;
+      }
+      if (pieceBelongsToTurn) { setSelected({ r, c }); return; }
+      setSelected(null);
+      return;
+    }
+    if (pieceBelongsToTurn) setSelected({ r, c });
+  }
+
+  function movePiece(fr, fc, tr, tc) {
+    const piece = board[fr][fc];
+    const next = board.map((row) => row.slice());
+    next[fr][fc] = null;
+    next[tr][tc] = piece;
+
+    const side = piece === "king" ? "def" : piece;
+    // The unarmed-king variant: this is one of the genuinely disputed rules
+    // across historical sources — some traditions let the king fight,
+    // others don't. Going with "unarmed" here: the king can still be used
+    // as the ally/anvil when a regular defender closes a capture against
+    // him, but moving the king himself never captures anything directly.
+    const captured = piece === "king" ? [] : resolveCaptures(next, tr, tc, side);
+    captured.forEach(([r, c]) => { next[r][c] = null; });
+    if (captured.length > 0) {
+      setCapturePopSide(side);
+      setCapturePopKey((k) => k + 1);
+      triggerGlow(side);
+    }
+
+    setBoard(next);
+    setSelected(null);
+    setLastMove({ from: { r: fr, c: fc }, to: { r: tr, c: tc } });
+    setMoveCount((m) => m + 1);
+
+    if (piece === "king" && isCorner(tr, tc)) {
+      setWinner("def");
+      setMessage("The king reaches the corner — defenders win!");
+      return;
+    }
+    if (piece === "att") {
+      const kp = kingPos;
+      // king may have just been captured by this very move
+      const newKingPos = (() => {
+        for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (next[r][c] === "king") return { r, c };
+        return null;
+      })();
+      const remainingDef = next.flat().filter((p) => p === "def").length;
+      const isLastStand = remainingDef === 0; // king is the only defender left on the board
+      if (newKingPos && checkKingCaptured(next, newKingPos.r, newKingPos.c, isLastStand)) {
+        setWinner("att");
+        setMessage(
+          isLastStand
+            ? "The king's last stand — surrounded alone, even the edge can't save him. Muscovites win!"
+            : "The king is surrounded — attackers win!"
+        );
+        return;
+      }
+    }
+
+    const nextTurn = turn === "att" ? "def" : "att";
+    setTurn(nextTurn);
+    setMessage(
+      captured.length > 0
+        ? `${side === "att" ? "Muscovites" : "Swedes"} captured ${captured.length} piece${captured.length > 1 ? "s" : ""} — ${nextTurn === "att" ? "Muscovites'" : "Swedes'"} move.`
+        : `${nextTurn === "att" ? "Muscovites'" : "Swedes'"} move.`
+    );
+  }
+
+  // Counts a completed Play game exactly once — fires only when `winner`
+  // genuinely transitions from null to set *this session*, not when a
+  // finished game is loaded from a save (which would double-count a game
+  // that was already tallied at the moment it was actually won).
+  const prevPlayWinnerRef = useRef(winner);
+  useEffect(() => {
+    if (winner && !prevPlayWinnerRef.current) {
+      setFreemium((prev) => {
+        const next = { ...prev, playCount: prev.playCount + 1 };
+        writeFreemiumState(next);
+        return next;
+      });
+    }
+    prevPlayWinnerRef.current = winner;
+  }, [winner]);
+
+  const reset = useCallback(() => {
+    if (!isPro && freemium.playCount >= FREE_GAMES_PER_MODE_PER_DAY) {
+      setPlayGateActive(true);
+      return;
+    }
+    clearSave();
+    setBoard(initialBoard());
+    setTurn("att");
+    setSelected(null);
+    setLastMove(null);
+    setWinner(null);
+    setMoveCount(0);
+    setMessage("Muscovites move first — tap a dark piece.");
+  }, [isPro, freemium.playCount]);
+
+  const [mode, setMode] = useState("challenge"); // "play" | "challenge" — Challenge is the default landing mode
+
+  // Pro tone picker — same interaction as Jumpin' Pin: tapping a locked
+  // tone shows a brief upsell toast instead of switching, rather than
+  // just doing nothing (silent failure reads as broken, not locked).
+  const [upsell, setUpsell] = useState(null);
+  function selectTheme(key) {
+    const theme = THEMES[key];
+    if (theme.tier === "pro" && !isPro) {
+      setUpsell(theme.name);
+      setTimeout(() => setUpsell(null), 2200);
+      return;
+    }
+    setThemeKey(key);
+  }
+
+  // ---------- Challenge mode — human vs AI ----------
+  // Separate state again, same reasoning as Play/Challenge always having
+  // kept independent state: entering Challenge never disturbs an
+  // in-progress hotseat Play game and vice versa.
+  // humanSide is null until chosen — "let the player choose each game"
+  // means every fresh game asks again, rather than defaulting to one side.
+  const initialChallengeSave = useMemo(() => loadChallengeSave(), []);
+  const [challengeBoard, setChallengeBoard] = useState(() => initialChallengeSave?.board || initialBoard());
+  const [challengeTurn, setChallengeTurn] = useState(() => initialChallengeSave?.turn || "att");
+  const [challengeSelected, setChallengeSelected] = useState(null);
+  const [challengeLastMove, setChallengeLastMove] = useState(() => initialChallengeSave?.lastMove || null);
+  const [challengeWinner, setChallengeWinner] = useState(() => initialChallengeSave?.winner || null);
+  const [challengeMessage, setChallengeMessage] = useState(() => initialChallengeSave?.message || "");
+  const [humanSide, setHumanSide] = useState(() => initialChallengeSave?.humanSide || null);
+  const [aiThinking, setAiThinking] = useState(false);
+  const [challengeMoveCount, setChallengeMoveCount] = useState(() => initialChallengeSave?.moveCount || 0);
+
+  useEffect(() => {
+    if (mode === "challenge") {
+      writeChallengeSave({ board: challengeBoard, turn: challengeTurn, winner: challengeWinner, message: challengeMessage, humanSide, lastMove: challengeLastMove, moveCount: challengeMoveCount });
+    }
+  }, [challengeBoard, challengeTurn, challengeWinner, challengeMessage, humanSide, challengeLastMove, challengeMoveCount, mode]);
+
+  const challengeLegalDestSet = useMemo(() => {
+    if (!challengeSelected) return new Set();
+    return new Set(legalDestinations(challengeBoard, challengeSelected.r, challengeSelected.c).map(([r, c]) => key(r, c)));
+  }, [challengeSelected, challengeBoard]);
+
+  // Shared by both the human's click and the AI's chosen move, so the two
+  // paths can never diverge on capture/win handling.
+  function commitChallengeMove(from, to, side) {
+    const { board: next, captured, kingCaptured, kingEscaped } = simulateMove(challengeBoard, from, to, side);
+    setChallengeBoard(next);
+    setChallengeSelected(null);
+    setChallengeLastMove({ from, to });
+    setChallengeMoveCount((m) => m + 1);
+
+    if (kingEscaped) {
+      setChallengeWinner("def");
+      setChallengeMessage("The king escapes to a corner — defenders win!");
+      return;
+    }
+    if (kingCaptured) {
+      setChallengeWinner("att");
+      setChallengeMessage("The king is surrounded — attackers win!");
+      return;
+    }
+    const nextTurn = side === "att" ? "def" : "att";
+    setChallengeTurn(nextTurn);
+    const nextIsHuman = nextTurn === humanSide;
+    setChallengeMessage(
+      captured.length > 0
+        ? `${side === "att" ? "Muscovites" : "Swedes"} captured ${captured.length} piece${captured.length > 1 ? "s" : ""} — ${nextIsHuman ? "your move." : "the AI is thinking..."}`
+        : nextIsHuman ? "Your move." : "The AI is thinking..."
+    );
+  }
+
+  function challengeHandleClick(r, c) {
+    if (challengeWinner || aiThinking || challengeTurn !== humanSide) return;
+    const piece = challengeBoard[r][c];
+    const belongsToTurn = piece === challengeTurn || (piece === "king" && challengeTurn === "def");
+
+    if (challengeSelected) {
+      if (challengeLegalDestSet.has(key(r, c))) {
+        commitChallengeMove(challengeSelected, { r, c }, challengeTurn);
+        return;
+      }
+      if (belongsToTurn) { setChallengeSelected({ r, c }); return; }
+      setChallengeSelected(null);
+      return;
+    }
+    if (belongsToTurn) setChallengeSelected({ r, c });
+  }
+
+  // Fires the AI's move whenever it becomes the AI's turn.
+  useEffect(() => {
+    if (mode !== "challenge" || !humanSide || challengeWinner) return;
+    if (challengeTurn === humanSide) return;
+    setAiThinking(true);
+    const timer = setTimeout(() => {
+      const move = chooseAiMove(challengeBoard, challengeTurn);
+      if (move) commitChallengeMove(move.from, move.to, challengeTurn);
+      setAiThinking(false);
+    }, 400); // small delay so "AI is thinking..." is actually visible, not just a flash
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challengeTurn, mode, humanSide, challengeWinner]);
+
+  // Same "genuine transition this session" pattern as Play mode's counter.
+  const prevChallengeWinnerRef = useRef(challengeWinner);
+  useEffect(() => {
+    if (challengeWinner && !prevChallengeWinnerRef.current) {
+      setFreemium((prev) => {
+        const next = { ...prev, challengeCount: prev.challengeCount + 1 };
+        writeFreemiumState(next);
+        return next;
+      });
+    }
+    prevChallengeWinnerRef.current = challengeWinner;
+  }, [challengeWinner]);
+
+  function challengeReset() {
+    if (!isPro && freemium.challengeCount >= FREE_GAMES_PER_MODE_PER_DAY) {
+      setChallengeGateActive(true);
+      return;
+    }
+    clearChallengeSave();
+    setChallengeBoard(initialBoard());
+    setChallengeTurn("att");
+    setChallengeSelected(null);
+    setChallengeLastMove(null);
+    setChallengeMoveCount(0);
+    setChallengeWinner(null);
+    setChallengeMessage("");
+    setHumanSide(null); // back to the side-select screen — "let the player choose each game"
+  }
+  function challengeChooseSide(side) {
+    if (!isPro && freemium.challengeCount >= FREE_GAMES_PER_MODE_PER_DAY) {
+      setChallengeGateActive(true);
+      return;
+    }
+    setHumanSide(side);
+    clearChallengeSave();
+    setChallengeBoard(initialBoard());
+    setChallengeTurn("att");
+    setChallengeSelected(null);
+    setChallengeLastMove(null);
+    setChallengeMoveCount(0);
+    setChallengeWinner(null);
+    setChallengeMessage(side === "att" ? "Your move." : "The AI is thinking...");
+  }
+  const challengeAttCount = useMemo(() => challengeBoard.flat().filter((p) => p === "att").length, [challengeBoard]);
+  const challengeDefCount = useMemo(() => challengeBoard.flat().filter((p) => p === "def").length, [challengeBoard]);
+
+  return (
+    <div style={{ minHeight: "100vh", background: t.bg, color: t.text, fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif", display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 12px 40px", transition: "background 200ms ease, color 200ms ease" }}>
+
+      {showIntro && (
+        <IntroCrawl
+          seriesLabel="ANCIENT GAMES · 04"
+          gameTitle="HNEFATAFL"
+          gameTagline="Viking siege game · one board, two players"
+          crawlText={HNEFATAFL_CRAWL}
+          onDone={dismissIntro}
+        />
+      )}
+
+      <style>{`
+        @keyframes msgPop {
+          0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+          15% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+          25% { transform: translate(-50%, -50%) scale(1); }
+          75% { opacity: 1; }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+        }
+        @keyframes glowBurst {
+          0% { opacity: 0; } 18% { opacity: 0.9; } 70% { opacity: 0.9; } 100% { opacity: 0; }
+        }
+        @keyframes kingFury {
+          from { filter: brightness(1); }
+          to { filter: brightness(1.25); }
+        }
+        .hf-glow-top, .hf-glow-bottom {
+          position: fixed; left: 0; right: 0; height: 30vh;
+          pointer-events: none; z-index: 900;
+          animation: glowBurst 1.3s ease-out forwards;
+        }
+        .hf-glow-top { top: 0; }
+        .hf-glow-bottom { bottom: 0; }
+      `}</style>
+
+      {glow && (() => {
+        const c1 = glow.side === "att" ? "232,196,104" : "127,232,201";
+        return (
+          <React.Fragment key={glow.key}>
+            <div className="hf-glow-top" style={{ background: `linear-gradient(to bottom, rgba(${c1},0.35) 0%, transparent 100%)` }} />
+            <div className="hf-glow-bottom" style={{ background: `linear-gradient(to top, rgba(${c1},0.35) 0%, transparent 100%)` }} />
+          </React.Fragment>
+        );
+      })()}
+
+      {capturePopKey > 0 && !winner && (
+        <div key={`cap-${capturePopKey}`} style={{ position: "fixed", top: "38vh", left: "50%", zIndex: 951, pointerEvents: "none", animation: "msgPop 1.3s ease forwards", textAlign: "center" }}>
+          <div style={{
+            fontSize: 44, fontWeight: 900, fontFamily: "Georgia, serif", whiteSpace: "nowrap",
+            color: capturePopSide === "att" ? "#e8c468" : DEF_FROM,
+            textShadow: capturePopSide === "att"
+              ? "0 0 32px rgba(232,196,104,0.85), 0 2px 6px rgba(0,0,0,0.8)"
+              : "0 0 32px rgba(127,232,201,0.85), 0 2px 6px rgba(0,0,0,0.8)",
+          }}>
+            CAPTURED!
+          </div>
+        </div>
+      )}
+
+      {berserkPopKey > 0 && !winner && mode === "play" && (
+        <div key={`berserk-${berserkPopKey}`} style={{ position: "fixed", top: "36vh", left: "50%", zIndex: 952, pointerEvents: "none", animation: "msgPop 1.9s ease forwards", textAlign: "center" }}>
+          <div style={{
+            fontSize: 34, fontWeight: 900, fontFamily: "Georgia, serif", whiteSpace: "nowrap", letterSpacing: 2,
+            color: "#ff8a4c",
+            textShadow: "0 0 12px rgba(255,138,76,0.6), 0 0 40px rgba(255,90,30,0.9), 0 2px 6px rgba(0,0,0,0.8)",
+          }}>
+            THE KING IS LOOSE
+          </div>
+        </div>
+      )}
+
+      {winner && (
+        <div style={{ position: "fixed", top: "38vh", left: "50%", zIndex: 951, pointerEvents: "none", animation: "msgPop 2.4s ease forwards", textAlign: "center" }}>
+          <div style={{
+            fontSize: 40, fontWeight: 900, fontFamily: "Georgia, serif", whiteSpace: "nowrap",
+            color: winner === "def" ? KING_FROM : "#e8c468",
+            textShadow: "0 0 32px rgba(232,196,104,0.85), 0 2px 6px rgba(0,0,0,0.8)",
+          }}>
+            {winner === "def" ? "KING ESCAPES!" : "KING CAPTURED!"}
+          </div>
+        </div>
+      )}
+
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, letterSpacing: 4, color: t.muted, fontWeight: 700, marginBottom: 4 }}>
+          ANCIENT GAMES · 04
+        </div>
+        <h1 style={{ fontSize: 25, fontWeight: 800, letterSpacing: 1, margin: 0, textTransform: "uppercase" }}>
+          Hnefa<span style={{ color: t.accent }}>tafl</span>
+        </h1>
+        <div style={{ fontSize: 11, color: t.muted, marginTop: 4, letterSpacing: 0.5 }}>
+          Viking siege game · play AI or challenge a friend
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap", justifyContent: "center" }}>
+        <button onClick={() => selectTheme(themeKey === "light" ? "dark" : "light")} style={pillStyle(t, themeKey === "light" || themeKey === "dark")}>
+          {themeKey === "light" ? "☀️ Light" : "🌙 Dark"}
+        </button>
+        <span style={{ width: 1, height: 20, background: t.panelBorder }} />
+        <button onClick={() => setMode("play")} style={pillStyle(t, mode === "play")}>Play</button>
+        <button onClick={() => setMode("challenge")} style={pillStyle(t, mode === "challenge")}>🤖 Challenge</button>
+        {/* Sandbox removed — this slot is reserved for "Challenge a Friend to a Game" once that's built */}
+        <span style={{ width: 1, height: 20, background: t.panelBorder }} />
+        <button onClick={() => setShowIntro(true)} style={pillStyle(t, false)} title="Watch the intro again">
+          🎬
+        </button>
+        <button onClick={devResetQuota} style={pillStyle(t, false)} title="DEV ONLY — reset today's freemium quota">
+          🔧 {freemium.playCount}/{FREE_GAMES_PER_MODE_PER_DAY} · {freemium.challengeCount}/{FREE_GAMES_PER_MODE_PER_DAY}{isPro ? " · PRO" : ""}
+        </button>
+      </div>
+
+      {/* Pro unlock / restore — always visible regardless of gate status,
+          not buried inside the paywall screen. Losing Pro access (a cache
+          clear, a new device) has nothing to do with hitting today's free-
+          game limit, so recovery needs to be reachable either way. Same
+          shape as Jumpin' Pin's unlock/restore block. */}
+      {isPro ? (
+        <div style={{ fontSize: 10, color: t.accent, marginBottom: 14, fontWeight: 700, textAlign: "center" }}>
+          ✓ Pro unlocked
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 14 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={startCheckout} disabled={checkoutBusy} style={btnStyle(t, checkoutBusy, true)}>
+              {checkoutBusy ? "Redirecting…" : "💳 Unlock Pro — $2"}
+            </button>
+            <button
+              onClick={() => { setRestoreOpen(true); setRestoreSent(false); }}
+              style={{ ...btnStyle(t, false), fontSize: 11, padding: "9px 10px" }}
+            >
+              Restore Purchase
+            </button>
+          </div>
+          {unlockNotice && (
+            <div style={{ fontSize: 10, color: t.muted, textAlign: "center", maxWidth: 260 }}>{unlockNotice}</div>
+          )}
+          <button
+            onClick={() => setManualTokenOpen((v) => !v)}
+            style={{ background: "none", border: "none", color: t.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
+          >
+            have a code already?
+          </button>
+          {manualTokenOpen && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={manualToken}
+                onChange={(e) => setManualToken(e.target.value)}
+                placeholder="paste code"
+                style={{ fontSize: 11, padding: "7px 10px", borderRadius: 8, border: `1px solid ${t.panelBorder}`, background: t.panel, color: t.text, width: 160 }}
+              />
+              <button
+                onClick={() => activateToken(manualToken.trim())}
+                disabled={!manualToken.trim()}
+                style={{ ...btnStyle(t, !manualToken.trim()), fontSize: 11, padding: "7px 12px" }}
+              >
+                Apply
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {restoreOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          onClick={() => setRestoreOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 320, width: "100%", background: t.panel, border: `1px solid ${t.panelBorder}`, borderRadius: 14, padding: 22, color: t.text }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>Restore Purchase</div>
+            {restoreSent ? (
+              <div style={{ fontSize: 12, color: t.muted, lineHeight: 1.6 }}>
+                If that email has a Hnefatafl purchase on file, an unlock link is on its way — just tap it from
+                your inbox and you're back in. A backup code's in there too if the link ever doesn't open right;
+                paste that via "have a code already?" below.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, color: t.muted, marginBottom: 12, lineHeight: 1.5 }}>
+                  Enter the email you used at checkout — we'll send your unlock code to it.
+                </div>
+                <input
+                  type="email"
+                  value={restoreEmail}
+                  onChange={(e) => setRestoreEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  style={{ width: "100%", fontSize: 13, padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.panelBorder}`, background: t.bg, color: t.text, marginBottom: 12 }}
+                />
+                <button
+                  onClick={submitRestoreEmail}
+                  disabled={restoreBusy || !restoreEmail.includes("@")}
+                  style={{ ...btnStyle(t, restoreBusy || !restoreEmail.includes("@"), true), width: "100%", justifyContent: "center" }}
+                >
+                  {restoreBusy ? "Sending…" : "Send my code"}
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setRestoreOpen(false)}
+              style={{ marginTop: 10, width: "100%", background: "none", border: "none", color: t.muted, fontSize: 11, cursor: "pointer" }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pro tone picker — same tones, colours, and lock/upsell behaviour
+          as Jumpin' Pin, for a consistent feel across the series. */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16, flexWrap: "wrap", justifyContent: "center" }}>
+        {Object.entries(THEMES)
+          .filter(([, v]) => v.tier === "pro")
+          .map(([key, v]) => (
+            <button
+              key={key}
+              onClick={() => selectTheme(key)}
+              title={v.name}
+              style={{
+                position: "relative", width: 30, height: 30, borderRadius: "50%",
+                border: themeKey === key ? `2px solid ${t.accent}` : `1px solid ${t.panelBorder}`,
+                background: v.swatch, cursor: "pointer", padding: 0,
+              }}
+            >
+              {!isPro && (
+                <span style={{
+                  position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "rgba(0,0,0,0.45)", borderRadius: "50%", fontSize: 12,
+                }}>
+                  🔒
+                </span>
+              )}
+            </button>
+          ))}
+        <span style={{ fontSize: 10, color: t.muted, marginLeft: 2 }}>PRO TONES</span>
+        {upsell && (
+          <span style={{ fontSize: 11, color: t.accent, fontWeight: 700, marginLeft: 6 }}>
+            🔒 {upsell} is a Pro tone — unlock unlimited play to use it.
+          </span>
+        )}
+      </div>
+
+      {mode === "play" && playGateActive && (
+        <FreemiumGate
+          t={t}
+          modeLabel="Play"
+          onUnlock={startCheckout}
+          unlocking={checkoutBusy}
+          unlockNotice={unlockNotice}
+        />
+      )}
+
+      {mode === "play" && !playGateActive && (
+      <>
+      <div style={{ display: "flex", gap: 18, marginBottom: 14, fontFamily: "'Courier New', monospace", fontSize: 13, background: t.panel, border: `1px solid ${t.panelBorder}`, borderRadius: 10, padding: "8px 18px" }}>
+        <div>MUS <span style={{ color: t.pegFrom, fontWeight: 700 }}>{attCount}</span></div>
+        <div>SWE <span style={{ color: DEF_FROM, fontWeight: 700 }}>{defCount}</span></div>
+        <div>MOVE <span style={{ color: t.accent, fontWeight: 700 }}>{moveCount}</span></div>
+        <div>TURN <span style={{ color: t.accent, fontWeight: 700 }}>{turn === "att" ? "Muscovites" : "Swedes"}</span></div>
+      </div>
+
+      <div style={{ fontSize: 13, color: t.muted, marginBottom: 14, textAlign: "center", minHeight: 18, fontWeight: 600, maxWidth: 300 }}>
+        {message}
+      </div>
+
+      {/* Board */}
+      <OuterRopeFrame t={t}>
+      <RunicFrame>
+      <BoardFrame t={t}>
+      <div style={{ position: "relative", width: boardSize, height: boardSize, background: t.panel, borderRadius: 10, boxShadow: `inset 0 0 0 1px ${t.panelBorder}` }}>
+        {Array.from({ length: SIZE * SIZE }).map((_, i) => {
+          const r = Math.floor(i / SIZE), c = i % SIZE;
+          const x = PAD + c * CELL, y = PAD + r * CELL;
+          const piece = board[r][c];
+          const size = Math.min(CELL - 6, 30);
+          const restricted = isRestricted(r, c);
+          const isDest = legalDestSet.has(key(r, c));
+          const isSelected = selected && selected.r === r && selected.c === c;
+          const isLastMove = lastMove && ((lastMove.from.r === r && lastMove.from.c === c) || (lastMove.to.r === r && lastMove.to.c === c));
+          const pieceIsKing = piece === "king";
+          const pieceSide = piece === "king" ? "def" : piece;
+          const clickable = isDest || (piece && (piece === turn || (pieceIsKing && turn === "def")));
+
+          return (
+            <div key={i} onClick={() => handleClick(r, c)} style={{
+              position: "absolute", left: x - CELL / 2 + 1, top: y - CELL / 2 + 1, width: CELL - 2, height: CELL - 2,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: clickable ? "pointer" : "default",
+            }}>
+              <div style={{
+                width: "92%", height: "92%", borderRadius: 4,
+                background: restricted ? t.restricted : "transparent",
+                boxShadow: isDest
+                  ? `inset 0 0 0 2px ${t.accent}`
+                  : isLastMove
+                  ? "inset 0 0 0 2px #e8c468"
+                  : "none",
+                display: "flex", alignItems: "center", justifyContent: "center", position: "relative",
+              }}>
+                {restricted && !piece && (
+                  <span style={{ fontSize: size * 0.5, opacity: 0.6 }}>{isCorner(r, c) ? "◆" : "♛"}</span>
+                )}
+                {piece && (
+                  <div style={{
+                    width: pieceIsKing ? size * 1.15 : size, height: pieceIsKing ? size * 1.15 : size, borderRadius: "50%",
+                    background: pieceIsKing
+                      ? `radial-gradient(circle at 35% 30%, ${KING_FROM}, ${KING_TO})`
+                      : pieceSide === "att"
+                      ? `radial-gradient(circle at 35% 30%, ${t.pegFrom}, ${t.pegTo})`
+                      : `radial-gradient(circle at 35% 30%, ${DEF_FROM}, ${DEF_TO})`,
+                    boxShadow: isSelected
+                      ? `0 0 0 3px ${t.accent}, 0 2px 4px rgba(0,0,0,0.5)`
+                      : pieceIsKing
+                      ? (kingLoose
+                          ? "0 0 0 2px #ff8a4c, 0 0 16px rgba(255,90,30,0.9), 0 2px 4px rgba(0,0,0,0.5)"
+                          : "0 0 0 2px #ffffff, 0 0 10px rgba(255,233,176,0.8), 0 2px 4px rgba(0,0,0,0.5)")
+                      : "0 2px 3px rgba(0,0,0,0.5)",
+                    transform: isSelected ? "scale(1.12)" : (pieceIsKing && kingLoose ? "scale(1.06)" : "scale(1)"),
+                    animation: pieceIsKing && kingLoose ? "kingFury 0.9s ease-in-out infinite alternate" : "none",
+                    transition: "transform 120ms ease, box-shadow 120ms ease",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {pieceIsKing && (
+                      <span style={{ fontSize: size * 0.62, lineHeight: 1, filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.6))" }}>
+                        ♛
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      </BoardFrame>
+      </RunicFrame>
+      </OuterRopeFrame>
+
+      <button onClick={reset} style={btnStyle(t, false)}>
+        🔄 Reset
+      </button>
+
+      {winner && (
+        <div style={{ marginTop: 18, textAlign: "center", padding: "14px 20px", borderRadius: 12, background: t.panel, border: `1px solid ${t.panelBorder}`, maxWidth: 320 }}>
+          <div style={{ fontSize: 12, letterSpacing: 2, color: t.muted, marginBottom: 4 }}>GAME OVER</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: t.accent, marginBottom: 6 }}>
+            {winner === "def" ? "Swedes win — the king is free." : "Muscovites win — the king has fallen."}
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 8, flexWrap: "wrap" }}>
+            <button onClick={reset} style={btnStyle(t, false, true)}>Play Again</button>
+            <button onClick={() => handleShareVictory(
+              winner,
+              `${winner === "att" ? "Muscovites" : "Swedes"} victory → king ${winner === "def" ? "escaped" : "captured"} in ${moveCount} moves`,
+              `${sideTitle(winner)} · ${performanceTitle(moveCount)}`
+            )} style={btnStyle(t, false)}>📤 Share</button>
+          </div>
+          {shareStatus && <div style={{ fontSize: 12, color: t.muted, marginTop: 8 }}>{shareStatus}</div>}
+        </div>
+      )}
+
+      <div style={{ fontSize: 10, color: t.muted, marginTop: 24, textAlign: "center", maxWidth: 340, lineHeight: 1.6 }}>
+        Muscovites (gold, 24) move first, Swedes (teal, 12) shield the king (bright gold, centre throne).
+        All pieces slide like a chess rook, any distance, no jumping. Only the king may stand on the throne or the four corners.
+        Sandwich an enemy piece between two of yours (or a throne/corner) to capture it. Surround the king on all four sides to win as Muscovites; get the king to any corner to win as Swedes.
+        This is one specific ruleset (Copenhagen-style, 11x11) — board size and capture nuances vary by historical source. Traditional
+        names per Linnaeus's 1732 account of Tablut: Swedes defend, Muscovites attack.
+      </div>
+      </>
+      )}
+
+      {mode === "challenge" && challengeGateActive && (
+        <FreemiumGate
+          t={t}
+          modeLabel="Challenge"
+          onUnlock={startCheckout}
+          unlocking={checkoutBusy}
+          unlockNotice={unlockNotice}
+        />
+      )}
+
+      {mode === "challenge" && !challengeGateActive && !humanSide && (
+        <div style={{ textAlign: "center", maxWidth: 340 }}>
+          <div style={{ fontSize: 14, color: t.muted, marginBottom: 18, lineHeight: 1.6 }}>
+            Choose your side. The AI plays the other — one search-based opponent, no difficulty levels yet.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+            <button onClick={() => challengeChooseSide("att")} style={{ ...btnStyle(t, false, false), padding: "14px 20px", width: 220, justifyContent: "center" }}>
+              ⚔️ Muscovites
+            </button>
+            <button onClick={() => challengeChooseSide("def")} style={{ ...btnStyle(t, false, false), padding: "14px 20px", width: 220, justifyContent: "center" }}>
+              🛡️ Swedes
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === "challenge" && !challengeGateActive && humanSide && (
+      <>
+      <div style={{ display: "flex", gap: 18, marginBottom: 14, fontFamily: "'Courier New', monospace", fontSize: 13, background: t.panel, border: `1px solid ${t.panelBorder}`, borderRadius: 10, padding: "8px 18px" }}>
+        <div>MUS <span style={{ color: t.pegFrom, fontWeight: 700 }}>{challengeAttCount}</span></div>
+        <div>SWE <span style={{ color: DEF_FROM, fontWeight: 700 }}>{challengeDefCount}</span></div>
+        <div>YOU <span style={{ color: t.accent, fontWeight: 700 }}>{humanSide === "att" ? "Muscovites" : "Swedes"}</span></div>
+        <div>TURN <span style={{ color: t.accent, fontWeight: 700 }}>{challengeTurn === "att" ? "Muscovites" : "Swedes"}</span></div>
+      </div>
+
+      <div style={{ fontSize: 13, color: t.muted, marginBottom: 14, textAlign: "center", minHeight: 18, fontWeight: 600, maxWidth: 300 }}>
+        {aiThinking ? "🤔 The AI is thinking..." : challengeMessage}
+      </div>
+
+      <OuterRopeFrame t={t}>
+      <RunicFrame>
+      <BoardFrame t={t}>
+      <div style={{ position: "relative", width: boardSize, height: boardSize, background: t.panel, borderRadius: 10, boxShadow: `inset 0 0 0 1px ${t.panelBorder}`, opacity: aiThinking ? 0.85 : 1 }}>
+        {Array.from({ length: SIZE * SIZE }).map((_, i) => {
+          const r = Math.floor(i / SIZE), c = i % SIZE;
+          const x = PAD + c * CELL, y = PAD + r * CELL;
+          const piece = challengeBoard[r][c];
+          const size = Math.min(CELL - 6, 30);
+          const restricted = isRestricted(r, c);
+          const isDest = challengeLegalDestSet.has(key(r, c));
+          const isSelected = challengeSelected && challengeSelected.r === r && challengeSelected.c === c;
+          const isLastMove = challengeLastMove && ((challengeLastMove.from.r === r && challengeLastMove.from.c === c) || (challengeLastMove.to.r === r && challengeLastMove.to.c === c));
+          const pieceIsKing = piece === "king";
+          const pieceSide = piece === "king" ? "def" : piece;
+          const clickable = !aiThinking && challengeTurn === humanSide && (isDest || (piece && (piece === challengeTurn || (pieceIsKing && challengeTurn === "def"))));
+
+          return (
+            <div key={i} onClick={() => challengeHandleClick(r, c)} style={{
+              position: "absolute", left: x - CELL / 2 + 1, top: y - CELL / 2 + 1, width: CELL - 2, height: CELL - 2,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: clickable ? "pointer" : "default",
+            }}>
+              <div style={{
+                width: "92%", height: "92%", borderRadius: 4,
+                background: restricted ? t.restricted : "transparent",
+                boxShadow: isDest ? `inset 0 0 0 2px ${t.accent}` : isLastMove ? "inset 0 0 0 2px #e8c468" : "none",
+                display: "flex", alignItems: "center", justifyContent: "center", position: "relative",
+              }}>
+                {restricted && !piece && (
+                  <span style={{ fontSize: size * 0.5, opacity: 0.6 }}>{isCorner(r, c) ? "◆" : "♛"}</span>
+                )}
+                {piece && (
+                  <div style={{
+                    width: pieceIsKing ? size * 1.15 : size, height: pieceIsKing ? size * 1.15 : size, borderRadius: "50%",
+                    background: pieceIsKing
+                      ? `radial-gradient(circle at 35% 30%, ${KING_FROM}, ${KING_TO})`
+                      : pieceSide === "att"
+                      ? `radial-gradient(circle at 35% 30%, ${t.pegFrom}, ${t.pegTo})`
+                      : `radial-gradient(circle at 35% 30%, ${DEF_FROM}, ${DEF_TO})`,
+                    boxShadow: isSelected
+                      ? `0 0 0 3px ${t.accent}, 0 2px 4px rgba(0,0,0,0.5)`
+                      : pieceIsKing
+                      ? "0 0 0 2px #ffffff, 0 0 10px rgba(255,233,176,0.8), 0 2px 4px rgba(0,0,0,0.5)"
+                      : "0 2px 3px rgba(0,0,0,0.5)",
+                    transform: isSelected ? "scale(1.12)" : "scale(1)",
+                    transition: "transform 120ms ease, box-shadow 120ms ease",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {pieceIsKing && (
+                      <span style={{ fontSize: size * 0.62, lineHeight: 1, filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.6))" }}>♛</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      </BoardFrame>
+      </RunicFrame>
+      </OuterRopeFrame>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <button onClick={challengeReset} style={btnStyle(t, false)}>🔄 Reset</button>
+      </div>
+
+      {challengeWinner && (
+        <div style={{ marginTop: 18, textAlign: "center", padding: "14px 20px", borderRadius: 12, background: t.panel, border: `1px solid ${t.panelBorder}`, maxWidth: 320 }}>
+          <div style={{ fontSize: 12, letterSpacing: 2, color: t.muted, marginBottom: 4 }}>GAME OVER</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: t.accent, marginBottom: 6 }}>
+            {challengeWinner === humanSide ? "You win!" : "The AI wins."}
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 8, flexWrap: "wrap" }}>
+            <button onClick={challengeReset} style={btnStyle(t, false, true)}>Play Again</button>
+            {challengeWinner === humanSide && (
+              <button onClick={() => handleShareVictory(
+                challengeWinner,
+                `AI defeated → ${challengeMoveCount} moves as the ${challengeWinner === "att" ? "Muscovites" : "Swedes"}`,
+                `${sideTitle(challengeWinner)} · AI Slayer`
+              )} style={btnStyle(t, false)}>📤 Share</button>
+            )}
+          </div>
+          {shareStatus && <div style={{ fontSize: 12, color: t.muted, marginTop: 8 }}>{shareStatus}</div>}
+        </div>
+      )}
+
+      <div style={{ fontSize: 10, color: t.muted, marginTop: 24, textAlign: "center", maxWidth: 340, lineHeight: 1.6 }}>
+        Single search-based opponent (depth {AI_DEPTH}, alpha-beta pruned) — no difficulty levels yet, that's the
+        next tuning pass. Same rules and capture logic as Play mode.
+      </div>
+      </>
+      )}
+
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Hnefatafl />);
+</script>
+</body>
+</html>

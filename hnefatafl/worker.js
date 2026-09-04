@@ -24,7 +24,7 @@
 //   wrangler secret put RESEND_API_KEY
 // ══════════════════════════════════════════════════════════
 
-const PRICE_AMOUNT_CENTS = 400; // $4.00 USD
+const PRICE_AMOUNT_CENTS = 200; // $2.00 USD
 const CURRENCY = "usd"; // standing SCVD decision — all games ship in USD, not AUD
 const PRODUCT_NAME = "Hnefatafl — Unlimited Play (Lifetime)";
 const ACTIVATION_CAP = 10; // max devices per purchased token, matches Jumpin' Pin
@@ -117,6 +117,7 @@ async function stripeCreateCheckoutSession(env, token) {
 
 // ---------- Resend email ----------
 async function sendRestoreEmail(env, email, token) {
+  const restoreLink = `${GAME_URL}?restore=${token}`;
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -127,7 +128,7 @@ async function sendRestoreEmail(env, email, token) {
       from: FROM_EMAIL,
       to: email,
       subject: "Your Hnefatafl unlock code",
-      text: `Here's your Hnefatafl unlock code: ${token}\n\nOpen Hnefatafl, tap "Restore Purchase", and enter this code to unlock unlimited play on this device.\n\nThis code works on up to ${ACTIVATION_CAP} devices.`,
+      text: `Tap this link to unlock unlimited play on this device:\n${restoreLink}\n\nOr, if that link doesn't open right, open Hnefatafl, tap "have a code already?", and paste in this code instead:\n${token}\n\nThis works on up to ${ACTIVATION_CAP} devices.`,
     }),
   });
   return res.ok;

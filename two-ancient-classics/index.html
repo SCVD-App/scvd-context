@@ -222,6 +222,46 @@ async function onlineApiPost(path, body, secret) {
 // Generic Pro-unlock gate — reused by both games. gameLabel/mode are just
 // for the copy ("You've played your 3 free Royal Game of Ur Challenge
 // games today"); the actual quota check and Pro purchase are bundle-wide.
+function RestoreControl({ t, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm, manualToken, setManualToken, manualTokenOpen, setManualTokenOpen, onSubmitManualToken }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      {!showRestoreForm ? (
+        <button onClick={() => setShowRestoreForm(true)} style={{ fontSize: 11, color: t.muted, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+          Already purchased? Restore it
+        </button>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
+          <input
+            type="email" value={restoreEmail} onChange={(e) => setRestoreEmail(e.target.value)} placeholder="Email used at purchase"
+            style={{ fontSize: 12, padding: "7px 10px", borderRadius: 8, border: `1px solid ${t.panelBorder}`, background: t.panel, color: t.text, width: 200 }}
+          />
+          <button onClick={onSubmitRestore} style={{ ...btnStyle(t, false, true), fontSize: 12 }}>Send restore link</button>
+        </div>
+      )}
+      <button
+        onClick={() => setManualTokenOpen((v) => !v)}
+        style={{ background: "none", border: "none", color: t.muted, fontSize: 10, textDecoration: "underline", cursor: "pointer" }}
+      >
+        have a code or link already?
+      </button>
+      {manualTokenOpen && (
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            value={manualToken}
+            onChange={(e) => setManualToken(e.target.value)}
+            placeholder="paste code or restore link"
+            style={{ fontSize: 11, padding: "7px 10px", borderRadius: 8, border: `1px solid ${t.panelBorder}`, background: t.panel, color: t.text, width: 180 }}
+          />
+          <button onClick={onSubmitManualToken} disabled={!manualToken.trim()} style={{ ...btnStyle(t, !manualToken.trim()), fontSize: 11, padding: "7px 12px" }}>
+            Apply
+          </button>
+        </div>
+      )}
+      {restoreStatus && <div style={{ fontSize: 11, color: t.muted, maxWidth: 240, textAlign: "center" }}>{restoreStatus}</div>}
+    </div>
+  );
+}
+
 function FreemiumGate({ t, gameLabel, modeLabel, onBack, onUnlock, unlocking, checkoutError, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm }) {
   return (
     <div style={{ minHeight: "100vh", background: t.bg, color: t.text, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px", fontFamily: "system-ui, -apple-system, sans-serif", textAlign: "center", position: "relative" }}>
@@ -737,7 +777,7 @@ const NMM_CRAWL = [
   "No dice. No luck. Just you, your opponent, and the mill.",
 ];
 
-function RoyalGameOfUr({ onBack, isPro, freemium, onGameCompleted, onUnlock, unlocking, checkoutError, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm }) {
+function RoyalGameOfUr({ onBack, isPro, freemium, onGameCompleted, onUnlock, unlocking, checkoutError, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm, manualToken, setManualToken, manualTokenOpen, setManualTokenOpen, onSubmitManualToken }) {
   const GAME_KEY = "ur";
   const UR_INTRO_SEEN_KEY = "ancient_games_intro_seen_ur_v1";
   const [showIntro, setShowIntro] = useState(() => {
@@ -750,6 +790,7 @@ function RoyalGameOfUr({ onBack, isPro, freemium, onGameCompleted, onUnlock, unl
   const [themeKey, setThemeKey] = useState("dark");
   const t = THEMES[themeKey];
   const [upsell, setUpsell] = useState(null);
+  const [restorePanelOpen, setRestorePanelOpen] = useState(false);
   function selectTheme(key) {
     const theme = THEMES[key];
     if (theme.tier === "pro" && !isPro) {
@@ -1152,7 +1193,20 @@ function RoyalGameOfUr({ onBack, isPro, freemium, onGameCompleted, onUnlock, unl
         <button onClick={() => setShowIntro(true)} style={pillStyle(t, false)} title="Watch the intro again">
           🎬
         </button>
+        {!isPro && (
+          <button onClick={() => setRestorePanelOpen((v) => !v)} style={pillStyle(t, restorePanelOpen)} title="Restore a previous Pro purchase">
+            🔑 Restore
+          </button>
+        )}
       </div>
+      {!isPro && restorePanelOpen && (
+        <div style={{ marginBottom: 16 }}>
+          <RestoreControl t={t} restoreEmail={restoreEmail} setRestoreEmail={setRestoreEmail} restoreStatus={restoreStatus}
+            onSubmitRestore={onSubmitRestore} showRestoreForm={showRestoreForm} setShowRestoreForm={setShowRestoreForm}
+            manualToken={manualToken} setManualToken={setManualToken} manualTokenOpen={manualTokenOpen}
+            setManualTokenOpen={setManualTokenOpen} onSubmitManualToken={onSubmitManualToken} />
+        </div>
+      )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
         <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: 0.5 }}>Rules:</span>
@@ -2024,7 +2078,7 @@ function NmmOnlineGameView({ t, isPro, freemium, onGameCompleted, onUnlock, unlo
   );
 }
 
-function NineMensMorris({ onBack, isPro, freemium, onGameCompleted, onUnlock, unlocking, checkoutError, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm }) {
+function NineMensMorris({ onBack, isPro, freemium, onGameCompleted, onUnlock, unlocking, checkoutError, restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm, manualToken, setManualToken, manualTokenOpen, setManualTokenOpen, onSubmitManualToken }) {
   const GAME_KEY = "nmm";
   const NMM_INTRO_SEEN_KEY = "ancient_games_intro_seen_nmm_v1";
   const [showIntro, setShowIntro] = useState(() => {
@@ -2037,6 +2091,7 @@ function NineMensMorris({ onBack, isPro, freemium, onGameCompleted, onUnlock, un
   const [themeKey, setThemeKey] = useState("dark");
   const t = THEMES[themeKey];
   const [upsell, setUpsell] = useState(null);
+  const [restorePanelOpen, setRestorePanelOpen] = useState(false);
   function selectTheme(key) {
     const theme = THEMES[key];
     if (theme.tier === "pro" && !isPro) {
@@ -2399,7 +2454,20 @@ function NineMensMorris({ onBack, isPro, freemium, onGameCompleted, onUnlock, un
         <button onClick={() => setShowIntro(true)} style={pillStyle(t, false)} title="Watch the intro again">
           🎬
         </button>
+        {!isPro && (
+          <button onClick={() => setRestorePanelOpen((v) => !v)} style={pillStyle(t, restorePanelOpen)} title="Restore a previous Pro purchase">
+            🔑 Restore
+          </button>
+        )}
       </div>
+      {!isPro && restorePanelOpen && (
+        <div style={{ marginBottom: 16 }}>
+          <RestoreControl t={t} restoreEmail={restoreEmail} setRestoreEmail={setRestoreEmail} restoreStatus={restoreStatus}
+            onSubmitRestore={onSubmitRestore} showRestoreForm={showRestoreForm} setShowRestoreForm={setShowRestoreForm}
+            manualToken={manualToken} setManualToken={setManualToken} manualTokenOpen={manualTokenOpen}
+            setManualTokenOpen={setManualTokenOpen} onSubmitManualToken={onSubmitManualToken} />
+        </div>
+      )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
         <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: 0.5 }}>Rules:</span>
@@ -2691,10 +2759,47 @@ function AncientGamesBundle() {
     })();
   }, []);
 
+  // Manual fallback for the restore link — pull a bare token out of either
+  // a raw token paste or a whole pasted URL (people often copy the full
+  // link rather than isolating the token), then hit the exact same
+  // /restore/confirm endpoint the automatic click-through uses. This is
+  // the "have a code already?" safety net Jumpin' Pin and Hnefatafl both
+  // have — it was missing here entirely: the only path in was clicking
+  // the email link, with no fallback if that link ever failed to open
+  // right (wrong device, a mail client that mangles query params, etc).
+  const [manualToken, setManualToken] = useState("");
+  const [manualTokenOpen, setManualTokenOpen] = useState(false);
+  async function onSubmitManualToken() {
+    const raw = manualToken.trim();
+    if (!raw) return;
+    let token = raw;
+    try {
+      const asUrl = new URL(raw);
+      const fromUrl = asUrl.searchParams.get("restore");
+      if (fromUrl) token = fromUrl;
+    } catch (e) { /* not a URL — use the raw paste as-is */ }
+    setRestoreStatus("Checking…");
+    try {
+      const res = await bundleApiPost("/restore/confirm", { token });
+      if (res.activated) {
+        writeProRecord({ activatedAt: Date.now(), source: "restore" });
+        setIsPro(true);
+        setRestoreStatus("Unlocked — enjoy unlimited play!");
+        setManualToken("");
+        setManualTokenOpen(false);
+      } else {
+        setRestoreStatus("That code didn't check out — double check it and try again.");
+      }
+    } catch (e) {
+      setRestoreStatus(e.message || "Something went wrong — try again.");
+    }
+  }
+
   const shared = {
     isPro, freemium, onGameCompleted: recordGameCompleted,
     onUnlock: startCheckout, unlocking: checkoutBusy, checkoutError,
     restoreEmail, setRestoreEmail, restoreStatus, onSubmitRestore, showRestoreForm, setShowRestoreForm,
+    manualToken, setManualToken, manualTokenOpen, setManualTokenOpen, onSubmitManualToken,
   };
 
   if (activeGame === "ur") return <RoyalGameOfUr onBack={() => setActiveGame(null)} {...shared} />;
@@ -2730,6 +2835,11 @@ function AncientGamesBundle() {
           </button>
         )}
       </div>
+      {!isPro && (
+        <div style={{ marginBottom: 20 }}>
+          <RestoreControl {...shared} t={t} />
+        </div>
+      )}
       {checkoutError && (
         <div style={{ fontSize: 12, color: "#ff6b5b", maxWidth: 300, textAlign: "center", marginBottom: 24 }}>{checkoutError}</div>
       )}
