@@ -1,0 +1,1977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wardens of Luminara</title>
+<link rel="icon" type="image/svg+xml" href="wardens-of-luminara-icon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0d16">
+<style>
+  :root{
+    --void:#0a0d16;
+    --void-deep:#05060a;
+    --hall-gold:#e8b34c;
+    --resonance:#4fd8e8;
+    --dissonance:#d84fa0;
+    --ember:#ff6a3d;
+    --parchment:#e9e3d3;
+    --ok:#7ee8a0;
+    --panel:#12162399;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;min-height:100%;
+    background:radial-gradient(ellipse at 50% 0%, #171c2e 0%, var(--void-deep) 70%);
+    color:var(--parchment);
+    font-family:Georgia,'Times New Roman',serif;
+    overflow-x:hidden;
+    overflow-y:auto;
+    -webkit-text-size-adjust:100%;
+    user-select:none;
+  }
+  #app{
+    display:flex;
+    flex-direction:column;
+    min-height:100%;
+    width:100%;
+    align-items:center;
+    padding-bottom:24px;
+  }
+  header{
+    width:100%;
+    max-width:1000px;
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    padding:14px 18px 6px;
+  }
+  h1{
+    font-size:1.5em;
+    font-weight:400;
+    letter-spacing:0.04em;
+    margin:0;
+    color:var(--hall-gold);
+    text-shadow:0 0 18px rgba(232,179,76,0.35);
+  }
+  h1 .sub{
+    font-family:Georgia,serif;
+    font-style:italic;
+    font-size:0.55em;
+    color:#9aa3c0;
+    display:block;
+    letter-spacing:0.02em;
+  }
+  #hud{
+    display:flex;
+    gap:22px;
+    font-size:0.95em;
+    color:#cfd6ef;
+    align-items:center;
+  }
+  #hud span.label{color:#7c86ab;font-size:0.78em;display:block;font-family:Georgia,serif;font-style:italic;}
+  #hud span.val{font-size:1.15em;color:var(--parchment);}
+  #hud .echoes .val{color:var(--hall-gold);}
+  #hud .integrity .val{color:var(--ok);}
+  #hud .integrity.low .val{color:var(--dissonance);}
+
+  #stage-wrap{
+    position:relative;
+    margin-top:6px;
+    width:100%;
+    max-width:900px;
+    padding:0 8px;
+  }
+  canvas{
+    background:transparent;
+    border:1px solid #2a3252;
+    border-radius:2px;
+    box-shadow:0 0 60px rgba(79,216,232,0.06), inset 0 0 80px rgba(0,0,0,0.5);
+    display:block;
+    width:100%;
+    height:auto;
+    touch-action:none;
+  }
+
+  #toolbar{
+    display:flex;
+    gap:8px;
+    padding:10px 6px;
+    flex-wrap:wrap;
+    justify-content:center;
+    max-width:940px;
+  }
+  .tower-btn{
+    background:linear-gradient(180deg,#1a2038,#12162a);
+    border:1px solid #313a5c;
+    border-radius:6px;
+    padding:8px 10px;
+    color:var(--parchment);
+    cursor:pointer;
+    text-align:left;
+    min-width:118px;
+    transition:border-color .15s, transform .1s;
+    font-family:Georgia,serif;
+    position:relative;
+  }
+  .tower-btn:hover{border-color:var(--resonance);transform:translateY(-1px);}
+  .tower-btn.selected{border-color:var(--hall-gold);box-shadow:0 0 12px rgba(232,179,76,0.35);}
+  .tower-btn.disabled{opacity:0.35;cursor:not-allowed;pointer-events:none;}
+  .tower-btn .tname{font-size:0.85em;color:var(--parchment);}
+  .tower-btn .tcost{font-size:0.78em;color:var(--hall-gold);}
+  .tower-btn .tswatch{
+    width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;
+    box-shadow:0 0 6px currentColor;
+  }
+  .tower-btn .tdesc{font-size:0.68em;color:#8a93b8;font-style:italic;margin-top:2px;line-height:1.25;}
+
+  #sidepanel{
+    position:absolute;
+    top:10px;right:-2px;
+    transform:translateX(100%);
+    width:200px;
+    background:var(--panel);
+    backdrop-filter:blur(6px);
+    border:1px solid #313a5c;
+    border-radius:8px;
+    padding:12px;
+    font-size:0.85em;
+    display:none;
+  }
+  #sidepanel.show{display:block;}
+  #sidepanel h3{margin:0 0 6px;color:var(--hall-gold);font-weight:400;font-size:1.05em;}
+  #sidepanel .row{display:flex;justify-content:space-between;margin:4px 0;color:#cfd6ef;}
+  #sidepanel button{
+    width:100%;margin-top:8px;padding:7px;border-radius:5px;border:1px solid #3a4570;
+    background:#1c2340;color:var(--parchment);cursor:pointer;font-family:Georgia,serif;
+  }
+  #sidepanel button:hover{border-color:var(--resonance);}
+  #sidepanel button.sell{border-color:#5a2c3a;color:#e39aad;}
+  #sidepanel button.sell:hover{border-color:var(--dissonance);}
+  #sidepanel button:disabled{opacity:0.35;cursor:not-allowed;}
+
+  @media (max-width: 720px){
+    #sidepanel{
+      position:fixed;
+      top:auto; right:0; bottom:0; left:0;
+      transform:none;
+      width:100%;
+      max-width:none;
+      border-radius:14px 14px 0 0;
+      z-index:15;
+      padding:14px 18px 18px;
+    }
+    header{padding:10px 14px 4px;}
+    h1{font-size:1.2em;}
+    #hud{gap:14px;font-size:0.85em;}
+  }
+
+  #wave-controls{
+    display:flex;gap:10px;align-items:center;margin-top:2px;
+  }
+  #startWaveBtn{
+    background:linear-gradient(180deg,#2a2144,#1a1530);
+    border:1px solid var(--hall-gold);
+    color:var(--hall-gold);
+    padding:9px 20px;
+    border-radius:20px;
+    cursor:pointer;
+    font-family:Georgia,serif;
+    font-size:0.95em;
+    letter-spacing:0.03em;
+  }
+  #startWaveBtn:hover{box-shadow:0 0 14px rgba(232,179,76,0.4);}
+  #startWaveBtn:disabled{opacity:0.4;cursor:default;box-shadow:none;}
+  #speedBtn{
+    background:#181d33;border:1px solid #313a5c;color:#cfd6ef;padding:9px 14px;border-radius:20px;cursor:pointer;font-family:Georgia,serif;
+  }
+
+  #overlay{
+    position:fixed;inset:0;
+    background:rgba(5,6,10,0.88);
+    display:flex;align-items:flex-start;justify-content:center;
+    overflow-y:auto;
+    padding:28px 0 40px;
+    z-index:20;
+  }
+  #overlay.hidden{display:none;}
+  .modal{
+    max-width:560px;
+    width:100%;
+    padding:30px 36px;
+    text-align:center;
+  }
+  .modal h2{
+    color:var(--hall-gold);font-weight:400;font-size:2em;letter-spacing:0.03em;margin-bottom:4px;
+    text-shadow:0 0 20px rgba(232,179,76,0.4);
+  }
+  .modal .flavor{color:#9aa3c0;font-style:italic;font-size:0.95em;margin-bottom:22px;line-height:1.5;}
+  .maps{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
+  .quest-block{ margin-bottom:22px; }
+  .quest-head{ color:var(--hall-gold); font-size:1.05em; margin-bottom:2px; letter-spacing:0.02em; }
+  .quest-desc{ color:#9aa3c0; font-style:italic; font-size:0.8em; margin-bottom:12px; }
+  .map-card{
+    width:150px;
+    border:1px solid #313a5c;
+    border-radius:8px;
+    padding:14px 10px;
+    cursor:pointer;
+    background:linear-gradient(180deg,#171c30,#0e1120);
+    transition:transform .15s, border-color .15s;
+  }
+  .map-card:hover{transform:translateY(-3px);border-color:var(--resonance);}
+  .map-card.locked{opacity:0.4;cursor:not-allowed;}
+  .map-card h4{margin:0 0 4px;color:var(--parchment);font-weight:400;font-size:1.05em;}
+  .map-card .mdesc{font-size:0.72em;color:#8a93b8;font-style:italic;line-height:1.3;min-height:44px;}
+  .map-card .best{font-size:0.7em;color:var(--ok);margin-top:6px;}
+  .quota-line{font-size:0.82em;color:#e8b34c;font-style:italic;margin-bottom:14px;}
+  .quota-line.pro{color:var(--ok);}
+  #playAgainBtn, .modal button.primary{
+    margin-top:20px;background:linear-gradient(180deg,#2a2144,#1a1530);border:1px solid var(--hall-gold);
+    color:var(--hall-gold);padding:10px 26px;border-radius:20px;cursor:pointer;font-family:Georgia,serif;font-size:1em;
+  }
+  .armory-list{ text-align:left; max-height:52vh; overflow-y:auto; margin:6px 2px 4px; padding-right:4px; }
+  .armory-row{
+    border:1px solid #313a5c; border-radius:8px; padding:10px 12px; margin-bottom:9px;
+    background:rgba(255,255,255,0.02);
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  .armory-icon{ flex-shrink:0; background:rgba(255,255,255,0.03); border-radius:8px; width:45px; height:53px; }
+  .armory-icons{ display:flex; gap:14px; align-items:flex-end; }
+  .armory-icon-wrap{ display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .armory-icon-cap{ font-size:0.62em; color:#8a93b8; font-style:italic; }
+  .armory-text{ width:100%; text-align:left; }
+  .armory-head{ color:var(--parchment); font-size:0.95em; margin-bottom:3px; }
+  .armory-head strong{ color:var(--hall-gold); font-weight:400; }
+  .armory-desc{ font-style:italic; color:#b9c0dd; font-size:0.82em; margin-bottom:4px; }
+  .armory-note{ font-size:0.72em; color:#8a93b8; line-height:1.4; }
+  #menuArmoryBtn{
+    margin-top:16px; background:none; border:1px solid #3a4570; color:#9aa3c0;
+    padding:7px 18px; border-radius:16px; cursor:pointer; font-family:Georgia,serif; font-size:0.82em; font-style:italic;
+  }
+  #menuArmoryBtn:hover{ border-color:var(--resonance); color:var(--parchment); }
+  #resonanceSword{
+    display:block;
+    width:100%;
+    max-width:900px;
+    height:auto;
+    margin:6px auto 0;
+    cursor:pointer;
+    touch-action:manipulation;
+  }
+  #banner{
+    position:absolute;top:44%;left:50%;transform:translate(-50%,-50%);
+    font-size:1.6em;color:var(--hall-gold);text-shadow:0 0 20px rgba(232,179,76,0.6);
+    pointer-events:none;opacity:0;transition:opacity .4s;font-style:italic;text-align:center;
+  }
+  #banner.show{opacity:1;}
+  footer{color:#5b6488;font-size:0.7em;margin:8px 0 14px;font-style:italic;}
+
+  #breachGlow{
+    position:fixed;inset:0;pointer-events:none;z-index:30;
+  }
+  @keyframes breachPulse{
+    0%{box-shadow: inset 0 0 140px 60px rgba(220,60,60,0.7);}
+    100%{box-shadow: inset 0 0 0px 0px rgba(220,60,60,0);}
+  }
+  #breachGlow.active{ animation: breachPulse 0.9s ease-out; }
+  @keyframes breachPulseBoss{
+    0%{box-shadow: inset 0 0 220px 90px rgba(220,40,40,0.9);}
+    100%{box-shadow: inset 0 0 0px 0px rgba(220,40,40,0);}
+  }
+  #breachGlow.boss{ animation: breachPulseBoss 1.3s ease-out; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Wardens of Luminara<span class="sub">a Volta Makashi tale</span></h1>
+    <div id="hud">
+      <div class="echoes"><span class="label">Echoes</span><span class="val" id="echoesVal">0</span></div>
+      <div class="integrity"><span class="label">Hall Integrity</span><span class="val" id="integrityVal">0</span></div>
+      <div><span class="label">Wave</span><span class="val" id="waveVal">0/0</span></div>
+    </div>
+  </header>
+
+  <div id="stage-wrap">
+    <canvas id="game" width="900" height="560"></canvas>
+    <div id="banner"></div>
+    <div id="sidepanel">
+      <h3 id="spName">Tower</h3>
+      <div class="row"><span>Tier</span><span id="spTier">1</span></div>
+      <div class="row"><span>Barrels</span><span id="spBarrels">1</span></div>
+      <div class="row"><span>Damage</span><span id="spDmg">-</span></div>
+      <div class="row"><span>Range</span><span id="spRange">-</span></div>
+      <div class="row"><span>Rate</span><span id="spRate">-</span></div>
+      <div id="spCombineHint" style="font-size:0.72em;color:#8a93b8;font-style:italic;margin-top:6px;"></div>
+      <button id="upgradeBtn">Upgrade</button>
+      <button id="sellBtn" class="sell">Sell</button>
+    </div>
+  </div>
+  <canvas id="resonanceSword" width="700" height="70"></canvas>
+
+  <div id="toolbar"></div>
+  <div id="wave-controls">
+    <button id="startWaveBtn">Begin Wave</button>
+    <button id="speedBtn">▶ 1x</button>
+  </div>
+  <footer>Echoes carry within a run · Hall Integrity resets each map · progress is saved to this browser</footer>
+</div>
+
+<div id="overlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+<div id="breachGlow"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- persistence ---------- */
+const SAVE_KEY = "wardensOfLuminara_save_v1";
+function loadSave(){
+  let s;
+  try{ s = JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; }
+  catch(e){ s = {}; }
+  if(s.unlocked===undefined) s.unlocked = 1;
+  if(!s.best) s.best = {1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0};
+  if(s.claudeDefeats===undefined) s.claudeDefeats = 0;
+  if(!s.plays) s.plays = { date:'', count:0 };
+  if(s.pro===undefined) s.pro = false;
+  if(s.proToken===undefined) s.proToken = null;
+  if(!s.skin) s.skin = 'classic';
+  return s;
+}
+function writeSave(s){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(s)); }catch(e){} }
+let save = loadSave();
+
+/* ---------- freemium quota: 3 free runs/day, matching the Ancient Games pattern ---------- */
+const FREE_PLAYS_PER_DAY = 3;
+function todayStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+}
+function playsRemainingToday(){
+  if(save.pro) return Infinity;
+  if(save.plays.date !== todayStr()) return FREE_PLAYS_PER_DAY;
+  return Math.max(0, FREE_PLAYS_PER_DAY - save.plays.count);
+}
+function consumeFreePlay(){
+  if(save.pro) return;
+  const today = todayStr();
+  if(save.plays.date !== today){ save.plays = { date: today, count: 0 }; }
+  save.plays.count++;
+  writeSave(save);
+}
+// Fill this in once the Worker is deployed, e.g. 'https://wardens-worker.yoursubdomain.workers.dev'
+const WORKER_URL = 'https://wardens-of-luminara.emblen-scott.workers.dev';
+
+async function validateProToken(token){
+  if(!token || typeof token !== 'string') return false;
+  if(!WORKER_URL){
+    // No Worker deployed yet — accept a plausible-looking token so the unlock
+    // flow can be tested end-to-end. Remove this fallback once WORKER_URL is set.
+    return token.trim().length >= 10;
+  }
+  try{
+    const resp = await fetch(`${WORKER_URL}/validate-token`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: token.trim() })
+    });
+    const data = await resp.json();
+    return !!data.valid;
+  }catch(e){
+    return false;
+  }
+}
+async function beginProCheckout(){
+  if(!WORKER_URL){
+    showBanner("Checkout isn't wired up yet — this app has no payment Worker deployed.");
+    return;
+  }
+  try{
+    const resp = await fetch(`${WORKER_URL}/create-checkout-session`, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const data = await resp.json();
+    if(data.url) window.location.href = data.url;
+    else showBanner('Could not start checkout — try again shortly.');
+  }catch(e){
+    showBanner('Could not reach the checkout server.');
+  }
+}
+async function checkForCheckoutReturn(){
+  if(!WORKER_URL) return;
+  const params = new URLSearchParams(window.location.search);
+  if(params.get('checkout') !== 'success') return;
+  const sessionId = params.get('session_id');
+  history.replaceState({}, '', window.location.pathname);
+  if(!sessionId) return;
+  try{
+    const resp = await fetch(`${WORKER_URL}/checkout-success?session_id=${encodeURIComponent(sessionId)}`);
+    const data = await resp.json();
+    if(data.token){
+      save.pro = true;
+      save.proToken = data.token;
+      writeSave(save);
+      showBanner('Pro unlocked — thank you!');
+    }
+  }catch(e){ /* ignore — they can restore via token/email later */ }
+}
+// Dev-only helpers, console access only (same pattern as the Ancient Games quota reset)
+window.__wardensDevResetQuota = () => { save.plays = {date:'', count:0}; writeSave(save); showModal(); };
+window.__wardensDevUnlockPro = () => { save.pro = true; writeSave(save); showModal(); };
+window.__wardensDevLockPro = () => { save.pro = false; save.proToken=null; writeSave(save); showModal(); };
+
+/* ---------- Funky Claude, the recurring nemesis ---------- */
+const CLAUDE_TITLES = ["Funky Claude","Funky Claude: Encore","Funky Claude: Reignited","Funky Claude: Unchained","Funky Claude: Eternal Encore"];
+const CLAUDE_COLORS = ['#ff6a3d','#ff8a3d','#ffb23d','#ff5c5c','#fff45c'];
+function claudeTitleFor(defeats){
+  const idx = Math.min(defeats, CLAUDE_TITLES.length-1);
+  return CLAUDE_TITLES[idx] + (defeats>=CLAUDE_TITLES.length ? ` (x${defeats+1})` : '');
+}
+function claudeColorFor(defeats){ return CLAUDE_COLORS[Math.min(defeats, CLAUDE_COLORS.length-1)]; }
+
+/* ---------- canvas setup ---------- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+/* ---------- maps ---------- */
+const QUESTS = [
+  { id:1, name:"Quest I — The Montreux Approach", desc:"Getting to the Casino was never the hard part." },
+  { id:2, name:"Quest II — The Constellation Depths", desc:"Beyond Montreux, the Geneva Constellation grows stranger." },
+  { id:3, name:"Quest III — The Reckoning", desc:"Where it ends — one way or another." }
+];
+const MAPS = [
+  {
+    id:1, quest:1,
+    name:"The Outer Ring",
+    desc:"Quiet approach lanes above Geneva Constellation.",
+    bg:['#141a30','#0a0d1a'],
+    pathColor:'rgba(79,216,232,0.18)',
+    waypoints:[[-20,90],[220,90],[220,280],[520,280],[520,120],[760,120],[760,440],[920,440]],
+    lives:20,
+    waveCount:8,
+    bossFlavor:"He's here already, somehow — nobody can explain it. The Outer Ring smells faintly of smoke."
+  },
+  {
+    id:2, quest:1,
+    name:"Approach to Montreux",
+    desc:"The lake glows strange here. Dusk never quite finishes.",
+    bg:['#241a30','#120a1a'],
+    pathColor:'rgba(216,79,160,0.18)',
+    waypoints:[[-20,480],[160,480],[160,180],[380,180],[380,400],[600,400],[600,80],[820,80],[820,300],[920,300]],
+    lives:18,
+    waveCount:9,
+    bossFlavor:"Montreux again. Of course. He never really left the lake."
+  },
+  {
+    id:3, quest:1,
+    name:"The Grand Hall (Casino Night)",
+    desc:"Somewhere below, a stage, a fire, and the Mothers of Invention mid-set.",
+    bg:['#301a12','#1a0d08'],
+    pathColor:'rgba(255,106,61,0.2)',
+    waypoints:[[-20,300],[200,300],[200,80],[450,80],[450,520],[700,520],[700,220],[920,220]],
+    lives:16,
+    waveCount:10,
+    bossFlavor:"Back where it started. The Casino, the fire, the man himself — turned all the way up."
+  },
+  {
+    id:4, quest:2,
+    name:"The Hollow Orbit",
+    desc:"Derelict relay stations drift in silence here, still humming with old resonance.",
+    bg:['#16223a','#0a1220'],
+    pathColor:'rgba(110,200,255,0.18)',
+    waypoints:[[-20,60],[200,60],[200,220],[420,220],[420,60],[640,60],[640,300],[860,300],[860,120],[920,120]],
+    lives:16,
+    waveCount:9,
+    bossFlavor:"Something rides the dead relays now, wearing static like a second skin."
+  },
+  {
+    id:5, quest:2,
+    name:"The Dissonance Rift",
+    desc:"A tear in the Constellation's harmony — the deeper you go, the less it sounds like music.",
+    bg:['#241530','#100816'],
+    pathColor:'rgba(200,90,220,0.18)',
+    waypoints:[[-20,400],[140,400],[140,160],[320,160],[320,480],[500,480],[500,80],[680,80],[680,400],[860,400],[860,220],[920,220]],
+    lives:15,
+    waveCount:10,
+    bossFlavor:"He doesn't so much arrive here as bleed through the tear."
+  },
+  {
+    id:6, quest:2,
+    name:"The Valdric Archive",
+    desc:"Master Valdric Noir's old records, half-burned, half-remembered.",
+    bg:['#2a2418','#14100a'],
+    pathColor:'rgba(244,226,133,0.2)',
+    waypoints:[[-20,120],[260,120],[260,340],[60,340],[60,520],[440,520],[440,260],[680,260],[680,60],[920,60]],
+    lives:14,
+    waveCount:11,
+    bossFlavor:"The Archive keeps every performance it ever recorded. Apparently that includes him."
+  },
+  {
+    id:7, quest:3,
+    name:"The Shattered Chorus",
+    desc:"What's left of a choir hall after its own resonance turned against it.",
+    bg:['#221535','#0e0818'],
+    pathColor:'rgba(150,90,255,0.18)',
+    waypoints:[[-20,500],[180,500],[180,240],[380,240],[380,500],[560,500],[560,100],[760,100],[760,380],[920,380]],
+    lives:14,
+    waveCount:11,
+    bossFlavor:"The Chorus never really stopped singing. It just started screaming instead."
+  },
+  {
+    id:8, quest:3,
+    name:"The Ember Choir",
+    desc:"Where the Casino fire's last embers never quite went out.",
+    bg:['#301a10','#180a06'],
+    pathColor:'rgba(255,120,60,0.2)',
+    waypoints:[[-20,80],[120,80],[120,300],[300,300],[300,80],[480,80],[480,460],[660,460],[660,180],[860,180],[860,420],[920,420]],
+    lives:13,
+    waveCount:12,
+    bossFlavor:"He's more comfortable in embers than anywhere else in the Constellation."
+  },
+  {
+    id:9, quest:3,
+    name:"The Final Cadence",
+    desc:"The Grand Resonance Hall's innermost chamber. If the Hall falls, it falls here.",
+    bg:['#332a1c','#15120c'],
+    pathColor:'rgba(255,215,120,0.22)',
+    waypoints:[[-20,300],[140,300],[140,80],[320,80],[320,500],[500,500],[500,140],[680,140],[680,440],[860,440],[860,240],[920,240]],
+    lives:12,
+    waveCount:13,
+    bossFlavor:"Every version of him that ever got away is standing behind this one."
+  }
+];
+let currentMap = null;
+
+/* ---------- towers ---------- */
+const TOWERS = {
+  spire:{ key:'spire', name:'Solfège Spire', cost:50, range:115, rate:600, dmg:9, color:'#4fd8e8',
+    desc:"Reliable single-note strike.", air:true, ground:true },
+  bloom:{ key:'bloom', name:'Chorus Bloom', cost:95, range:95, rate:950, dmg:13, splash:52, color:'#e8b34c',
+    desc:"Harmonic pulse, hits all nearby.", air:false, ground:true },
+  piercer:{ key:'piercer', name:'Discord Piercer', cost:130, range:150, rate:1500, dmg:46, pierceArmor:true, color:'#d84fa0',
+    desc:"Slow, brutal, ignores armor.", air:false, ground:true },
+  lyre:{ key:'lyre', name:'Skywatch Lyre', cost:85, range:150, rate:750, dmg:15, color:'#8ee8c3',
+    desc:"Only strikes what flies.", air:true, ground:false },
+  baton:{ key:'baton', name:"Valdric's Baton", cost:160, range:100, rate:0, support:true, color:'#f4e285',
+    desc:"Auras nearby towers: +25% rate/range.", unlockWave:6 },
+  mothers:{ key:'mothers', name:'The Mothers', cost:140, range:110, rate:0, support:true, color:'#b084f0',
+    desc:"Freeform chaos: random buff or curse, every few seconds.", unlockWave:10 },
+  rds:{ key:'rds', name:'RDS Amp Stack', cost:210, range:135, rate:1700, dmgMin:8, dmgMax:95, splash:65, color:'#ff5c5c',
+    desc:"Rolling Drunk Stones. Off-beat, deafening, occasionally glorious.", unlockWave:14, secret:true },
+  echo:{ key:'echo', name:"Valdric's Echo", cost:150, range:120, rate:900, dmg:20, color:'#8a6bff',
+    desc:"A resonant pulse that bounces between enemies.", air:true, ground:true,
+    chain:3, chainFalloff:0.65, chainRange:140, proOnly:true }
+};
+const TOWER_ORDER = ['spire','bloom','piercer','lyre','baton','mothers','rds','echo'];
+
+/* ---------- enemies ---------- */
+const ENEMY_DEFS = {
+  whisper:{ hp:22, speed:2.3, reward:3, color:'#9ee8ff', r:8 },
+  drone:{ hp:100, speed:0.85, reward:8, color:'#6b7280', r:13, armor:0.3 },
+  screecher:{ hp:34, speed:1.9, reward:6, color:'#f0c419', r:9, flying:true },
+  chorusWisp:{ hp:42, speed:1.4, reward:5, color:'#c084f0', r:10, splits:2, splitHp:16 },
+  discordKnight:{ hp:170, speed:0.75, reward:13, color:'#7a2e4d', r:15, armor:0.5 },
+  ember:{ hp:18, speed:3.0, reward:2, color:'#ff9d5c', r:6 }
+};
+
+let highestWaveEverUnlocked = {}; // per-map cumulative flag: has a support tower unlocked
+
+/* ---------- game state ---------- */
+let state = {
+  screen:'menu', // menu | playing | victory | defeat | mapComplete
+  echoes:0,
+  integrity:0,
+  waveNum:0,
+  towers:[],
+  enemies:[],
+  particles:[],
+  popups:[],
+  watermark:null,
+  bossTrail:[],
+  resonance:0,
+  resonanceTargeting:false,
+  selectedBuild:null,
+  selectedTower:null,
+  waveActive:false,
+  spawnQueue:[],
+  spawnTimer:0,
+  speed:1,
+  paused:false,
+  unlockedThisRun:{baton:false,mothers:false,rds:false},
+  bossAlive:false,
+  bossEscaped:false
+};
+
+/* ---------- geometry helpers ---------- */
+function distToSegment(p, a, b){
+  const l2 = (b[0]-a[0])**2 + (b[1]-a[1])**2;
+  if(l2===0) return Math.hypot(p[0]-a[0], p[1]-a[1]);
+  let t = ((p[0]-a[0])*(b[0]-a[0]) + (p[1]-a[1])*(b[1]-a[1])) / l2;
+  t = Math.max(0, Math.min(1, t));
+  const proj = [a[0]+t*(b[0]-a[0]), a[1]+t*(b[1]-a[1])];
+  return Math.hypot(p[0]-proj[0], p[1]-proj[1]);
+}
+function distToPath(p, waypoints){
+  let min = Infinity;
+  for(let i=0;i<waypoints.length-1;i++){
+    min = Math.min(min, distToSegment(p, waypoints[i], waypoints[i+1]));
+  }
+  return min;
+}
+function pointAtDistance(waypoints, dist){
+  let remaining = dist;
+  for(let i=0;i<waypoints.length-1;i++){
+    const a = waypoints[i], b = waypoints[i+1];
+    const segLen = Math.hypot(b[0]-a[0], b[1]-a[1]);
+    if(remaining <= segLen){
+      const t = segLen===0?0:remaining/segLen;
+      return { x:a[0]+t*(b[0]-a[0]), y:a[1]+t*(b[1]-a[1]), done:false, segIndex:i };
+    }
+    remaining -= segLen;
+  }
+  return { x:waypoints[waypoints.length-1][0], y:waypoints[waypoints.length-1][1], done:true };
+}
+function pathTotalLength(waypoints){
+  let total=0;
+  for(let i=0;i<waypoints.length-1;i++){
+    total += Math.hypot(waypoints[i+1][0]-waypoints[i][0], waypoints[i+1][1]-waypoints[i][1]);
+  }
+  return total;
+}
+
+/* ---------- wave generation ---------- */
+function generateWave(map, waveIndex){
+  // waveIndex 1-based; last wave of map is a boss wave
+  const isBoss = waveIndex === map.waveCount;
+  const list = [];
+  const scale = 1 + (waveIndex-1)*0.18 + (map.id-1)*0.22;
+  if(isBoss){
+    const defeats = save.claudeDefeats;
+    const bossScale = scale * (1 + defeats*0.4);
+    list.push({
+      type:'boss',
+      hp: Math.round(520*bossScale),
+      speed: 0.6 + Math.min(defeats*0.03, 0.3),
+      reward: 120 + defeats*20,
+      color: claudeColorFor(defeats),
+      r:26,
+      title: claudeTitleFor(defeats),
+      visualTier: Math.min(3, 1+defeats)
+    });
+    // small escort, a little bigger each time he's been beaten before
+    for(let i=0;i<Math.min(8, 3+map.id+Math.min(defeats,4)); i++) list.push({type:'whisper', delay:i*500});
+    return list;
+  }
+  const n = 5 + waveIndex + Math.floor((map.id-1)*0.8);
+  const pool = ['whisper'];
+  if(waveIndex >= 2) pool.push('screecher');
+  if(waveIndex >= 3) pool.push('chorusWisp');
+  if(waveIndex >= 4) pool.push('discordKnight');
+  if(waveIndex >= 5) pool.push('drone');
+  for(let i=0;i<n;i++){
+    const t = pool[Math.floor(Math.random()*pool.length)];
+    list.push({type:t, delay:i*(650 - Math.min(waveIndex*10,220))});
+  }
+  // scale stats via multiplier applied at spawn time using 'scale'
+  list.scaleFactor = scale;
+  return list;
+}
+
+/* ---------- enemy spawn ---------- */
+function spawnEnemy(spec, map, scale){
+  let def, isBoss=false;
+  if(spec.type==='boss'){
+    def = {hp:spec.hp, speed:spec.speed, reward:spec.reward, color:spec.color, r:spec.r, title:spec.title, visualTier:spec.visualTier};
+    isBoss = true;
+  } else {
+    const base = ENEMY_DEFS[spec.type];
+    def = {
+      hp: Math.round(base.hp*scale), speed: base.speed, reward: base.reward,
+      color: base.color, r: base.r, armor: base.armor||0, flying: !!base.flying,
+      splits: base.splits, splitHp: base.splitHp
+    };
+  }
+  state.enemies.push({
+    type: spec.type, hp: def.hp, maxHp: def.hp, speed: def.speed, reward: def.reward,
+    color: def.color, r: def.r, armor: def.armor||0, flying: !!def.flying,
+    dist: 0, x: currentMap.waypoints[0][0], y: currentMap.waypoints[0][1],
+    slowUntil:0, slowFactor:1, isBoss, phase:0, splits: def.splits, splitHp: def.splitHp,
+    burstAt: isBoss ? [0.66,0.33] : null, shieldUntil:0, title: def.title||null, visualTier: def.visualTier||1
+  });
+  if(isBoss) state.bossAlive = true;
+}
+
+/* ---------- combat ---------- */
+function towerEffectiveStats(t){
+  const base = TOWERS[t.key];
+  let rangeMul=1, rateMul=1, dmgMul=1;
+  for(const other of state.towers){
+    if(other===t) continue;
+    if(other.key==='baton' && Math.hypot(other.x-t.x, other.y-t.y) <= TOWERS.baton.range){
+      rangeMul *= 1.25; rateMul *= 1.25;
+    }
+  }
+  if(t.chaosBuff && t.chaosBuff.until > performance.now()){
+    dmgMul *= t.chaosBuff.dmgMul; rangeMul *= t.chaosBuff.rangeMul||1;
+  }
+  if(t.resonanceBoost && t.resonanceBoost.until > performance.now()){
+    dmgMul *= 2;
+  }
+  const barrels = t.combined||1;
+  rateMul *= (1 + (barrels-1)*0.1);
+  return {
+    range: (base.range + (t.tier-1)*22) * rangeMul,
+    rate: Math.max(180, base.rate * (1 - (t.tier-1)*0.18)) / rateMul,
+    dmg: (base.dmgMin!==undefined
+        ? 0 // handled separately for rds
+        : (base.dmg + (t.tier-1)*base.dmg*0.55)) * dmgMul,
+    splash: base.splash ? base.splash + (t.tier-1)*10 : 0
+  };
+}
+
+function findTargets(t, stats, count){
+  const candidates = [];
+  for(const e of state.enemies){
+    if(e.hp<=0) continue;
+    if(e.flying && !TOWERS[t.key].air) continue;
+    if(!e.flying && !TOWERS[t.key].ground) continue;
+    const d = Math.hypot(e.x-t.x, e.y-t.y);
+    if(d<=stats.range) candidates.push(e);
+  }
+  candidates.sort((a,b)=> b.dist - a.dist);
+  return candidates.slice(0, count);
+}
+
+function dealDamage(e, dmg, ignoreArmor){
+  const reduction = ignoreArmor ? 0 : (e.armor||0);
+  let actual = dmg * (1-reduction);
+  const shielded = e.shieldUntil && e.shieldUntil > performance.now();
+  if(shielded) actual *= 0.4;
+  e.hp -= actual;
+  spawnParticle(e.x, e.y, shielded ? '#ffdf9e' : '#ffffff', 3);
+}
+
+/* ---------- combining towers ---------- */
+const MAX_BARRELS = 3;
+function tryCombine(source, target){
+  if(source.key !== target.key) return {ok:false, reason:'type'};
+  if(TOWERS[source.key].support) return {ok:false, reason:'support'};
+  if(source.tier !== target.tier) return {ok:false, reason:'tier'};
+  const total = (source.combined||1) + (target.combined||1);
+  if(total > MAX_BARRELS) return {ok:false, reason:'max'};
+  target.combined = total;
+  state.towers = state.towers.filter(t=>t!==source);
+  spawnParticle(target.x, target.y, TOWERS[target.key].color, 22);
+  return {
+    ok:true,
+    message: total>=MAX_BARRELS
+      ? `${TOWERS[target.key].name} fused — ${total} barrels, max`
+      : `${TOWERS[target.key].name} fused — ${total} barrels`
+  };
+}
+
+function killEnemy(e){
+  state.echoes += e.reward;
+  state.resonance = Math.min(100, state.resonance + Math.min(18, e.reward));
+  spawnParticle(e.x, e.y, e.color, 14);
+  state.popups.push({x:e.x, y:e.y, text:`+${e.reward}`, life:1});
+  if(e.splits){
+    for(let i=0;i<e.splits;i++){
+      state.enemies.push({
+        type:'chorusWisp_child', hp:e.splitHp, maxHp:e.splitHp, speed:1.6, reward:2,
+        color:e.color, r:6, armor:0, flying:false, dist: Math.max(0,e.dist-14), x:e.x, y:e.y, slowUntil:0, slowFactor:1
+      });
+    }
+  }
+  if(e.isBoss){
+    state.bossAlive = false;
+    save.claudeDefeats++;
+    writeSave(save);
+  }
+}
+
+function spawnParticle(x,y,color,n){
+  for(let i=0;i<n;i++){
+    state.particles.push({
+      x,y, vx:(Math.random()-0.5)*2.4, vy:(Math.random()-0.5)*2.4,
+      life:1, color
+    });
+  }
+}
+const EMBER_TONES = ['#ffcf5c','#ff7a3d','#ff5c1f'];
+function spawnEmberWisp(x,y){
+  state.particles.push({
+    x, y, vx:(Math.random()-0.5)*0.6, vy:-(0.4+Math.random()*0.5),
+    life:1, color: EMBER_TONES[Math.floor(Math.random()*EMBER_TONES.length)]
+  });
+}
+
+let lastTime = performance.now();
+function tick(now){
+  const dtRaw = Math.min(40, now-lastTime);
+  lastTime = now;
+  requestAnimationFrame(tick);
+  if(state.screen!=='playing' || state.paused) { render(); return; }
+  const dt = dtRaw*state.speed;
+
+  // spawn queue
+  if(state.waveActive){
+    state.spawnTimer -= dt;
+    while(state.spawnQueue.length && state.spawnTimer<=0){
+      const spec = state.spawnQueue.shift();
+      spawnEnemy(spec, currentMap, state.spawnQueue.scaleFactor||1);
+      state.spawnTimer = (spec.delay!==undefined? Math.max(140,spec.delay*0.75) : 400);
+    }
+  }
+
+  // move enemies
+  const totalLen = pathTotalLength(currentMap.waypoints);
+  for(const e of state.enemies){
+    if(e.hp<=0) continue;
+    let spd = e.speed;
+    if(e.slowUntil > now) spd *= e.slowFactor;
+    e.dist += spd * (dt/16.6);
+    const p = pointAtDistance(currentMap.waypoints, e.dist);
+    e.x = p.x; e.y = p.y;
+    if(e.isBoss){
+      if(now - (state.bossTrailEmitAt||0) > 55){
+        state.bossTrail.push({x:e.x, y:e.y, life:1, r:e.r, color:'#ff3d1f'});
+        state.bossTrailEmitAt = now;
+      }
+    }
+    if(p.done){
+      state.integrity -= (e.isBoss?3:1);
+      e.hp = 0;
+      if(e.isBoss) state.bossEscaped = true;
+      spawnParticle(e.x,e.y,'#ff4444',10);
+      triggerBreachGlow(e.isBoss);
+      if(e.isBoss) triggerShake(now, 16, 550);
+    }
+  }
+  state.enemies = state.enemies.filter(e=>{
+    if(e.hp<=0){ if(e.dist < totalLen-2) killEnemy(e); return false; }
+    return true;
+  });
+  if(state.integrity<=0){ state.integrity=0; endRun(false); }
+
+  // towers act
+  for(const t of state.towers){
+    const stats = towerEffectiveStats(t);
+    if(TOWERS[t.key].support){
+      if(t.key==='mothers'){
+        t.chaosTimer = (t.chaosTimer||0) - dt;
+        if(t.chaosTimer<=0){
+          t.chaosTimer = 3200;
+          const roll = Math.random();
+          for(const other of state.towers){
+            if(other===t) continue;
+            if(Math.hypot(other.x-t.x, other.y-t.y) > TOWERS.mothers.range) continue;
+            if(roll<0.5){
+              other.chaosBuff = {until: now+3000, dmgMul:1.6, rangeMul:1.1};
+            } else {
+              other.chaosBuff = {until: now+1500, dmgMul:0.7, rangeMul:1};
+            }
+          }
+          spawnParticle(t.x,t.y, roll<0.5?'#7ee8a0':'#d84fa0', 10);
+        }
+      }
+      continue;
+    }
+    if(t.resonanceBoost && t.resonanceBoost.until > now && Math.random()<0.35){
+      spawnEmberWisp(t.x + (Math.random()-0.5)*12, t.y - 6);
+    }
+    t.cooldown = (t.cooldown||0) - dt;
+    if(t.cooldown>0) continue;
+    const barrels = t.combined||1;
+    const target = findTargets(t, stats, 1)[0];
+    if(!target) continue;
+    t.cooldown = stats.rate;
+    t.flashUntil = now+120;
+    t.targetRef = target;
+    for(let b=0;b<barrels;b++){
+      if(t.key==='rds'){
+        const rdsPowerMul = (t.resonanceBoost && t.resonanceBoost.until > now) ? 2 : 1;
+        const dmg = (TOWERS.rds.dmgMin + Math.random()*(TOWERS.rds.dmgMax-TOWERS.rds.dmgMin)) * rdsPowerMul;
+        applyAoE(t, target, dmg + (t.tier-1)*dmg*0.4, stats.splash, false);
+      } else if(t.key==='echo'){
+        const chainCount = TOWERS.echo.chain + (t.tier-1);
+        applyChain(target, stats.dmg, chainCount, TOWERS.echo.chainFalloff, TOWERS.echo.chainRange);
+      } else if(TOWERS[t.key].splash){
+        applyAoE(t, target, stats.dmg, stats.splash, false);
+      } else {
+        dealDamage(target, stats.dmg, !!TOWERS[t.key].pierceArmor);
+      }
+    }
+  }
+
+  // boss phase triggers — Funky Claude feeds the flames as he's worn down
+  for(const e of state.enemies){
+    if(!e.isBoss || e.hp<=0 || !e.burstAt || !e.burstAt.length) continue;
+    const frac = e.hp/e.maxHp;
+    if(frac <= e.burstAt[0]){
+      e.burstAt.shift();
+      e.shieldUntil = now + 2500;
+      e.speed *= 1.12;
+      spawnParticle(e.x, e.y, '#ffdf9e', 16);
+      for(let i=0;i<2;i++){
+        state.enemies.push({
+          type:'ember', hp:18, maxHp:18, speed:3.0, reward:2, color:'#ff9d5c', r:6,
+          armor:0, flying:false, dist: Math.max(0, e.dist-24-i*14), x:e.x, y:e.y,
+          slowUntil:0, slowFactor:1, isBoss:false, phase:0, burstAt:null, shieldUntil:0, title:null
+        });
+      }
+      showBanner(`${e.title||'Funky Claude'} feeds the flames`);
+    }
+  }
+
+  // particles
+  for(const p of state.particles){
+    p.x+=p.vx; p.y+=p.vy; p.life-=dt/500;
+  }
+  state.particles = state.particles.filter(p=>p.life>0);
+
+  // score popups — drift toward the current tip of the resonance blade, fading as they feed its charge
+  const swordCharge = Math.max(0, Math.min(1, state.resonance/100));
+  const swordInternalGuardX = 90, swordInternalMaxLen = 586, swordInternalWidth = 700;
+  const tipInternalX = swordInternalGuardX + swordInternalMaxLen*swordCharge;
+  const swordTargetX = (tipInternalX/swordInternalWidth) * W;
+  const swordTargetY = H + 20;
+  for(const s of state.popups){
+    const k = Math.min(1, 0.09*(dt/16.6));
+    s.x += (swordTargetX - s.x) * k;
+    s.y += (swordTargetY - s.y) * k;
+    s.life -= dt/900;
+  }
+  state.popups = state.popups.filter(s=>s.life>0);
+
+  // boss vapor trail fade
+  for(const p of state.bossTrail){
+    p.life -= dt/3200;
+  }
+  state.bossTrail = state.bossTrail.filter(p=>p.life>0);
+
+  // wave completion check
+  if(state.waveActive && state.spawnQueue.length===0 && state.enemies.length===0){
+    state.waveActive=false;
+    onWaveCleared();
+  }
+
+  // live HUD refresh so echoes earned mid-wave immediately unlock purchases/upgrades
+  state.hudRefresh = (state.hudRefresh||0) - dt;
+  if(state.hudRefresh<=0){
+    state.hudRefresh = 250;
+    updateHud();
+    if(state.selectedTower) showSidePanel(state.selectedTower);
+  }
+
+  render();
+}
+function applyAoE(t, center, dmg, radius, ignoreArmor){
+  for(const e of state.enemies){
+    if(e.hp<=0) continue;
+    if(Math.hypot(e.x-center.x,e.y-center.y) <= radius){
+      dealDamage(e, dmg, ignoreArmor);
+    }
+  }
+}
+function applyChain(origin, dmg, chainCount, falloff, chainRange){
+  let currentDmg = dmg;
+  let last = origin;
+  const hit = new Set([origin]);
+  dealDamage(origin, currentDmg, false);
+  spawnParticle(origin.x, origin.y, TOWERS.echo.color, 6);
+  for(let i=0;i<chainCount-1;i++){
+    let next=null, bestDist=Infinity;
+    for(const e of state.enemies){
+      if(e.hp<=0 || hit.has(e)) continue;
+      const d = Math.hypot(e.x-last.x, e.y-last.y);
+      if(d<=chainRange && d<bestDist){ next=e; bestDist=d; }
+    }
+    if(!next) break;
+    currentDmg *= falloff;
+    dealDamage(next, currentDmg, false);
+    spawnParticle(next.x, next.y, TOWERS.echo.color, 6);
+    hit.add(next);
+    last = next;
+  }
+}
+
+/* ---------- wave lifecycle ---------- */
+function onWaveCleared(){
+  save.best[currentMap.id] = Math.max(save.best[currentMap.id]||0, state.waveNum);
+  writeSave(save);
+  if(state.waveNum >= currentMap.waveCount){
+    endRun(true);
+    return;
+  }
+  showBanner(`Wave ${state.waveNum} cleared`);
+  document.getElementById('startWaveBtn').disabled=false;
+  checkUnlocks();
+  updateHud();
+}
+function checkUnlocks(){
+  buildToolbar();
+}
+function beginWave(){
+  if(state.waveActive) return;
+  state.waveNum++;
+  const list = generateWave(currentMap, state.waveNum);
+  state.spawnQueue = list;
+  state.spawnQueue.scaleFactor = list.scaleFactor||1;
+  state.spawnTimer = 0;
+  state.waveActive = true;
+  state.bossEscaped = false;
+  document.getElementById('startWaveBtn').disabled=true;
+  if(state.waveNum===currentMap.waveCount){
+    showBanner(`${claudeTitleFor(save.claudeDefeats)} approaches`);
+  }
+  updateHud();
+}
+function endRun(won){
+  state.screen = won ? 'mapComplete' : 'defeat';
+  if(won && save.unlocked <= currentMap.id && currentMap.id < MAPS.length){
+    save.unlocked = currentMap.id+1;
+  }
+  save.best[currentMap.id] = Math.max(save.best[currentMap.id]||0, state.waveNum);
+  writeSave(save);
+  showModal();
+}
+
+/* ---------- breach glow ---------- */
+function triggerBreachGlow(boss){
+  const el = document.getElementById('breachGlow');
+  el.classList.remove('active');
+  el.classList.remove('boss');
+  void el.offsetWidth; // force reflow so the animation can retrigger
+  el.classList.add(boss ? 'boss' : 'active');
+}
+
+/* ---------- screen shake ---------- */
+function triggerShake(now, magnitude, duration){
+  state.shakeUntil = now + duration;
+  state.shakeMag = magnitude;
+  state.shakeDuration = duration;
+}
+
+/* ---------- banner ---------- */
+let bannerTimeout;
+function showBanner(text){
+  const b = document.getElementById('banner');
+  b.textContent = text;
+  b.classList.add('show');
+  clearTimeout(bannerTimeout);
+  bannerTimeout = setTimeout(()=>b.classList.remove('show'), 1800);
+}
+
+/* ---------- terrain watermark: starfield, nebula glow, circuit traces ---------- */
+function generateWatermark(map){
+  const nebColors = {
+    1:'79,216,232', 2:'216,79,160', 3:'255,106,61',
+    4:'110,200,255', 5:'200,90,220', 6:'244,226,133',
+    7:'150,90,255', 8:'255,120,60', 9:'255,215,120'
+  }[map.id] || '79,216,232';
+  const stars = [];
+  for(let i=0;i<55;i++){
+    stars.push({
+      x:Math.random()*W, y:Math.random()*H, r:0.5+Math.random()*1.6, a:0.12+Math.random()*0.35,
+      phase: Math.random()*Math.PI*2, speed: 0.0012+Math.random()*0.0022
+    });
+  }
+  const nebulae = [];
+  for(let i=0;i<3;i++){
+    nebulae.push({ x:Math.random()*W, y:Math.random()*H, r:150+Math.random()*160 });
+  }
+  const traces = [];
+  for(let i=0;i<5;i++){
+    let cx = Math.random()*W, cy = Math.random()*H;
+    const pts = [[cx,cy]];
+    const segs = 3+Math.floor(Math.random()*3);
+    for(let s=0;s<segs;s++){
+      if(Math.random()<0.5) cx += (Math.random()<0.5?1:-1)*(40+Math.random()*80);
+      else cy += (Math.random()<0.5?1:-1)*(40+Math.random()*80);
+      cx = Math.max(10, Math.min(W-10, cx));
+      cy = Math.max(10, Math.min(H-10, cy));
+      pts.push([cx,cy]);
+    }
+    traces.push(pts);
+  }
+  return { stars, nebulae, traces, color:nebColors };
+}
+/* ---------- shared tier-power aura glow ---------- */
+function hexToRgb(hex){
+  const h = hex.replace('#','');
+  const n = parseInt(h,16);
+  return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+}
+function hexToHue(hex){
+  const {r,g,b} = hexToRgb(hex);
+  const rr=r/255, gg=g/255, bb=b/255;
+  const max=Math.max(rr,gg,bb), min=Math.min(rr,gg,bb);
+  const d = max-min;
+  let h = 0;
+  if(d!==0){
+    if(max===rr) h = 60*(((gg-bb)/d)%6);
+    else if(max===gg) h = 60*(((bb-rr)/d)+2);
+    else h = 60*(((rr-gg)/d)+4);
+  }
+  return h<0 ? h+360 : h;
+}
+function auroraColor(seed, now, baseHue){
+  const wobble = Math.sin(now/1400 + seed*Math.PI*2) * 22;
+  const hue = (baseHue + wobble + 360) % 360;
+  return hslToHex(hue, 85, 62);
+}
+function hslToHex(h, s, l){
+  s/=100; l/=100;
+  const k = n => (n + h/30) % 12;
+  const a = s * Math.min(l, 1-l);
+  const f = n => l - a*Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n),1)));
+  const toHex = x => Math.round(255*x).toString(16).padStart(2,'0');
+  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+}
+function drawAuraGlow(ctx2, cx, cy, hexColor, radius, alpha){
+  if(radius<=0) return;
+  const {r,g,b} = hexToRgb(hexColor);
+  const grad = ctx2.createRadialGradient(cx,cy,0,cx,cy,radius);
+  grad.addColorStop(0, `rgba(${r},${g},${b},${alpha})`);
+  grad.addColorStop(0.6, `rgba(${r},${g},${b},${alpha*0.4})`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx2.fillStyle = grad;
+  ctx2.beginPath();
+  ctx2.arc(cx,cy,radius,0,Math.PI*2);
+  ctx2.fill();
+}
+
+/* ---------- resonance collector: Volta Fire sword ---------- */
+const swordCanvas = document.getElementById('resonanceSword');
+const swordCtx = swordCanvas.getContext('2d');
+let swordWisps = [];
+const EMBER_TONES_AURORA = ['#8a6bff','#4fd8e8','#c084f0'];
+
+function drawResonanceSword(now){
+  const w = swordCanvas.width, h = swordCanvas.height;
+  swordCtx.clearRect(0,0,w,h);
+  const charge = Math.max(0, Math.min(1, state.resonance/100));
+  const midY = h/2;
+  const hiltW = 60, hiltH = 24;
+  const leftX = 16;
+  const auroraOn = save.pro && save.skin==='aurora';
+
+  // pommel
+  swordCtx.beginPath();
+  swordCtx.arc(leftX, midY, 8, 0, Math.PI*2);
+  swordCtx.fillStyle = '#e8b34c';
+  swordCtx.fill();
+  // hilt
+  swordCtx.fillStyle = '#221a2c';
+  swordCtx.fillRect(leftX+6, midY-hiltH/2, hiltW, hiltH);
+  swordCtx.strokeStyle = 'rgba(232,179,76,0.6)';
+  swordCtx.lineWidth = 2;
+  swordCtx.strokeRect(leftX+6, midY-hiltH/2, hiltW, hiltH);
+  // crossguard
+  const guardX = leftX+6+hiltW+8;
+  swordCtx.fillStyle = '#e8b34c';
+  swordCtx.fillRect(guardX-4, midY-hiltH*0.9, 8, hiltH*1.8);
+
+  const maxBladeLen = w - guardX - 24;
+  const bladeLen = maxBladeLen * charge;
+  const fullyCharged = charge >= 0.999;
+  const pulse = fullyCharged ? 0.7+0.3*Math.sin(now/220) : 1;
+
+  if(bladeLen > 3){
+    const tipX = guardX + bladeLen;
+    const bladeH = fullyCharged ? 11*pulse : 8;
+    const grad = swordCtx.createLinearGradient(tipX, 0, guardX, 0);
+    if(auroraOn){
+      grad.addColorStop(0, fullyCharged ? '#f0e6ff' : '#c084f0');
+      grad.addColorStop(0.55, '#4fd8e8');
+      grad.addColorStop(1, '#2a1a6e');
+    } else {
+      grad.addColorStop(0, fullyCharged ? '#fff2b0' : '#ffcf5c');
+      grad.addColorStop(0.55, '#ff7a3d');
+      grad.addColorStop(1, '#7a1a0a');
+    }
+    swordCtx.save();
+    swordCtx.shadowColor = auroraOn ? (fullyCharged ? '#dfc8ff' : '#8a6bff') : (fullyCharged ? '#ffdf9e' : '#ff7a3d');
+    swordCtx.shadowBlur = fullyCharged ? 22*pulse : 10;
+    swordCtx.fillStyle = grad;
+    swordCtx.beginPath();
+    swordCtx.moveTo(guardX, midY-bladeH/2);
+    swordCtx.lineTo(tipX-9, midY-bladeH/2);
+    swordCtx.quadraticCurveTo(tipX+7, midY, tipX-9, midY+bladeH/2);
+    swordCtx.lineTo(guardX, midY+bladeH/2);
+    swordCtx.closePath();
+    swordCtx.fill();
+    swordCtx.restore();
+
+    // laser core running through the blade — fire (or aurora) sword with a plasma spine
+    swordCtx.save();
+    swordCtx.shadowColor = '#fff8dc';
+    swordCtx.shadowBlur = fullyCharged ? 14*pulse : 6;
+    swordCtx.strokeStyle = 'rgba(255,250,230,0.9)';
+    swordCtx.lineWidth = fullyCharged ? 3*pulse : 2;
+    swordCtx.lineCap = 'round';
+    swordCtx.beginPath();
+    swordCtx.moveTo(guardX+4, midY);
+    swordCtx.lineTo(tipX-10, midY);
+    swordCtx.stroke();
+    swordCtx.restore();
+
+    // smouldering plasma wisps rising off the blade
+    if(Math.random() < 0.6){
+      const tones = auroraOn ? EMBER_TONES_AURORA : EMBER_TONES;
+      swordWisps.push({
+        x: guardX + Math.random()*bladeLen,
+        y: midY + (Math.random()-0.5)*bladeH*0.8,
+        vy: -(0.25+Math.random()*0.35),
+        life: 1,
+        color: tones[Math.floor(Math.random()*tones.length)]
+      });
+    }
+  }
+  for(const p of swordWisps){
+    p.y += p.vy;
+    p.life -= 0.018;
+  }
+  swordWisps = swordWisps.filter(p=>p.life>0);
+  for(const p of swordWisps){
+    swordCtx.save();
+    swordCtx.globalAlpha = Math.max(0, p.life*0.65);
+    swordCtx.fillStyle = p.color;
+    swordCtx.shadowColor = p.color;
+    swordCtx.shadowBlur = 6;
+    swordCtx.beginPath();
+    swordCtx.arc(p.x, p.y, 1.4+1.4*p.life, 0, Math.PI*2);
+    swordCtx.fill();
+    swordCtx.restore();
+  }
+
+  if(state.resonanceTargeting){
+    const ringPulse = 0.5+0.5*Math.sin(now/180);
+    swordCtx.strokeStyle = `rgba(255,255,255,${(0.35+0.4*ringPulse).toFixed(2)})`;
+    swordCtx.lineWidth = 2;
+    swordCtx.strokeRect(2,2,w-4,h-4);
+  }
+}
+swordCanvas.addEventListener('click', ()=>{
+  if(state.screen!=='playing') return;
+  if(state.resonance < 100){
+    showBanner('Resonance still charging...');
+    return;
+  }
+  state.resonanceTargeting = !state.resonanceTargeting;
+  showBanner(state.resonanceTargeting ? 'Choose a defender to empower' : 'Targeting cancelled');
+});
+
+function drawWatermark(wm, now){
+  if(!wm) return;
+  for(const n of wm.nebulae){
+    const g = ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.r);
+    g.addColorStop(0, `rgba(${wm.color},0.10)`);
+    g.addColorStop(1, `rgba(${wm.color},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+    ctx.fill();
+  }
+  for(const s of wm.stars){
+    const twinkle = 0.35 + 0.65*(0.5+0.5*Math.sin(now*s.speed + s.phase));
+    const alpha = Math.min(1, s.a*1.6*twinkle);
+    ctx.fillStyle = `rgba(255,255,255,${alpha.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = `rgba(${wm.color},0.16)`;
+  ctx.lineWidth = 1;
+  for(const pts of wm.traces){
+    ctx.beginPath();
+    pts.forEach((p,i)=> i===0 ? ctx.moveTo(p[0],p[1]) : ctx.lineTo(p[0],p[1]));
+    ctx.stroke();
+    ctx.fillStyle = `rgba(${wm.color},0.25)`;
+    for(const p of pts){
+      ctx.beginPath();
+      ctx.arc(p[0],p[1],2,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  const now = performance.now();
+  ctx.save();
+  if(state.shakeUntil && state.shakeUntil > now){
+    const remaining = state.shakeUntil - now;
+    const decay = remaining / state.shakeDuration;
+    const mag = state.shakeMag * decay;
+    ctx.translate((Math.random()-0.5)*2*mag, (Math.random()-0.5)*2*mag);
+  }
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, currentMap? currentMap.bg[0]:'#141a30');
+  grad.addColorStop(1, currentMap? currentMap.bg[1]:'#0a0d1a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+  if(!currentMap){ ctx.restore(); return; }
+  drawWatermark(state.watermark, now);
+  drawResonanceSword(now);
+
+  // path — opaque mask first so the watermark doesn't show through the lane, then the tinted overlay
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 46;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.beginPath();
+  currentMap.waypoints.forEach((p,i)=> i===0? ctx.moveTo(p[0],p[1]) : ctx.lineTo(p[0],p[1]));
+  ctx.stroke();
+  ctx.strokeStyle = currentMap.pathColor;
+  ctx.lineWidth = 46;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.beginPath();
+  currentMap.waypoints.forEach((p,i)=> i===0? ctx.moveTo(p[0],p[1]) : ctx.lineTo(p[0],p[1]));
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth=1;
+  ctx.stroke();
+
+  // build preview
+  if(state.selectedBuild){
+    const m = mousePos;
+    const def = TOWERS[state.selectedBuild];
+    const valid = canPlaceAt(m.x,m.y);
+    ctx.beginPath();
+    ctx.arc(m.x,m.y, def.range, 0, Math.PI*2);
+    ctx.strokeStyle = valid? 'rgba(255,255,255,0.25)':'rgba(216,79,80,0.4)';
+    ctx.fillStyle = valid? 'rgba(255,255,255,0.04)':'rgba(216,79,80,0.08)';
+    ctx.fill(); ctx.stroke();
+  }
+
+  // towers
+  for(const t of state.towers){
+    const stats = towerEffectiveStats(t);
+    if(state.selectedTower===t){
+      ctx.beginPath();
+      ctx.arc(t.x,t.y,stats.range,0,Math.PI*2);
+      ctx.strokeStyle='rgba(232,179,76,0.35)';
+      ctx.stroke();
+    }
+    const flashing = t.flashUntil && t.flashUntil>performance.now();
+    const barrels = t.combined||1;
+    const size = 11 + t.tier*2.5;
+    const auroraOn = save.pro && save.skin==='aurora';
+    const towerSeed = ((t.x*7 + t.y*13) % 100) / 100;
+    const displayColor = auroraOn ? auroraColor(towerSeed, performance.now(), hexToHue(TOWERS[t.key].color)) : TOWERS[t.key].color;
+    if(t.tier>=2){
+      const auraRadius = t.tier===2 ? 26 : 38;
+      const auraAlpha = t.tier===2 ? 0.22 : 0.36;
+      drawAuraGlow(ctx, t.x, t.y, displayColor, auraRadius, auraAlpha);
+    }
+    if(t.resonanceBoost && t.resonanceBoost.until > performance.now()){
+      const pulse = 0.6+0.4*Math.sin(performance.now()/150);
+      drawAuraGlow(ctx, t.x, t.y, '#ffcf5c', 34*pulse, 0.4);
+    }
+    const boosted = t.resonanceBoost && t.resonanceBoost.until > performance.now();
+    ctx.save();
+    ctx.shadowColor = boosted ? '#ff9a4d' : displayColor;
+    const baseBlur = 8 + (t.tier-1)*7;
+    ctx.shadowBlur = flashing ? baseBlur+10 : baseBlur;
+    if(boosted){
+      const flameGrad = ctx.createRadialGradient(t.x,t.y,0,t.x,t.y,size*1.5);
+      flameGrad.addColorStop(0, '#fff2b0');
+      flameGrad.addColorStop(0.5, '#ff7a3d');
+      flameGrad.addColorStop(1, '#7a1a0a');
+      ctx.fillStyle = flameGrad;
+    } else {
+      ctx.fillStyle = displayColor;
+    }
+    const barrelCenters = [];
+    for(let b=0;b<barrels;b++){
+      const ang = barrels>1 ? (b/barrels)*Math.PI*2 - Math.PI/2 : 0;
+      const offset = barrels>1 ? 10 : 0;
+      const cx = t.x + Math.cos(ang)*offset;
+      const cy = t.y + Math.sin(ang)*offset;
+      barrelCenters.push({cx,cy});
+      const s = barrels>1 ? size*0.72 : size;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy-s);
+      for(let i=1;i<=5;i++){
+        const a = -Math.PI/2 + i*(Math.PI*2/5);
+        ctx.lineTo(cx+Math.cos(a)*s, cy+Math.sin(a)*s);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    if(barrels>1){
+      const pairs = barrels===2 ? [[0,1]] : barrelCenters.map((_,i)=>[i,(i+1)%barrels]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
+      for(const [i,j] of pairs){
+        const a = barrelCenters[i], b2 = barrelCenters[j];
+        const mx=(a.cx+b2.cx)/2, my=(a.cy+b2.cy)/2;
+        const dx=b2.cx-a.cx, dy=b2.cy-a.cy;
+        const len = Math.hypot(dx,dy)||1;
+        const ux=dx/len, uy=dy/len;
+        const half = Math.min(len*0.5, 8)/2;
+        ctx.beginPath();
+        ctx.moveTo(mx-ux*half, my-uy*half);
+        ctx.lineTo(mx+ux*half, my+uy*half);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+    if(flashing && t.targetRef){
+      const target = t.targetRef;
+      const dx = target.x-t.x, dy = target.y-t.y;
+      const len = Math.hypot(dx,dy)||1;
+      const px = -dy/len, py = dx/len;
+      for(let b=0;b<barrels;b++){
+        const off = barrels>1 ? (b-(barrels-1)/2)*7 : 0;
+        ctx.beginPath();
+        ctx.moveTo(t.x+px*off, t.y+py*off);
+        ctx.lineTo(target.x+px*off, target.y+py*off);
+        ctx.strokeStyle = displayColor;
+        ctx.globalAlpha=0.6;
+        ctx.lineWidth=2;
+        ctx.stroke();
+        ctx.globalAlpha=1;
+      }
+    }
+  }
+
+  // boss vapor trail
+  for(const p of state.bossTrail){
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.life*0.32);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 9;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r*(0.3+0.5*p.life), 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // enemies
+  for(const e of state.enemies){
+    if(e.hp<=0) continue;
+    if(e.isBoss){
+      const vt = e.visualTier||1;
+      if(vt>=2){
+        const auraRadius = vt===2 ? e.r*1.8 : e.r*2.6;
+        const auraAlpha = vt===2 ? 0.24 : 0.4;
+        drawAuraGlow(ctx, e.x, e.y, e.color, auraRadius, auraAlpha);
+      }
+    }
+    ctx.save();
+    ctx.shadowColor = e.color;
+    ctx.shadowBlur = e.isBoss ? 14 + (e.visualTier||1)*8 : 6;
+    ctx.fillStyle = e.color;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r, 0, Math.PI*2);
+    ctx.fill();
+    if(e.flying){
+      ctx.strokeStyle='rgba(255,255,255,0.6)';
+      ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.arc(e.x,e.y,e.r+4,0,Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // hp bar
+    const pct = Math.max(0,e.hp/e.maxHp);
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(e.x-14, e.y-e.r-10, 28, 4);
+    ctx.fillStyle= pct>0.5? '#7ee8a0' : pct>0.25? '#e8b34c':'#d84f4f';
+    ctx.fillRect(e.x-14, e.y-e.r-10, 28*pct, 4);
+    if(e.isBoss){
+      const label = e.title||'Funky Claude';
+      ctx.font='bold 17px Georgia';
+      ctx.textAlign='center';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+      ctx.strokeText(label, e.x, e.y-e.r-16);
+      ctx.fillStyle='#fff';
+      ctx.fillText(label, e.x, e.y-e.r-16);
+    }
+  }
+
+  // particles
+  for(const p of state.particles){
+    ctx.globalAlpha = Math.max(0,p.life);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,2.4,0,Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha=1;
+  }
+
+  // score popups
+  ctx.textAlign='center';
+  ctx.font='italic 30px Georgia';
+  for(const s of state.popups){
+    ctx.globalAlpha = Math.max(0, s.life);
+    ctx.fillStyle = '#ffd76a';
+    ctx.shadowColor = '#ffd76a';
+    ctx.shadowBlur = 10;
+    ctx.fillText(s.text, s.x, s.y);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+/* ---------- placement ---------- */
+let mousePos = {x:-100,y:-100};
+function canPlaceAt(x,y){
+  if(x<16||x>W-16||y<16||y>H-16) return false;
+  if(distToPath([x,y], currentMap.waypoints) < 42) return false;
+  for(const t of state.towers){
+    if(Math.hypot(t.x-x,t.y-y) < 34) return false;
+  }
+  return true;
+}
+canvas.addEventListener('mousemove', (ev)=>{
+  const r = canvas.getBoundingClientRect();
+  mousePos.x = (ev.clientX-r.left) * (W/r.width);
+  mousePos.y = (ev.clientY-r.top) * (H/r.height);
+});
+canvas.addEventListener('touchstart', (ev)=>{
+  const t = ev.touches[0];
+  const r = canvas.getBoundingClientRect();
+  mousePos.x = (t.clientX-r.left) * (W/r.width);
+  mousePos.y = (t.clientY-r.top) * (H/r.height);
+}, {passive:true});
+canvas.addEventListener('touchmove', (ev)=>{
+  const t = ev.touches[0];
+  const r = canvas.getBoundingClientRect();
+  mousePos.x = (t.clientX-r.left) * (W/r.width);
+  mousePos.y = (t.clientY-r.top) * (H/r.height);
+  ev.preventDefault();
+}, {passive:false});
+canvas.addEventListener('click', (ev)=>{
+  if(state.screen!=='playing') return;
+  const r = canvas.getBoundingClientRect();
+  const x = (ev.clientX-r.left) * (W/r.width);
+  const y = (ev.clientY-r.top) * (H/r.height);
+
+  if(state.resonanceTargeting){
+    let hit = null;
+    for(const t of state.towers){
+      if(Math.hypot(t.x-x,t.y-y) < 18){ hit=t; break; }
+    }
+    if(hit && TOWERS[hit.key].support){
+      showBanner("Support towers can't be empowered");
+    } else if(hit){
+      hit.resonanceBoost = { until: performance.now()+20000 };
+      state.resonance = 0;
+      state.resonanceTargeting = false;
+      spawnParticle(hit.x, hit.y, '#ffcf5c', 26);
+      showBanner(`${TOWERS[hit.key].name} empowered by Volta Fire!`);
+    } else {
+      state.resonanceTargeting = false;
+      showBanner('Targeting cancelled');
+    }
+    return;
+  }
+
+  if(state.selectedBuild){
+    const def = TOWERS[state.selectedBuild];
+    if(state.echoes>=def.cost && canPlaceAt(x,y)){
+      state.echoes -= def.cost;
+      state.towers.push({key:state.selectedBuild, x, y, tier:1, cooldown:0, combined:1});
+      state.selectedBuild = null;
+      buildToolbar();
+      updateHud();
+      hideSidePanel();
+    }
+    return;
+  }
+  // select existing tower, or combine with the currently selected one
+  let hit = null;
+  for(const t of state.towers){
+    if(Math.hypot(t.x-x,t.y-y) < 18){ hit=t; break; }
+  }
+  if(hit && state.selectedTower && hit!==state.selectedTower){
+    const result = tryCombine(state.selectedTower, hit);
+    if(result.ok){
+      state.selectedTower = hit;
+      showSidePanel(hit);
+      buildToolbar();
+      updateHud();
+      showBanner(result.message);
+      return;
+    } else if(hit.key===state.selectedTower.key && !TOWERS[hit.key].support){
+      const reasonText = result.reason==='tier'
+        ? "Towers must match tier to fuse"
+        : "Already at max barrels";
+      showBanner(reasonText);
+    }
+  }
+  state.selectedTower = hit;
+  if(hit) showSidePanel(hit); else hideSidePanel();
+});
+
+/* ---------- side panel ---------- */
+function showSidePanel(t){
+  const panel = document.getElementById('sidepanel');
+  panel.classList.add('show');
+  const stats = towerEffectiveStats(t);
+  const barrels = t.combined||1;
+  document.getElementById('spName').textContent = TOWERS[t.key].name;
+  document.getElementById('spTier').textContent = t.tier;
+  document.getElementById('spBarrels').textContent = barrels;
+  document.getElementById('spDmg').textContent = TOWERS[t.key].support ? '—' : (t.key==='rds' ? `${TOWERS.rds.dmgMin}-${TOWERS.rds.dmgMax}` : Math.round(stats.dmg));
+  document.getElementById('spRange').textContent = Math.round(stats.range);
+  document.getElementById('spRate').textContent = TOWERS[t.key].support ? '—' : (stats.rate/1000).toFixed(2)+'s';
+  const hintEl = document.getElementById('spCombineHint');
+  if(TOWERS[t.key].support){
+    hintEl.textContent = '';
+  } else if(barrels>=MAX_BARRELS){
+    hintEl.textContent = 'Fully fused — max barrels reached.';
+  } else {
+    hintEl.textContent = `Tap another tier ${t.tier} ${TOWERS[t.key].name} to fuse it here (up to ${MAX_BARRELS} barrels).`;
+  }
+  if(t.resonanceBoost && t.resonanceBoost.until > performance.now()){
+    const secsLeft = Math.ceil((t.resonanceBoost.until - performance.now())/1000);
+    hintEl.textContent += `${hintEl.textContent ? ' ' : ''}Empowered — ${secsLeft}s of double power remaining.`;
+  }
+  const upgradeCost = Math.round(TOWERS[t.key].cost * 0.7 * t.tier * (1 + (barrels-1)*0.5));
+  const upBtn = document.getElementById('upgradeBtn');
+  upBtn.textContent = t.tier>=3 ? 'Max tier' : `Upgrade (${upgradeCost} echoes)`;
+  upBtn.disabled = t.tier>=3 || state.echoes<upgradeCost;
+  upBtn.onclick = ()=>{
+    if(t.tier>=3 || state.echoes<upgradeCost) return;
+    state.echoes -= upgradeCost;
+    t.tier++;
+    showSidePanel(t);
+    updateHud();
+  };
+  const sellVal = Math.round(TOWERS[t.key].cost*0.5*t.tier*barrels);
+  document.getElementById('sellBtn').textContent = `Sell (+${sellVal})`;
+  document.getElementById('sellBtn').onclick = ()=>{
+    state.echoes += sellVal;
+    state.towers = state.towers.filter(x=>x!==t);
+    state.selectedTower=null;
+    hideSidePanel();
+    updateHud();
+  };
+}
+function hideSidePanel(){ document.getElementById('sidepanel').classList.remove('show'); }
+
+/* ---------- toolbar ---------- */
+function buildToolbar(){
+  const bar = document.getElementById('toolbar');
+  bar.innerHTML='';
+  for(const key of TOWER_ORDER){
+    const def = TOWERS[key];
+    if(def.proOnly && !save.pro){
+      const btn = document.createElement('div');
+      btn.className='tower-btn disabled';
+      btn.innerHTML = `<span class="tname">🔒 ${def.name}</span><div class="tdesc">Pro exclusive</div>`;
+      bar.appendChild(btn);
+      continue;
+    }
+    if(def.unlockWave && state.waveNum < def.unlockWave){
+      const btn = document.createElement('div');
+      btn.className='tower-btn disabled';
+      btn.innerHTML = `<span class="tname">🔒 ${def.name}</span><div class="tdesc">Unlocks wave ${def.unlockWave}</div>`;
+      bar.appendChild(btn);
+      continue;
+    }
+    const btn = document.createElement('div');
+    btn.className='tower-btn'+(state.selectedBuild===key?' selected':'');
+    if(state.echoes<def.cost) btn.classList.add('disabled');
+    btn.innerHTML = `<div><span class="tswatch" style="background:${def.color};color:${def.color}"></span><span class="tname">${def.name}</span></div>
+      <div class="tcost">${def.cost} echoes</div><div class="tdesc">${def.desc}</div>`;
+    btn.onclick = ()=>{
+      state.selectedBuild = state.selectedBuild===key? null : key;
+      state.selectedTower=null; hideSidePanel();
+      buildToolbar();
+    };
+    bar.appendChild(btn);
+  }
+}
+
+/* ---------- hud ---------- */
+function updateHud(){
+  document.getElementById('echoesVal').textContent = Math.floor(state.echoes);
+  const intEl = document.getElementById('integrityVal');
+  intEl.textContent = Math.max(0,Math.round(state.integrity));
+  intEl.parentElement.classList.toggle('low', state.integrity <= currentMap.lives*0.3);
+  document.getElementById('waveVal').textContent = `${state.waveNum}/${currentMap.waveCount}`;
+  buildToolbar();
+}
+
+/* ---------- modals ---------- */
+let armoryTimers = [];
+function drawTowerIcon(canvas, color, tier, label, barrels){
+  barrels = barrels||1;
+  const cctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  cctx.clearRect(0,0,w,h);
+  const cx = w/2, cy = h/2 - 6;
+  const baseSize = (11 + tier*2.5) * 1.35;
+  const offset = barrels>1 ? 9 : 0;
+  const centers = [];
+  if(tier>=2){
+    const auraRadius = tier===2 ? 16 : 24;
+    const auraAlpha = tier===2 ? 0.26 : 0.42;
+    drawAuraGlow(cctx, cx, cy, color, auraRadius, auraAlpha);
+  }
+  cctx.save();
+  cctx.shadowColor = color;
+  cctx.shadowBlur = 6 + (tier-1)*6;
+  cctx.fillStyle = color;
+  for(let b=0;b<barrels;b++){
+    const ang = barrels>1 ? (b/barrels)*Math.PI*2 - Math.PI/2 : 0;
+    const bx = cx + Math.cos(ang)*offset;
+    const by = cy + Math.sin(ang)*offset;
+    centers.push({bx,by});
+    const s = barrels>1 ? baseSize*0.72 : baseSize;
+    cctx.beginPath();
+    cctx.moveTo(bx, by-s);
+    for(let i=1;i<=5;i++){
+      const a = -Math.PI/2 + i*(Math.PI*2/5);
+      cctx.lineTo(bx+Math.cos(a)*s, by+Math.sin(a)*s);
+    }
+    cctx.closePath();
+    cctx.fill();
+  }
+  cctx.restore();
+  if(barrels>1){
+    cctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    cctx.lineWidth = 1.5;
+    const a = centers[0], b2 = centers[1];
+    const mx=(a.bx+b2.bx)/2, my=(a.by+b2.by)/2;
+    const dx=b2.bx-a.bx, dy=b2.by-a.by;
+    const len = Math.hypot(dx,dy)||1;
+    const ux=dx/len, uy=dy/len;
+    const half = Math.min(len*0.5,6)/2;
+    cctx.beginPath();
+    cctx.moveTo(mx-ux*half, my-uy*half);
+    cctx.lineTo(mx+ux*half, my+uy*half);
+    cctx.stroke();
+  }
+  cctx.fillStyle = 'rgba(190,198,225,0.85)';
+  cctx.font = '10px Georgia';
+  cctx.textAlign = 'center';
+  cctx.fillText(label, cx, h-6);
+}
+function showArmory(onContinue){
+  armoryTimers.forEach(id=>clearInterval(id));
+  armoryTimers = [];
+  const overlay = document.getElementById('overlay');
+  const box = document.getElementById('modalContent');
+  overlay.classList.remove('hidden');
+  const rows = TOWER_ORDER.map(key=>{
+    const def = TOWERS[key];
+    const lockNote = def.proOnly ? ' — Pro exclusive' : (def.unlockWave ? ` — unlocks wave ${def.unlockWave}` : '');
+    if(def.support){
+      return `<div class="armory-row">
+        <div class="armory-icons">
+          <div class="armory-icon-wrap"><canvas class="armory-icon" data-key="${key}" data-mode="single" width="64" height="76"></canvas></div>
+        </div>
+        <div class="armory-text">
+          <div class="armory-head"><strong>${def.name}</strong> — ${def.cost} echoes${lockNote}</div>
+          <div class="armory-desc">${def.desc}</div>
+          <div class="armory-note">Support aura only — doesn't fire, can't be upgraded or fused. Buffs any attack tower in its range.</div>
+        </div>
+      </div>`;
+    }
+    return `<div class="armory-row">
+      <div class="armory-icons">
+        <div class="armory-icon-wrap"><span class="armory-icon-cap">Single</span><canvas class="armory-icon" data-key="${key}" data-mode="single" width="64" height="76"></canvas></div>
+        <div class="armory-icon-wrap"><span class="armory-icon-cap">Fused</span><canvas class="armory-icon" data-key="${key}" data-mode="fused" width="64" height="76"></canvas></div>
+      </div>
+      <div class="armory-text">
+        <div class="armory-head"><strong>${def.name}</strong> — ${def.cost} echoes${lockNote}</div>
+        <div class="armory-desc">${def.desc}</div>
+        <div class="armory-note">Upgrades to tier 3 — each tier adds damage, range and rate. Fuse two towers of the same tier to combine barrels (up to ${MAX_BARRELS}); every barrel fires into the same target at once. Each extra barrel adds 50% to the upgrade cost — a discount against the risk of massing your defense in one spot, but it climbs the more barrels you stack.</div>
+      </div>
+    </div>`;
+  }).join('');
+  box.innerHTML = `<h2>Field Manual</h2>
+    <div class="flavor">What the Wardens have on hand.</div>
+    <div class="armory-list">${rows}</div>
+    <button class="primary" id="armoryContinueBtn">Continue</button>`;
+
+  TOWER_ORDER.forEach(key=>{
+    const def = TOWERS[key];
+    const singleCanvas = box.querySelector(`canvas[data-key="${key}"][data-mode="single"]`);
+    if(!singleCanvas) return;
+    if(def.support){
+      drawTowerIcon(singleCanvas, def.color, 1, 'Aura', 1);
+      return;
+    }
+    const fusedCanvas = box.querySelector(`canvas[data-key="${key}"][data-mode="fused"]`);
+    let tier = 1;
+    drawTowerIcon(singleCanvas, def.color, tier, `Tier ${tier}`, 1);
+    drawTowerIcon(fusedCanvas, def.color, tier, `Tier ${tier}`, 2);
+    const id = setInterval(()=>{
+      tier = tier>=3 ? 1 : tier+1;
+      drawTowerIcon(singleCanvas, def.color, tier, `Tier ${tier}`, 1);
+      drawTowerIcon(fusedCanvas, def.color, tier, `Tier ${tier}`, 2);
+    }, 2500);
+    armoryTimers.push(id);
+  });
+
+  document.getElementById('armoryContinueBtn').onclick = ()=>{
+    armoryTimers.forEach(id=>clearInterval(id));
+    armoryTimers = [];
+    onContinue();
+  };
+}
+
+function showPaywall(){
+  const overlay = document.getElementById('overlay');
+  const box = document.getElementById('modalContent');
+  overlay.classList.remove('hidden');
+  box.innerHTML = `<h2>Out of Runs</h2>
+    <div class="flavor">You've used your ${FREE_PLAYS_PER_DAY} free runs for today. Come back tomorrow, or unlock Pro for unlimited access.</div>
+    <button class="primary" id="buyProBtn">Unlock Pro — $4 USD lifetime</button>
+    <div style="margin-top:18px;">
+      <div style="font-size:0.8em;color:#8a93b8;font-style:italic;margin-bottom:6px;">Already purchased? Restore it here.</div>
+      <input id="tokenInput" type="text" placeholder="Paste your Pro token" style="width:80%;max-width:320px;padding:8px 10px;border-radius:6px;border:1px solid #3a4570;background:#12162a;color:#e9e3d3;font-family:Georgia,serif;">
+      <div><button id="restoreBtn" style="margin-top:10px;">Restore Purchase</button></div>
+    </div>
+    <div><button id="paywallBackBtn" style="margin-top:16px;background:none;border:1px solid #3a4570;color:#9aa3c0;padding:7px 18px;border-radius:16px;cursor:pointer;font-family:Georgia,serif;font-size:0.82em;font-style:italic;">Back to menu</button></div>`;
+  document.getElementById('buyProBtn').onclick = beginProCheckout;
+  document.getElementById('restoreBtn').onclick = async ()=>{
+    const token = document.getElementById('tokenInput').value;
+    if(await validateProToken(token)){
+      save.pro = true;
+      save.proToken = token.trim();
+      writeSave(save);
+      state.screen = 'menu';
+      showModal();
+    } else {
+      showBanner('That token doesn\'t look right — check and try again.');
+    }
+  };
+  document.getElementById('paywallBackBtn').onclick = ()=>{ state.screen='menu'; showModal(); };
+}
+function showModal(){
+  const overlay = document.getElementById('overlay');
+  const box = document.getElementById('modalContent');
+  overlay.classList.remove('hidden');
+  if(state.screen==='menu'){
+    const remaining = playsRemainingToday();
+    const quotaLine = save.pro
+      ? `<div class="quota-line pro">Pro unlocked — unlimited runs.</div>`
+      : `<div class="quota-line">${remaining} free run${remaining===1?'':'s'} left today</div>`;
+    box.innerHTML = `<h2>Wardens of Luminara</h2>
+      <div class="flavor">The Grand Resonance Hall keeps the Geneva Constellation in tune.<br>Something out of key wants it silent. Choose your approach.</div>
+      ${quotaLine}
+      ${QUESTS.map(q=>{
+        const questMaps = MAPS.filter(m=>m.quest===q.id);
+        return `<div class="quest-block">
+          <div class="quest-head">${q.name}</div>
+          <div class="quest-desc">${q.desc}</div>
+          <div class="maps">${questMaps.map(m=>{
+            const locked = !save.pro && m.id>save.unlocked;
+            const best = save.best[m.id]||0;
+            return `<div class="map-card ${locked?'locked':''}" data-map="${m.id}">
+              <h4>${m.name}</h4>
+              <div class="mdesc">${m.desc}</div>
+              ${best? `<div class="best">Best: wave ${best}/${m.waveCount}</div>`:''}
+              ${locked? `<div class="best" style="color:#8a93b8;">Locked</div>`:''}
+            </div>`;
+          }).join('')}</div>
+        </div>`;
+      }).join('')}
+      <div><button id="menuArmoryBtn">View Field Manual</button>${save.pro
+        ? ` <button id="menuSkinBtn">Skin: ${save.skin==='aurora'?'Aurora':'Classic'}</button>`
+        : ' <button id="menuProBtn">Unlock Pro</button>'}</div>`;
+    box.querySelectorAll('.map-card:not(.locked)').forEach(el=>{
+      el.onclick = ()=> startMap(parseInt(el.dataset.map));
+    });
+    document.getElementById('menuArmoryBtn').onclick = ()=> showArmory(()=> showModal());
+    const proBtn = document.getElementById('menuProBtn');
+    if(proBtn) proBtn.onclick = ()=> showPaywall();
+    const skinBtn = document.getElementById('menuSkinBtn');
+    if(skinBtn) skinBtn.onclick = ()=>{
+      save.skin = save.skin==='aurora' ? 'classic' : 'aurora';
+      writeSave(save);
+      showModal();
+    };
+  } else if(state.screen==='mapComplete'){
+    const won3 = currentMap.id===MAPS.length;
+    const defeats = save.claudeDefeats;
+    const outcomeLine = state.bossEscaped
+      ? "Funky Claude tears through the line and vanishes back into the smoke before anyone can stop him. He'll be back!"
+      : `Funky Claude goes down again — that's ${defeats} time${defeats===1?'':'s'} now. He'll come back louder.`;
+    box.innerHTML = `<h2>${won3? 'Luminara Holds' : 'Map Cleared'}</h2>
+      <div class="flavor">${currentMap.bossFlavor}<br><br>
+      ${outcomeLine}
+      ${won3 ? "<br><br>For tonight, the Hall rings true across the whole Constellation. He's still out there, though." : ""}</div>
+      <button class="primary" id="continueBtn">${won3? 'Return to menu' : 'Continue'}</button>`;
+    document.getElementById('continueBtn').onclick = ()=>{
+      showArmory(()=>{
+        state.screen='menu';
+        overlay.classList.remove('hidden');
+        showModal();
+      });
+    };
+  } else if(state.screen==='defeat'){
+    box.innerHTML = `<h2>The Hall Falls Silent</h2>
+      <div class="flavor">Wave ${state.waveNum} of ${currentMap.waveCount} on ${currentMap.name}. The dissonance gets in, this time.</div>
+      <button class="primary" id="retryBtn">Try again</button>
+      <button class="primary" id="menuBtn" style="margin-left:10px;">Map select</button>`;
+    document.getElementById('retryBtn').onclick = ()=> startMap(currentMap.id);
+    document.getElementById('menuBtn').onclick = ()=>{ state.screen='menu'; showModal(); };
+  }
+}
+function hideModal(){ document.getElementById('overlay').classList.add('hidden'); }
+
+/* ---------- start / reset ---------- */
+function startMap(id){
+  if(playsRemainingToday() <= 0){
+    showPaywall();
+    return;
+  }
+  consumeFreePlay();
+  currentMap = MAPS.find(m=>m.id===id);
+  state.screen='playing';
+  state.echoes = 140 + (id-1)*20;
+  state.integrity = currentMap.lives;
+  state.waveNum = 0;
+  state.towers = [];
+  state.enemies = [];
+  state.particles = [];
+  state.popups = [];
+  state.watermark = generateWatermark(currentMap);
+  state.bossTrail = [];
+  state.resonance = 0;
+  state.resonanceTargeting = false;
+  state.selectedBuild=null;
+  state.selectedTower=null;
+  state.waveActive=false;
+  state.spawnQueue=[];
+  state.hudRefresh=0;
+  hideModal();
+  hideSidePanel();
+  updateHud();
+  document.getElementById('startWaveBtn').disabled=false;
+}
+
+/* ---------- controls ---------- */
+document.getElementById('startWaveBtn').onclick = beginWave;
+document.getElementById('speedBtn').onclick = ()=>{
+  state.speed = state.speed===1?2: state.speed===2?0.001:1;
+  document.getElementById('speedBtn').textContent = state.speed===1?'▶ 1x':state.speed===2?'▶▶ 2x':'⏸';
+};
+
+/* ---------- boot ---------- */
+state.screen='menu';
+showModal();
+requestAnimationFrame(tick);
+checkForCheckoutReturn().then(()=>{ if(state.screen==='menu') showModal(); });
+
+})();
+</script>
+</body>
+</html>
