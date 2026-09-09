@@ -25,6 +25,15 @@
 //   SPOTIFY_CLIENT_SECRET    ← from developer.spotify.com/dashboard (Beta)
 //
 // KV binding: MICDROP_KV
+//
+// Session 18 fix: /admin/generate-token could not produce a working
+// lifetime comp token — it always passed a numeric days value to
+// generateToken(), but verifyToken()'s lifetime branch only accepts the
+// literal string "forever". The endpoint would return what looked like a
+// valid token, but it would fail verification the moment anyone tried to
+// redeem it. Fixed below by special-casing type === "lifetime" to match
+// the paid checkout path exactly. Also fixed a misplaced comment header
+// that sat above /spotify/exchange instead of the actual /coaching route.
 
 const SPOTIFY_CLIENT_ID = "5cba2d3336ad4d08b63970ad40fc7814"; // not secret — same as index.html
 
@@ -456,8 +465,18 @@ Return ONLY valid JSON with these four keys. No explanation, no markdown, no cat
         if (adminKey !== env.MICDROP_TOKEN_SECRET) {
           return new Response(JSON.stringify({ error: "Unauthorised" }), { status: 403, headers: { ...CORS, "Content-Type": "application/json" } });
         }
-        const tokenDays = Math.min(400, Math.max(1, parseInt(days) || 90));
         const tokenType = type || "comp";
+
+        // Session 18 fix: lifetime comps need the literal "forever" marker,
+        // same as the paid checkout path above — a numeric days value here
+        // would generate a token that looks valid on issue but fails
+        // verifyToken's lifetime branch every time it's actually redeemed.
+        if (tokenType === "lifetime") {
+          const token = await generateToken("lifetime", "forever", env.MICDROP_TOKEN_SECRET);
+          return new Response(JSON.stringify({ token, days: null, type: "lifetime" }), { headers: { ...CORS, "Content-Type": "application/json" } });
+        }
+
+        const tokenDays = Math.min(400, Math.max(1, parseInt(days) || 90));
         const token = await generateToken(tokenType, tokenDays, env.MICDROP_TOKEN_SECRET);
         return new Response(JSON.stringify({ token, days: tokenDays, type: tokenType }), { headers: { ...CORS, "Content-Type": "application/json" } });
       } catch (e) {
@@ -465,7 +484,7 @@ Return ONLY valid JSON with these four keys. No explanation, no markdown, no cat
       }
     }
 
-    // ── POST /coaching ───────────────────────────────────────────────────────
+    // ── POST /spotify/exchange (Beta) ────────────────────────────────────────
     if (pathname === "/spotify/exchange" && request.method === "POST") {
       try {
         const { code, redirect_uri } = await request.json();
@@ -496,6 +515,7 @@ Return ONLY valid JSON with these four keys. No explanation, no markdown, no cat
       }
     }
 
+    // ── POST /spotify/refresh (Beta) ─────────────────────────────────────────
     if (pathname === "/spotify/refresh" && request.method === "POST") {
       try {
         const { refresh_token } = await request.json();
@@ -525,6 +545,7 @@ Return ONLY valid JSON with these four keys. No explanation, no markdown, no cat
       }
     }
 
+    // ── POST /coaching ───────────────────────────────────────────────────────
     if (pathname === "/coaching" && request.method === "POST") {
       try {
         const { title, artist, accuracy, pocket, sharp, flat } = await request.json();
