@@ -49,6 +49,34 @@
     align-items:baseline;
     padding:14px 18px 6px;
   }
+  .title-group{
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+  }
+  #exitToMenuBtn{
+    background:none;
+    border:1px solid #3a4570;
+    color:#9aa3c0;
+    padding:5px 12px;
+    border-radius:14px;
+    cursor:pointer;
+    font-family:Georgia,serif;
+    font-size:0.72em;
+    font-style:italic;
+    white-space:nowrap;
+  }
+  #exitToMenuBtn:hover{ border-color:var(--resonance); color:var(--parchment); }
+  #muteBtn{
+    background:none;
+    border:1px solid #3a4570;
+    color:#9aa3c0;
+    padding:5px 10px;
+    border-radius:14px;
+    cursor:pointer;
+    font-size:0.85em;
+  }
+  #muteBtn:hover{ border-color:var(--resonance); color:var(--parchment); }
   h1{
     font-size:1.5em;
     font-weight:400;
@@ -98,8 +126,8 @@
 
   #toolbar{
     display:flex;
-    gap:8px;
-    padding:10px 6px;
+    gap:6px;
+    padding:8px 6px;
     flex-wrap:wrap;
     justify-content:center;
     max-width:940px;
@@ -108,11 +136,11 @@
     background:linear-gradient(180deg,#1a2038,#12162a);
     border:1px solid #313a5c;
     border-radius:6px;
-    padding:8px 10px;
+    padding:5px 8px;
     color:var(--parchment);
     cursor:pointer;
     text-align:left;
-    min-width:118px;
+    min-width:90px;
     transition:border-color .15s, transform .1s;
     font-family:Georgia,serif;
     position:relative;
@@ -120,13 +148,15 @@
   .tower-btn:hover{border-color:var(--resonance);transform:translateY(-1px);}
   .tower-btn.selected{border-color:var(--hall-gold);box-shadow:0 0 12px rgba(232,179,76,0.35);}
   .tower-btn.disabled{opacity:0.35;cursor:not-allowed;pointer-events:none;}
-  .tower-btn .tname{font-size:0.85em;color:var(--parchment);}
-  .tower-btn .tcost{font-size:0.78em;color:var(--hall-gold);}
+  .tower-btn .tname{font-size:0.78em;color:var(--parchment);}
+  .tower-btn .tcost{font-size:0.72em;color:var(--hall-gold);}
   .tower-btn .tswatch{
     width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;
     box-shadow:0 0 6px currentColor;
   }
   .tower-btn .tdesc{font-size:0.68em;color:#8a93b8;font-style:italic;margin-top:2px;line-height:1.25;}
+  .tower-btn .tdesc.collapsible{display:none;}
+  .tower-btn.selected .tdesc.collapsible{display:block;margin-top:5px;}
 
   #sidepanel{
     position:absolute;
@@ -164,23 +194,34 @@
       z-index:15;
       padding:14px 18px 18px;
     }
-    header{padding:10px 14px 4px;}
-    h1{font-size:1.2em;}
-    #hud{gap:14px;font-size:0.85em;}
+    header{padding:12px 16px 8px; flex-wrap:wrap; row-gap:6px;}
+    .title-group{gap:8px; flex-wrap:wrap;}
+    h1{font-size:1.3em;}
+    h1 .sub{display:block; font-size:0.62em;}
+    #hud{gap:16px;font-size:0.9em;}
+    #exitToMenuBtn{padding:4px 11px; font-size:0.72em;}
+    #muteBtn{padding:4px 10px; font-size:0.82em;}
   }
 
   #wave-controls{
     display:flex;gap:10px;align-items:center;margin-top:2px;
   }
+  #endlessCountdown{
+    color:var(--hall-gold);
+    font-style:italic;
+    font-size:0.85em;
+    margin-top:6px;
+    text-shadow:0 0 8px rgba(232,179,76,0.4);
+  }
   #startWaveBtn{
     background:linear-gradient(180deg,#2a2144,#1a1530);
     border:1px solid var(--hall-gold);
     color:var(--hall-gold);
-    padding:9px 20px;
+    padding:7px 18px;
     border-radius:20px;
     cursor:pointer;
     font-family:Georgia,serif;
-    font-size:0.95em;
+    font-size:0.88em;
     letter-spacing:0.03em;
   }
   #startWaveBtn:hover{box-shadow:0 0 14px rgba(232,179,76,0.4);}
@@ -268,7 +309,7 @@
     pointer-events:none;opacity:0;transition:opacity .4s;font-style:italic;text-align:center;
   }
   #banner.show{opacity:1;}
-  footer{color:#5b6488;font-size:0.7em;margin:8px 0 14px;font-style:italic;}
+  footer{color:#5b6488;font-size:0.62em;margin:4px 0 8px;font-style:italic;}
 
   #breachGlow{
     position:fixed;inset:0;pointer-events:none;z-index:30;
@@ -288,7 +329,11 @@
 <body>
 <div id="app">
   <header>
-    <h1>Wardens of Luminara<span class="sub">a Volta Makashi tale</span></h1>
+    <div class="title-group">
+      <h1>Wardens of Luminara<span class="sub">a Volta Makashi tale</span></h1>
+      <button id="exitToMenuBtn" title="Back to map select">☰ Menu</button>
+      <button id="muteBtn" title="Mute/unmute sound">🔊</button>
+    </div>
     <div id="hud">
       <div class="echoes"><span class="label">Echoes</span><span class="val" id="echoesVal">0</span></div>
       <div class="integrity"><span class="label">Hall Integrity</span><span class="val" id="integrityVal">0</span></div>
@@ -297,7 +342,7 @@
   </header>
 
   <div id="stage-wrap">
-    <canvas id="game" width="900" height="560"></canvas>
+    <canvas id="game" width="900" height="820"></canvas>
     <div id="banner"></div>
     <div id="sidepanel">
       <h3 id="spName">Tower</h3>
@@ -318,6 +363,7 @@
     <button id="startWaveBtn">Begin Wave</button>
     <button id="speedBtn">▶ 1x</button>
   </div>
+  <div id="endlessCountdown" style="display:none;"></div>
   <footer>Echoes carry within a run · Hall Integrity resets each map · progress is saved to this browser</footer>
 </div>
 
@@ -343,10 +389,296 @@ function loadSave(){
   if(s.pro===undefined) s.pro = false;
   if(s.proToken===undefined) s.proToken = null;
   if(!s.skin) s.skin = 'classic';
+  if(s.muted===undefined) s.muted = false;
   return s;
 }
 function writeSave(s){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(s)); }catch(e){} }
 let save = loadSave();
+
+/* ---------- audio: Web Audio synthesis, no audio files ---------- */
+let audioCtx = null, masterGain = null;
+function ensureAudio(){
+  if(audioCtx) return;
+  try{
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = save.muted ? 0 : 0.6;
+    masterGain.connect(audioCtx.destination);
+  }catch(e){ audioCtx = null; }
+}
+function resumeAudioIfNeeded(){
+  if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+}
+document.addEventListener('pointerdown', ()=>{ ensureAudio(); resumeAudioIfNeeded(); }, {passive:true});
+
+/* ---------- keep the screen awake during play (same pattern as Cult Connections / Mic Drop) ---------- */
+let wakeLock = null;
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', ()=>{ wakeLock = null; });
+    }
+  }catch(e){ /* not supported, or denied — fine, just no-op */ }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && !wakeLock){
+    requestWakeLock();
+  }
+});
+requestWakeLock();
+function setMuted(m){
+  save.muted = m;
+  writeSave(save);
+  if(masterGain) masterGain.gain.value = m ? 0 : 0.6;
+}
+
+/* ---------- tower fire sounds: 12th-fret-harmonic-style bell tones ---------- */
+const TOWER_NOTE_HZ = {
+  spire: 523.251,   // C5
+  bloom: 659.255,   // E5
+  piercer: 391.995, // G4
+  vael: 880.000,    // A5
+  echo: 587.330     // D5
+};
+const TOWER_HARMONIC_BASE_GAIN = 0.16; // the standard tower fire-sound peak level; other levels are ratioed off this
+const ENEMY_DRONE_GAIN = TOWER_HARMONIC_BASE_GAIN * 0.25;
+function makeDistortionCurve(amount){
+  const n = 4096;
+  const curve = new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const x = (i*2)/n - 1;
+    curve[i] = ((3+amount)*x*20*Math.PI/180) / (Math.PI + amount*Math.abs(x));
+  }
+  return curve;
+}
+const DISTORTION_CURVE_MED = makeDistortionCurve(12);
+const DISTORTION_CURVE_HEAVY = makeDistortionCurve(32);
+const DISTORTION_CURVE_PINCH = makeDistortionCurve(55);
+
+function playHarmonicTone(freq, opts){
+  opts = opts||{};
+  if(!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const dur = opts.dur || 0.34;
+  const amt = opts.gain || TOWER_HARMONIC_BASE_GAIN;
+  const tier = opts.tier || 1;
+  const osc1 = audioCtx.createOscillator(); osc1.type='sine'; osc1.frequency.value=freq;
+  const osc2 = audioCtx.createOscillator(); osc2.type='sine'; osc2.frequency.value=freq*2.006; // slightly detuned overtone for shimmer
+  const g = audioCtx.createGain();
+  const boostedAmt = amt * (1 + (tier-1)*0.25); // gets louder each tier too
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(boostedAmt, now+0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, now+dur);
+  const g2 = audioCtx.createGain(); g2.gain.value = 0.35;
+  osc1.connect(g); osc2.connect(g2); g2.connect(g);
+  let outNode = g;
+  if(tier>=2){
+    const shaper = audioCtx.createWaveShaper();
+    shaper.curve = tier>=3 ? DISTORTION_CURVE_HEAVY : DISTORTION_CURVE_MED;
+    shaper.oversample = '2x';
+    g.connect(shaper);
+    outNode = shaper;
+  }
+  outNode.connect(masterGain);
+  osc1.start(now); osc1.stop(now+dur+0.05);
+  osc2.start(now); osc2.stop(now+dur+0.05);
+}
+function playPinchHarmonic(freq){
+  if(!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(freq*0.94, now);
+  osc.frequency.exponentialRampToValueAtTime(freq, now+0.025); // quick upward squeal into the note, like a real pinch harmonic
+  const funda = audioCtx.createOscillator();
+  funda.type = 'sawtooth';
+  funda.frequency.value = freq/2; // the full note an octave below, stacked under the harmonic
+  const mixGain = audioCtx.createGain();
+  mixGain.gain.setValueAtTime(0.0001, now);
+  mixGain.gain.exponentialRampToValueAtTime(1.0, now+0.008); // driven at 100% into the shaper
+  mixGain.gain.exponentialRampToValueAtTime(0.0001, now+0.4);
+  const shaper = audioCtx.createWaveShaper();
+  shaper.curve = DISTORTION_CURVE_PINCH;
+  shaper.oversample = '4x';
+  const outGain = audioCtx.createGain();
+  outGain.gain.value = 0.22; // tame the post-distortion level so it doesn't clip the master bus
+  osc.connect(mixGain); funda.connect(mixGain);
+  mixGain.connect(shaper); shaper.connect(outGain); outGain.connect(masterGain);
+  osc.start(now); osc.stop(now+0.42);
+  funda.start(now); funda.stop(now+0.42);
+}
+function playTowerFireSound(key, tier){
+  if(!audioCtx) return;
+  tier = tier||1;
+  if(key==='rds'){
+    const scale = [523.251,587.330,659.255,783.991,880.000];
+    const f = scale[Math.floor(Math.random()*scale.length)] * (0.985+Math.random()*0.03);
+    playHarmonicTone(f, {dur:0.28, gain:0.19, tier});
+    return;
+  }
+  if(key==='echo'){
+    playHarmonicTone(TOWER_NOTE_HZ.echo, {dur:0.3, gain:0.17, tier});
+    setTimeout(()=>{ if(audioCtx) playHarmonicTone(TOWER_NOTE_HZ.echo, {dur:0.22, gain:0.08, tier}); }, 95);
+    return;
+  }
+  const freq = TOWER_NOTE_HZ[key];
+  if(freq) playHarmonicTone(freq, {dur:0.32, gain:0.16, tier});
+}
+
+/* ---------- Funky Claude's riff: contrary-motion pedal-tone bass line ---------- */
+// C4, E3, B3, F3, A#3, F#3, A3, A3, G3, E3 — all quarter notes, looping
+const CLAUDE_RIFF_NOTES = [261.626,164.814,246.942,174.614,233.082,185.000,220.000,220.000,195.998,164.814];
+const CLAUDE_RIFF_BPM = 132;
+// Tiny push/pull per step (seconds) — a bit of human "in the pocket" feel so the
+// groove doesn't sit dead-on-grid. Note indices 6/7 are the repeated A: the first
+// sits right on the beat as an anchor, the second is deliberately dragged behind
+// it for separation — a laid-back funk repeat rather than a mechanical echo.
+const CLAUDE_GROOVE_OFFSETS = [0, -0.014, 0.010, -0.008, 0, -0.014, 0, 0.035, 0, 0.007];
+let claudeRiff = { stepIndex:0, nextNoteTime:0, timerId:null, playing:false };
+function playFunkNote(time, freq){
+  const osc = audioCtx.createOscillator(); osc.type='sawtooth'; osc.frequency.setValueAtTime(freq, time);
+  const filter = audioCtx.createBiquadFilter(); filter.type='lowpass'; filter.Q.value=6;
+  filter.frequency.setValueAtTime(1800, time);
+  filter.frequency.exponentialRampToValueAtTime(420, time+0.24);
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.exponentialRampToValueAtTime(0.26, time+0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time+0.3);
+  osc.connect(filter); filter.connect(gain); gain.connect(masterGain);
+  osc.start(time); osc.stop(time+0.32);
+}
+function claudeRiffScheduler(){
+  if(!audioCtx) return;
+  const beatDur = 60/CLAUDE_RIFF_BPM;
+  while(claudeRiff.nextNoteTime < audioCtx.currentTime + 0.15){
+    const groove = CLAUDE_GROOVE_OFFSETS[claudeRiff.stepIndex % CLAUDE_GROOVE_OFFSETS.length];
+    playFunkNote(claudeRiff.nextNoteTime + groove, CLAUDE_RIFF_NOTES[claudeRiff.stepIndex]);
+    claudeRiff.nextNoteTime += beatDur;
+    claudeRiff.stepIndex = (claudeRiff.stepIndex+1) % CLAUDE_RIFF_NOTES.length;
+  }
+}
+function startClaudeRiff(){
+  if(!audioCtx || claudeRiff.playing) return;
+  claudeRiff.playing = true;
+  claudeRiff.stepIndex = 0;
+  claudeRiff.nextNoteTime = audioCtx.currentTime + 0.05;
+  claudeRiff.timerId = setInterval(claudeRiffScheduler, 40);
+}
+function stopClaudeRiff(){
+  claudeRiff.playing = false;
+  if(claudeRiff.timerId) clearInterval(claudeRiff.timerId);
+  claudeRiff.timerId = null;
+}
+
+/* ---------- adversary drones: one sustained Em(add maj7) tone per enemy TYPE ---------- */
+// E2, B2, E3, G3, D#4, E4 — the chord rung out across all six open/fretted strings.
+// One tone per type, sustained only while at least one of that type is alive.
+const ENEMY_DRONE_HZ = {
+  drone: 82.407,         // low E — a literal drone, for the enemy named Drone
+  discordKnight: 123.471,// B2 — heaviest tone left, for the toughest regular enemy
+  chorusWisp: 164.814,   // E3 — an octave on the root, since it duplicates itself
+  ember: 195.998,        // G3
+  screecher: 311.127,    // D#4 — the maj7 tension tone, fitting something that screeches
+  whisper: 329.628       // E4 — the top voice, airy and delicate
+};
+let enemyDrones = {};
+function ensureDroneNode(type){
+  if(enemyDrones[type] || !audioCtx) return;
+  const freq = ENEMY_DRONE_HZ[type];
+  const osc1 = audioCtx.createOscillator(); osc1.type='sine'; osc1.frequency.value=freq;
+  const osc2 = audioCtx.createOscillator(); osc2.type='sine'; osc2.frequency.value=freq*1.003; // gentle detune for a soft chorus shimmer
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.0001;
+  osc1.connect(gain); osc2.connect(gain); gain.connect(masterGain);
+  osc1.start(); osc2.start();
+  enemyDrones[type] = { osc1, osc2, gain, active:false };
+}
+function setDroneActive(type, active){
+  ensureDroneNode(type);
+  const d = enemyDrones[type];
+  if(!d || !audioCtx) return;
+  if(active === d.active) return;
+  d.active = active;
+  const now = audioCtx.currentTime;
+  d.gain.gain.cancelScheduledValues(now);
+  d.gain.gain.setValueAtTime(Math.max(d.gain.gain.value, 0.0001), now);
+  if(active) d.gain.gain.exponentialRampToValueAtTime(ENEMY_DRONE_GAIN, now+0.5);
+  else d.gain.gain.exponentialRampToValueAtTime(0.0001, now+0.7);
+}
+function updateEnemyDrones(){
+  if(!audioCtx) return;
+  const present = {};
+  for(const e of state.enemies){
+    if(e.hp<=0) continue;
+    const key = e.type==='chorusWisp_child' ? 'chorusWisp' : e.type;
+    if(ENEMY_DRONE_HZ[key]!==undefined) present[key]=true;
+  }
+  for(const type in ENEMY_DRONE_HZ){
+    setDroneActive(type, !!present[type]);
+  }
+}
+function stopAllEnemyDrones(){
+  for(const type in enemyDrones){
+    const d = enemyDrones[type];
+    try{ d.osc1.stop(); d.osc2.stop(); }catch(e){}
+  }
+  enemyDrones = {};
+}
+
+/* ---------- breach crash: gated cymbal noise burst when an attacker gets through ---------- */
+let breachNoiseBuffer = null;
+function getBreachNoiseBuffer(){
+  if(breachNoiseBuffer || !audioCtx) return breachNoiseBuffer;
+  const len = Math.ceil(audioCtx.sampleRate * 1.6);
+  breachNoiseBuffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  const data = breachNoiseBuffer.getChannelData(0);
+  for(let i=0;i<len;i++) data[i] = Math.random()*2 - 1;
+  return breachNoiseBuffer;
+}
+// classic inharmonic-partial recipe used in drum machines for metallic cymbal timbre
+const RIDE_PARTIAL_RATIOS = [1, 1.342, 1.2312, 1.6532, 1.9412, 2.6812];
+function playBreachCrash(){
+  if(!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const dur = 1.2; // gated length, per spec: ~1-1.5s then cut, not left to ring out
+  const baseFreq = 520; // ride-style metallic base, more "ping" than a dark crash
+
+  // the metallic body: a bank of detuned square oscillators at inharmonic ratios —
+  // this is what actually reads as "cymbal" rather than plain filtered noise
+  const metalBus = audioCtx.createGain(); metalBus.gain.value = 0.6;
+  RIDE_PARTIAL_RATIOS.forEach(ratio=>{
+    const osc = audioCtx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = baseFreq*ratio;
+    osc.connect(metalBus);
+    osc.start(now);
+    osc.stop(now+dur+0.05);
+  });
+  const hp = audioCtx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=1200;
+  const bp = audioCtx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200; bp.Q.value=0.9;
+  metalBus.connect(hp); hp.connect(bp);
+
+  // a little noise underneath for sizzle/shimmer — subtle, so it reads as cymbal
+  // texture rather than the hiss it was when it carried the whole sound
+  const buf = getBreachNoiseBuffer();
+  if(buf){
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const noiseHp = audioCtx.createBiquadFilter(); noiseHp.type='highpass'; noiseHp.frequency.value=3500;
+    const noiseGain = audioCtx.createGain(); noiseGain.gain.value = 0.22;
+    src.connect(noiseHp); noiseHp.connect(noiseGain); noiseGain.connect(bp);
+    src.start(now); src.stop(now+dur+0.05);
+  }
+
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(ENEMY_DRONE_GAIN, now+0.004); // sharp ride "ping" attack
+  gain.gain.exponentialRampToValueAtTime(ENEMY_DRONE_GAIN*0.35, now+dur*0.6);
+  gain.gain.setValueAtTime(ENEMY_DRONE_GAIN*0.35, now+dur-0.03);
+  gain.gain.linearRampToValueAtTime(0.0001, now+dur); // hard gate cutoff, no long tail
+  bp.connect(gain); gain.connect(masterGain);
+}
 
 /* ---------- freemium quota: 3 free runs/day, matching the Ancient Games pattern ---------- */
 const FREE_PLAYS_PER_DAY = 3;
@@ -370,11 +702,11 @@ function consumeFreePlay(){
 const WORKER_URL = 'https://wardens-of-luminara.emblen-scott.workers.dev';
 
 async function validateProToken(token){
-  if(!token || typeof token !== 'string') return false;
+  if(!token || typeof token !== 'string') return {valid:false};
   if(!WORKER_URL){
     // No Worker deployed yet — accept a plausible-looking token so the unlock
     // flow can be tested end-to-end. Remove this fallback once WORKER_URL is set.
-    return token.trim().length >= 10;
+    return {valid: token.trim().length >= 10};
   }
   try{
     const resp = await fetch(`${WORKER_URL}/validate-token`, {
@@ -382,9 +714,9 @@ async function validateProToken(token){
       body: JSON.stringify({ token: token.trim() })
     });
     const data = await resp.json();
-    return !!data.valid;
+    return {valid: !!data.valid, reason: data.reason};
   }catch(e){
-    return false;
+    return {valid:false};
   }
 }
 async function beginProCheckout(){
@@ -451,7 +783,7 @@ const MAPS = [
     desc:"Quiet approach lanes above Geneva Constellation.",
     bg:['#141a30','#0a0d1a'],
     pathColor:'rgba(79,216,232,0.18)',
-    waypoints:[[-20,90],[220,90],[220,280],[520,280],[520,120],[760,120],[760,440],[920,440]],
+    waypoints:[[-20,132],[220,132],[220,410],[520,410],[520,175],[760,175],[760,645],[920,645]],
     lives:20,
     waveCount:8,
     bossFlavor:"He's here already, somehow — nobody can explain it. The Outer Ring smells faintly of smoke."
@@ -462,7 +794,7 @@ const MAPS = [
     desc:"The lake glows strange here. Dusk never quite finishes.",
     bg:['#241a30','#120a1a'],
     pathColor:'rgba(216,79,160,0.18)',
-    waypoints:[[-20,480],[160,480],[160,180],[380,180],[380,400],[600,400],[600,80],[820,80],[820,300],[920,300]],
+    waypoints:[[-20,703],[160,703],[160,263],[380,263],[380,585],[600,585],[600,117],[820,117],[820,440],[920,440]],
     lives:18,
     waveCount:9,
     bossFlavor:"Montreux again. Of course. He never really left the lake."
@@ -473,7 +805,7 @@ const MAPS = [
     desc:"Somewhere below, a stage, a fire, and the Mothers of Invention mid-set.",
     bg:['#301a12','#1a0d08'],
     pathColor:'rgba(255,106,61,0.2)',
-    waypoints:[[-20,300],[200,300],[200,80],[450,80],[450,520],[700,520],[700,220],[920,220]],
+    waypoints:[[-20,440],[200,440],[200,117],[450,117],[450,762],[700,762],[700,322],[920,322]],
     lives:16,
     waveCount:10,
     bossFlavor:"Back where it started. The Casino, the fire, the man himself — turned all the way up."
@@ -484,7 +816,7 @@ const MAPS = [
     desc:"Derelict relay stations drift in silence here, still humming with old resonance.",
     bg:['#16223a','#0a1220'],
     pathColor:'rgba(110,200,255,0.18)',
-    waypoints:[[-20,60],[200,60],[200,220],[420,220],[420,60],[640,60],[640,300],[860,300],[860,120],[920,120]],
+    waypoints:[[-20,88],[200,88],[200,322],[420,322],[420,88],[640,88],[640,440],[860,440],[860,175],[920,175]],
     lives:16,
     waveCount:9,
     bossFlavor:"Something rides the dead relays now, wearing static like a second skin."
@@ -495,7 +827,7 @@ const MAPS = [
     desc:"A tear in the Constellation's harmony — the deeper you go, the less it sounds like music.",
     bg:['#241530','#100816'],
     pathColor:'rgba(200,90,220,0.18)',
-    waypoints:[[-20,400],[140,400],[140,160],[320,160],[320,480],[500,480],[500,80],[680,80],[680,400],[860,400],[860,220],[920,220]],
+    waypoints:[[-20,585],[140,585],[140,235],[320,235],[320,703],[500,703],[500,117],[680,117],[680,585],[860,585],[860,322],[920,322]],
     lives:15,
     waveCount:10,
     bossFlavor:"He doesn't so much arrive here as bleed through the tear."
@@ -506,7 +838,7 @@ const MAPS = [
     desc:"Master Valdric Noir's old records, half-burned, half-remembered.",
     bg:['#2a2418','#14100a'],
     pathColor:'rgba(244,226,133,0.2)',
-    waypoints:[[-20,120],[260,120],[260,340],[60,340],[60,520],[440,520],[440,260],[680,260],[680,60],[920,60]],
+    waypoints:[[-20,175],[260,175],[260,498],[60,498],[60,762],[440,762],[440,380],[680,380],[680,88],[920,88]],
     lives:14,
     waveCount:11,
     bossFlavor:"The Archive keeps every performance it ever recorded. Apparently that includes him."
@@ -517,7 +849,7 @@ const MAPS = [
     desc:"What's left of a choir hall after its own resonance turned against it.",
     bg:['#221535','#0e0818'],
     pathColor:'rgba(150,90,255,0.18)',
-    waypoints:[[-20,500],[180,500],[180,240],[380,240],[380,500],[560,500],[560,100],[760,100],[760,380],[920,380]],
+    waypoints:[[-20,732],[180,732],[180,352],[380,352],[380,732],[560,732],[560,147],[760,147],[760,557],[920,557]],
     lives:14,
     waveCount:11,
     bossFlavor:"The Chorus never really stopped singing. It just started screaming instead."
@@ -528,7 +860,7 @@ const MAPS = [
     desc:"Where the Casino fire's last embers never quite went out.",
     bg:['#301a10','#180a06'],
     pathColor:'rgba(255,120,60,0.2)',
-    waypoints:[[-20,80],[120,80],[120,300],[300,300],[300,80],[480,80],[480,460],[660,460],[660,180],[860,180],[860,420],[920,420]],
+    waypoints:[[-20,117],[120,117],[120,440],[300,440],[300,117],[480,117],[480,673],[660,673],[660,263],[860,263],[860,615],[920,615]],
     lives:13,
     waveCount:12,
     bossFlavor:"He's more comfortable in embers than anywhere else in the Constellation."
@@ -539,12 +871,23 @@ const MAPS = [
     desc:"The Grand Resonance Hall's innermost chamber. If the Hall falls, it falls here.",
     bg:['#332a1c','#15120c'],
     pathColor:'rgba(255,215,120,0.22)',
-    waypoints:[[-20,300],[140,300],[140,80],[320,80],[320,500],[500,500],[500,140],[680,140],[680,440],[860,440],[860,240],[920,240]],
+    waypoints:[[-20,440],[140,440],[140,117],[320,117],[320,732],[500,732],[500,205],[680,205],[680,645],[860,645],[860,352],[920,352]],
     lives:12,
     waveCount:13,
     bossFlavor:"Every version of him that ever got away is standing behind this one."
   }
 ];
+const ENDLESS_MAP = {
+  id:'endless', quest:null,
+  name:"The Warden's Gauntlet",
+  desc:"No finish line. Just the Hall, the waves, and however long you can hold.",
+  bg:['#1a1424','#0a0812'],
+  pathColor:'rgba(180,140,255,0.2)',
+  waypoints:[[-20,98],[220,98],[220,344],[460,344],[460,115],[700,115],[700,459],[440,459],[440,640],[860,640],[860,771],[920,771]],
+  lives:25,
+  waveCount:Infinity,
+  bossFlavor:"He never really leaves this place. Why would he? You keep coming back too."
+};
 let currentMap = null;
 
 /* ---------- towers ---------- */
@@ -555,19 +898,19 @@ const TOWERS = {
     desc:"Harmonic pulse, hits all nearby.", air:false, ground:true },
   piercer:{ key:'piercer', name:'Discord Piercer', cost:130, range:150, rate:1500, dmg:46, pierceArmor:true, color:'#d84fa0',
     desc:"Slow, brutal, ignores armor.", air:false, ground:true },
-  lyre:{ key:'lyre', name:'Skywatch Lyre', cost:85, range:150, rate:750, dmg:15, color:'#8ee8c3',
-    desc:"Only strikes what flies.", air:true, ground:false },
   baton:{ key:'baton', name:"Valdric's Baton", cost:160, range:100, rate:0, support:true, color:'#f4e285',
     desc:"Auras nearby towers: +25% rate/range.", unlockWave:6 },
   mothers:{ key:'mothers', name:'The Mothers', cost:140, range:110, rate:0, support:true, color:'#b084f0',
     desc:"Freeform chaos: random buff or curse, every few seconds.", unlockWave:10 },
   rds:{ key:'rds', name:'RDS Amp Stack', cost:210, range:135, rate:1700, dmgMin:8, dmgMax:95, splash:65, color:'#ff5c5c',
     desc:"Rolling Drunk Stones. Off-beat, deafening, occasionally glorious.", unlockWave:14, secret:true },
+  vael:{ key:'vael', name:"Vael's Liminar", cost:175, range:130, rate:1100, dmg:14, color:'#eaff5c',
+    desc:"A lightning bolt that stuns whatever it strikes.", air:true, ground:true, unlockWave:12 },
   echo:{ key:'echo', name:"Valdric's Echo", cost:150, range:120, rate:900, dmg:20, color:'#8a6bff',
     desc:"A resonant pulse that bounces between enemies.", air:true, ground:true,
     chain:3, chainFalloff:0.65, chainRange:140, proOnly:true }
 };
-const TOWER_ORDER = ['spire','bloom','piercer','lyre','baton','mothers','rds','echo'];
+const TOWER_ORDER = ['spire','bloom','piercer','baton','mothers','rds','vael','echo'];
 
 /* ---------- enemies ---------- */
 const ENEMY_DEFS = {
@@ -595,6 +938,8 @@ let state = {
   bossTrail:[],
   resonance:0,
   resonanceTargeting:false,
+  endlessCountdownDeadline:0,
+  waveStartedAt:0,
   selectedBuild:null,
   selectedTower:null,
   waveActive:false,
@@ -664,7 +1009,7 @@ function generateWave(map, waveIndex){
       visualTier: Math.min(3, 1+defeats)
     });
     // small escort, a little bigger each time he's been beaten before
-    for(let i=0;i<Math.min(8, 3+map.id+Math.min(defeats,4)); i++) list.push({type:'whisper', delay:i*500});
+    for(let i=0;i<Math.min(8, 3+map.id+Math.min(defeats,4)); i++) list.push({type:'whisper', delay:500});
     return list;
   }
   const n = 5 + waveIndex + Math.floor((map.id-1)*0.8);
@@ -675,10 +1020,43 @@ function generateWave(map, waveIndex){
   if(waveIndex >= 5) pool.push('drone');
   for(let i=0;i<n;i++){
     const t = pool[Math.floor(Math.random()*pool.length)];
-    list.push({type:t, delay:i*(650 - Math.min(waveIndex*10,220))});
+    list.push({type:t, delay:650 - Math.min(waveIndex*10,220), scale});
   }
-  // scale stats via multiplier applied at spawn time using 'scale'
-  list.scaleFactor = scale;
+  return list;
+}
+
+const ENDLESS_BOSS_INTERVAL = 10;
+const ENDLESS_WAVE_INTERVAL_MS = 5000; // flat 5s between auto-released waves in endless mode
+function generateEndlessWave(waveIndex){
+  const list = [];
+  if(waveIndex % ENDLESS_BOSS_INTERVAL === 0){
+    const defeats = save.claudeDefeats;
+    const cycle = waveIndex / ENDLESS_BOSS_INTERVAL;
+    const bossScale = (1 + cycle*0.55) * (1 + defeats*0.4);
+    list.push({
+      type:'boss',
+      hp: Math.round(520*bossScale),
+      speed: 0.6 + Math.min(defeats*0.03, 0.3),
+      reward: 120 + defeats*20 + cycle*15,
+      color: claudeColorFor(defeats),
+      r:26,
+      title: claudeTitleFor(defeats),
+      visualTier: Math.min(3, 1+defeats)
+    });
+    for(let i=0;i<Math.min(10, 4+cycle);i++) list.push({type:'whisper', delay:450});
+    return list;
+  }
+  const scale = 1 + (waveIndex-1)*0.12;
+  const pool = ['whisper'];
+  if(waveIndex >= 2) pool.push('screecher');
+  if(waveIndex >= 3) pool.push('chorusWisp');
+  if(waveIndex >= 4) pool.push('discordKnight');
+  if(waveIndex >= 5) pool.push('drone');
+  const n = Math.min(40, 5 + waveIndex);
+  for(let i=0;i<n;i++){
+    const t = pool[Math.floor(Math.random()*pool.length)];
+    list.push({type:t, delay:Math.max(220, 600-waveIndex*8), scale});
+  }
   return list;
 }
 
@@ -824,7 +1202,7 @@ function tick(now){
     state.spawnTimer -= dt;
     while(state.spawnQueue.length && state.spawnTimer<=0){
       const spec = state.spawnQueue.shift();
-      spawnEnemy(spec, currentMap, state.spawnQueue.scaleFactor||1);
+      spawnEnemy(spec, currentMap, spec.scale||1);
       state.spawnTimer = (spec.delay!==undefined? Math.max(140,spec.delay*0.75) : 400);
     }
   }
@@ -847,9 +1225,10 @@ function tick(now){
     if(p.done){
       state.integrity -= (e.isBoss?3:1);
       e.hp = 0;
-      if(e.isBoss) state.bossEscaped = true;
+      if(e.isBoss){ state.bossEscaped = true; state.bossAlive = false; }
       spawnParticle(e.x,e.y,'#ff4444',10);
       triggerBreachGlow(e.isBoss);
+      try{ playBreachCrash(); }catch(err){ /* audio must never be able to stall the game loop */ }
       if(e.isBoss) triggerShake(now, 16, 550);
     }
   }
@@ -893,6 +1272,12 @@ function tick(now){
     t.cooldown = stats.rate;
     t.flashUntil = now+120;
     t.targetRef = target;
+    try{
+      playTowerFireSound(t.key, t.tier);
+      if(t.resonanceBoost && t.resonanceBoost.until > now){
+        playPinchHarmonic(TOWER_NOTE_HZ[t.key] || 440);
+      }
+    }catch(e){ /* audio must never be able to stall the game loop */ }
     for(let b=0;b<barrels;b++){
       if(t.key==='rds'){
         const rdsPowerMul = (t.resonanceBoost && t.resonanceBoost.until > now) ? 2 : 1;
@@ -901,6 +1286,12 @@ function tick(now){
       } else if(t.key==='echo'){
         const chainCount = TOWERS.echo.chain + (t.tier-1);
         applyChain(target, stats.dmg, chainCount, TOWERS.echo.chainFalloff, TOWERS.echo.chainRange);
+      } else if(t.key==='vael'){
+        dealDamage(target, stats.dmg, false);
+        const stunDur = target.isBoss ? 150 : (600 + (t.tier-1)*150);
+        target.slowUntil = now + stunDur;
+        target.slowFactor = 0;
+        spawnParticle(target.x, target.y, TOWERS.vael.color, 8);
       } else if(TOWERS[t.key].splash){
         applyAoE(t, target, stats.dmg, stats.splash, false);
       } else {
@@ -955,11 +1346,52 @@ function tick(now){
   }
   state.bossTrail = state.bossTrail.filter(p=>p.life>0);
 
-  // wave completion check
+  // wave completion check — endless mode skips the "cleared" banner/unlock flow
+  // entirely since waves overlap by design; best-wave tracking already happens
+  // per-call in beginWaveEndless(), not on a "cleared" event.
   if(state.waveActive && state.spawnQueue.length===0 && state.enemies.length===0){
     state.waveActive=false;
-    onWaveCleared();
+    if(currentMap.id!=='endless'){
+      onWaveCleared();
+    }
   }
+
+  // safety valve: if a wave has been active for far longer than any wave should
+  // reasonably take (e.g. an enemy permanently stun-locked so it never dies or
+  // reaches the end), force any survivors through rather than soft-locking the
+  // game forever. They still cost Hall Integrity — this isn't a free pass, just
+  // a guarantee things can never get stuck for good.
+  if(state.waveActive && state.spawnQueue.length===0 && state.enemies.length>0
+     && state.waveStartedAt && (now - state.waveStartedAt) > 60000){
+    for(const e of state.enemies){
+      if(e.hp>0){
+        state.integrity -= (e.isBoss?3:1);
+        if(e.isBoss){ state.bossEscaped = true; state.bossAlive = false; }
+        e.hp = 0;
+      }
+    }
+    state.enemies = [];
+    state.waveActive = false;
+    if(currentMap.id!=='endless'){
+      onWaveCleared();
+    }
+  }
+
+  // endless mode: waves auto-release on a flat interval, always — regardless
+  // of whether the previous wave is still active. The button is always available
+  // too (see updateHud), so this is just the "if you don't call it yourself" fallback.
+  if(currentMap.id==='endless' && state.endlessCountdownDeadline && now >= state.endlessCountdownDeadline){
+    beginWaveEndless();
+  }
+
+  // Funky Claude's riff plays exactly while he's alive on the map
+  try{
+    if(state.bossAlive && !claudeRiff.playing) startClaudeRiff();
+    else if(!state.bossAlive && claudeRiff.playing) stopClaudeRiff();
+  }catch(e){ /* audio must never be able to stall the game loop */ }
+
+  // one sustained chord tone per adversary type, live only while that type is on the map
+  try{ updateEnemyDrones(); }catch(e){ /* audio must never be able to stall the game loop */ }
 
   // live HUD refresh so echoes earned mid-wave immediately unlock purchases/upgrades
   state.hudRefresh = (state.hudRefresh||0) - dt;
@@ -969,7 +1401,7 @@ function tick(now){
     if(state.selectedTower) showSidePanel(state.selectedTower);
   }
 
-  render();
+  try{ render(); }catch(e){ /* a render glitch should never be able to stall the game loop */ }
 }
 function applyAoE(t, center, dmg, radius, ignoreArmor){
   for(const e of state.enemies){
@@ -978,6 +1410,69 @@ function applyAoE(t, center, dmg, radius, ignoreArmor){
       dealDamage(e, dmg, ignoreArmor);
     }
   }
+}
+function drawFireBeam(ctx2, x1, y1, x2, y2, color, thicknessScale){
+  thicknessScale = thicknessScale || 1;
+  ctx2.save();
+  ctx2.lineCap = 'round';
+  ctx2.beginPath();
+  ctx2.moveTo(x1,y1);
+  ctx2.lineTo(x2,y2);
+  // outer glow
+  ctx2.strokeStyle = color;
+  ctx2.shadowColor = color;
+  ctx2.globalAlpha = 0.35;
+  ctx2.shadowBlur = 14*thicknessScale;
+  ctx2.lineWidth = 16*thicknessScale;
+  ctx2.stroke();
+  // mid body
+  ctx2.globalAlpha = 0.75;
+  ctx2.shadowBlur = 6*thicknessScale;
+  ctx2.lineWidth = 8*thicknessScale;
+  ctx2.stroke();
+  // bright core
+  ctx2.globalAlpha = 0.95;
+  ctx2.shadowBlur = 0;
+  ctx2.lineWidth = 3*thicknessScale;
+  ctx2.strokeStyle = '#fff8e0';
+  ctx2.stroke();
+  ctx2.restore();
+}
+function drawLightningBolt(ctx2, x1, y1, x2, y2, color){
+  const segments = 5;
+  const dx = (x2-x1)/segments, dy = (y2-y1)/segments;
+  const pts = [[x1,y1]];
+  for(let i=1;i<segments;i++){
+    pts.push([x1+dx*i + (Math.random()-0.5)*14, y1+dy*i + (Math.random()-0.5)*14]);
+  }
+  pts.push([x2,y2]);
+  ctx2.save();
+  ctx2.lineCap = 'round';
+  ctx2.lineJoin = 'round';
+  ctx2.strokeStyle = color;
+  ctx2.shadowColor = color;
+  const drawPath = ()=>{
+    ctx2.beginPath();
+    ctx2.moveTo(pts[0][0], pts[0][1]);
+    for(let i=1;i<pts.length;i++) ctx2.lineTo(pts[i][0], pts[i][1]);
+  };
+  drawPath();
+  ctx2.globalAlpha = 0.4;
+  ctx2.shadowBlur = 16;
+  ctx2.lineWidth = 11;
+  ctx2.stroke();
+  drawPath();
+  ctx2.globalAlpha = 0.85;
+  ctx2.shadowBlur = 8;
+  ctx2.lineWidth = 6;
+  ctx2.stroke();
+  drawPath();
+  ctx2.globalAlpha = 0.95;
+  ctx2.shadowBlur = 0;
+  ctx2.lineWidth = 2.5;
+  ctx2.strokeStyle = '#fff8e0';
+  ctx2.stroke();
+  ctx2.restore();
 }
 function applyChain(origin, dmg, chainCount, falloff, chainRange){
   let currentDmg = dmg;
@@ -1018,21 +1513,57 @@ function checkUnlocks(){
   buildToolbar();
 }
 function beginWave(){
+  if(currentMap.id==='endless'){
+    beginWaveEndless(true);
+    return;
+  }
   if(state.waveActive) return;
   state.waveNum++;
+  state.waveStartedAt = performance.now();
   const list = generateWave(currentMap, state.waveNum);
   state.spawnQueue = list;
-  state.spawnQueue.scaleFactor = list.scaleFactor||1;
   state.spawnTimer = 0;
   state.waveActive = true;
   state.bossEscaped = false;
   document.getElementById('startWaveBtn').disabled=true;
-  if(state.waveNum===currentMap.waveCount){
+  const isBossWave = (state.waveNum===currentMap.waveCount);
+  if(isBossWave){
     showBanner(`${claudeTitleFor(save.claudeDefeats)} approaches`);
   }
   updateHud();
 }
+// Endless mode: waves stack on top of whatever's still alive rather than
+// gating on the previous one clearing first — the button is always available,
+// calling it in just layers more enemies onto the existing queue. Difficulty
+// scaling travels with each spawned enemy individually (spec.scale) so waves
+// with different difficulty can coexist correctly mid-overlap.
+const ENDLESS_MAX_BACKLOG = 30; // spawn queue can never outrun what can actually appear on screen
+function beginWaveEndless(manual){
+  const backlog = state.spawnQueue.length + state.enemies.filter(e=>e.hp>0).length;
+  if(backlog >= ENDLESS_MAX_BACKLOG){
+    if(manual) showBanner("Too many on the field — let some through or clear a few first");
+    state.endlessCountdownDeadline = performance.now() + 2000; // retry soon, silently unless manually tapped
+    return;
+  }
+  state.waveNum++;
+  state.waveStartedAt = performance.now();
+  const list = generateEndlessWave(state.waveNum);
+  state.spawnQueue = state.spawnQueue.concat(list);
+  state.waveActive = true;
+  state.bossEscaped = false;
+  const isBossWave = (state.waveNum % ENDLESS_BOSS_INTERVAL === 0);
+  if(isBossWave){
+    showBanner(`${claudeTitleFor(save.claudeDefeats)} approaches`);
+  }
+  save.best['endless'] = Math.max(save.best['endless']||0, state.waveNum);
+  writeSave(save);
+  state.endlessCountdownDeadline = performance.now() + ENDLESS_WAVE_INTERVAL_MS;
+  updateHud();
+}
 function endRun(won){
+  stopClaudeRiff();
+  stopAllEnemyDrones();
+  state.bossAlive = false;
   state.screen = won ? 'mapComplete' : 'defeat';
   if(won && save.unlocked <= currentMap.id && currentMap.id < MAPS.length){
     save.unlocked = currentMap.id+1;
@@ -1361,7 +1892,7 @@ function render(){
     }
     const flashing = t.flashUntil && t.flashUntil>performance.now();
     const barrels = t.combined||1;
-    const size = 11 + t.tier*2.5;
+    const size = 13 + t.tier*3;
     const auroraOn = save.pro && save.skin==='aurora';
     const towerSeed = ((t.x*7 + t.y*13) % 100) / 100;
     const displayColor = auroraOn ? auroraColor(towerSeed, performance.now(), hexToHue(TOWERS[t.key].color)) : TOWERS[t.key].color;
@@ -1425,19 +1956,20 @@ function render(){
     ctx.restore();
     if(flashing && t.targetRef){
       const target = t.targetRef;
-      const dx = target.x-t.x, dy = target.y-t.y;
-      const len = Math.hypot(dx,dy)||1;
-      const px = -dy/len, py = dx/len;
-      for(let b=0;b<barrels;b++){
-        const off = barrels>1 ? (b-(barrels-1)/2)*7 : 0;
-        ctx.beginPath();
-        ctx.moveTo(t.x+px*off, t.y+py*off);
-        ctx.lineTo(target.x+px*off, target.y+py*off);
-        ctx.strokeStyle = displayColor;
-        ctx.globalAlpha=0.6;
-        ctx.lineWidth=2;
-        ctx.stroke();
-        ctx.globalAlpha=1;
+      if(t.key==='vael'){
+        drawLightningBolt(ctx, t.x, t.y, target.x, target.y, displayColor);
+      } else if(barrels>=3){
+        // triple-fused: one solid, noticeably thicker beam rather than three separate lines
+        drawFireBeam(ctx, t.x, t.y, target.x, target.y, displayColor, 1.6);
+      } else if(barrels===2){
+        // twin barrels: slight separation, each still a full thick beam
+        const dx = target.x-t.x, dy = target.y-t.y;
+        const len = Math.hypot(dx,dy)||1;
+        const px = -dy/len, py = dx/len, off = 5;
+        drawFireBeam(ctx, t.x+px*off, t.y+py*off, target.x+px*off, target.y+py*off, displayColor, 1);
+        drawFireBeam(ctx, t.x-px*off, t.y-py*off, target.x-px*off, target.y-py*off, displayColor, 1);
+      } else {
+        drawFireBeam(ctx, t.x, t.y, target.x, target.y, displayColor, 1);
       }
     }
   }
@@ -1561,7 +2093,7 @@ canvas.addEventListener('click', (ev)=>{
   if(state.resonanceTargeting){
     let hit = null;
     for(const t of state.towers){
-      if(Math.hypot(t.x-x,t.y-y) < 18){ hit=t; break; }
+      if(Math.hypot(t.x-x,t.y-y) < 40){ hit=t; break; }
     }
     if(hit && TOWERS[hit.key].support){
       showBanner("Support towers can't be empowered");
@@ -1593,7 +2125,7 @@ canvas.addEventListener('click', (ev)=>{
   // select existing tower, or combine with the currently selected one
   let hit = null;
   for(const t of state.towers){
-    if(Math.hypot(t.x-x,t.y-y) < 18){ hit=t; break; }
+    if(Math.hypot(t.x-x,t.y-y) < 40){ hit=t; break; }
   }
   if(hit && state.selectedTower && hit!==state.selectedTower){
     const result = tryCombine(state.selectedTower, hit);
@@ -1604,8 +2136,10 @@ canvas.addEventListener('click', (ev)=>{
       updateHud();
       showBanner(result.message);
       return;
-    } else if(hit.key===state.selectedTower.key && !TOWERS[hit.key].support){
-      const reasonText = result.reason==='tier'
+    } else if(hit.key===state.selectedTower.key){
+      const reasonText = result.reason==='support'
+        ? "Support towers can't be fused"
+        : result.reason==='tier'
         ? "Towers must match tier to fuse"
         : "Already at max barrels";
       showBanner(reasonText);
@@ -1629,7 +2163,7 @@ function showSidePanel(t){
   document.getElementById('spRate').textContent = TOWERS[t.key].support ? '—' : (stats.rate/1000).toFixed(2)+'s';
   const hintEl = document.getElementById('spCombineHint');
   if(TOWERS[t.key].support){
-    hintEl.textContent = '';
+    hintEl.textContent = "Support aura — can't be upgraded or fused.";
   } else if(barrels>=MAX_BARRELS){
     hintEl.textContent = 'Fully fused — max barrels reached.';
   } else {
@@ -1641,15 +2175,21 @@ function showSidePanel(t){
   }
   const upgradeCost = Math.round(TOWERS[t.key].cost * 0.7 * t.tier * (1 + (barrels-1)*0.5));
   const upBtn = document.getElementById('upgradeBtn');
-  upBtn.textContent = t.tier>=3 ? 'Max tier' : `Upgrade (${upgradeCost} echoes)`;
-  upBtn.disabled = t.tier>=3 || state.echoes<upgradeCost;
-  upBtn.onclick = ()=>{
-    if(t.tier>=3 || state.echoes<upgradeCost) return;
-    state.echoes -= upgradeCost;
-    t.tier++;
-    showSidePanel(t);
-    updateHud();
-  };
+  if(TOWERS[t.key].support){
+    upBtn.textContent = "Support — no upgrades";
+    upBtn.disabled = true;
+    upBtn.onclick = null;
+  } else {
+    upBtn.textContent = t.tier>=3 ? 'Max tier' : `Upgrade (${upgradeCost} echoes)`;
+    upBtn.disabled = t.tier>=3 || state.echoes<upgradeCost;
+    upBtn.onclick = ()=>{
+      if(t.tier>=3 || state.echoes<upgradeCost) return;
+      state.echoes -= upgradeCost;
+      t.tier++;
+      showSidePanel(t);
+      updateHud();
+    };
+  }
   const sellVal = Math.round(TOWERS[t.key].cost*0.5*t.tier*barrels);
   document.getElementById('sellBtn').textContent = `Sell (+${sellVal})`;
   document.getElementById('sellBtn').onclick = ()=>{
@@ -1686,7 +2226,7 @@ function buildToolbar(){
     btn.className='tower-btn'+(state.selectedBuild===key?' selected':'');
     if(state.echoes<def.cost) btn.classList.add('disabled');
     btn.innerHTML = `<div><span class="tswatch" style="background:${def.color};color:${def.color}"></span><span class="tname">${def.name}</span></div>
-      <div class="tcost">${def.cost} echoes</div><div class="tdesc">${def.desc}</div>`;
+      <div class="tcost">${def.cost} echoes</div><div class="tdesc collapsible">${def.desc}</div>`;
     btn.onclick = ()=>{
       state.selectedBuild = state.selectedBuild===key? null : key;
       state.selectedTower=null; hideSidePanel();
@@ -1702,7 +2242,23 @@ function updateHud(){
   const intEl = document.getElementById('integrityVal');
   intEl.textContent = Math.max(0,Math.round(state.integrity));
   intEl.parentElement.classList.toggle('low', state.integrity <= currentMap.lives*0.3);
-  document.getElementById('waveVal').textContent = `${state.waveNum}/${currentMap.waveCount}`;
+  document.getElementById('waveVal').textContent = currentMap.waveCount===Infinity ? `${state.waveNum}` : `${state.waveNum}/${currentMap.waveCount}`;
+  const startBtn = document.getElementById('startWaveBtn');
+  const countdownEl = document.getElementById('endlessCountdown');
+  if(currentMap.id==='endless'){
+    startBtn.disabled = false;
+    startBtn.textContent = state.waveNum===0 ? 'Call First Wave' : 'Call Next Wave';
+    const secs = Math.max(0, Math.ceil((state.endlessCountdownDeadline-performance.now())/1000));
+    countdownEl.textContent = secs>0 ? `Next wave in ${secs}…` : '';
+    countdownEl.style.display = '';
+  } else {
+    countdownEl.style.display = 'none';
+    if(state.waveActive){
+      startBtn.textContent = 'Wave in progress…';
+    } else {
+      startBtn.textContent = 'Begin Wave';
+    }
+  }
   buildToolbar();
 }
 
@@ -1794,9 +2350,41 @@ function showArmory(onContinue){
       </div>
     </div>`;
   }).join('');
+  const ENEMY_INFO = {
+    whisper: { name:'Whisper', note:'Fast and fragile — the backbone of every early wave.' },
+    screecher: { name:'Screecher', note:'Flies. Only air-capable towers can hit it at all.' },
+    chorusWisp: { name:'Chorus Wisp', note:'Splits into two weaker wisps the moment it dies.' },
+    discordKnight: { name:'Discord Knight', note:'Heavily armored — raw damage struggles here; armor-piercing or sustained fire works better.' },
+    drone: { name:'Drone', note:'Slow, armored, and built to soak hits while others slip past.' },
+    ember: { name:'Ember', note:"Spawned when Funky Claude feeds the flames mid-fight — fast but weak alone." }
+  };
+  const ENEMY_ORDER = ['whisper','screecher','chorusWisp','discordKnight','drone','ember'];
+  const enemyRows = ENEMY_ORDER.map(key=>{
+    const def = ENEMY_DEFS[key];
+    const info = ENEMY_INFO[key];
+    const armorNote = def.armor ? ` · ${Math.round(def.armor*100)}% damage reduction` : '';
+    const flyNote = def.flying ? ' · Flying' : '';
+    const splitNote = def.splits ? ` Splits into ${def.splits} on death (${def.splitHp} HP each).` : '';
+    return `<div class="armory-row" style="flex-direction:row;align-items:center;gap:10px;text-align:left;">
+      <span class="tswatch" style="background:${def.color};color:${def.color};flex-shrink:0;"></span>
+      <div class="armory-text">
+        <div class="armory-head"><strong>${info.name}</strong> — ${def.hp} HP base${armorNote}${flyNote}</div>
+        <div class="armory-note">${info.note}${splitNote}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const bossRow = `<div class="armory-row" style="flex-direction:row;align-items:center;gap:10px;text-align:left;">
+    <span class="tswatch" style="background:#ff6a3d;color:#ff6a3d;flex-shrink:0;"></span>
+    <div class="armory-text">
+      <div class="armory-head"><strong>Funky Claude</strong> — 520 HP base, heavily scaled</div>
+      <div class="armory-note">The recurring final boss. Scales up with wave and map difficulty, and gets permanently stronger every time you defeat him — forever.</div>
+    </div>
+  </div>`;
   box.innerHTML = `<h2>Field Manual</h2>
     <div class="flavor">What the Wardens have on hand.</div>
     <div class="armory-list">${rows}</div>
+    <div class="flavor" style="margin-top:6px;">The Dissonance itself. Base HP shown — it scales up with wave and map difficulty.</div>
+    <div class="armory-list">${enemyRows}${bossRow}</div>
     <button class="primary" id="armoryContinueBtn">Continue</button>`;
 
   TOWER_ORDER.forEach(key=>{
@@ -1838,19 +2426,44 @@ function showPaywall(){
       <input id="tokenInput" type="text" placeholder="Paste your Pro token" style="width:80%;max-width:320px;padding:8px 10px;border-radius:6px;border:1px solid #3a4570;background:#12162a;color:#e9e3d3;font-family:Georgia,serif;">
       <div><button id="restoreBtn" style="margin-top:10px;">Restore Purchase</button></div>
     </div>
+    <div style="margin-top:18px;">
+      <div style="font-size:0.8em;color:#8a93b8;font-style:italic;margin-bottom:6px;">Lost your token? We'll email it to you.</div>
+      <input id="emailInput" type="email" placeholder="Email used at purchase" style="width:80%;max-width:320px;padding:8px 10px;border-radius:6px;border:1px solid #3a4570;background:#12162a;color:#e9e3d3;font-family:Georgia,serif;">
+      <div><button id="emailRestoreBtn" style="margin-top:10px;">Email My Code</button></div>
+    </div>
     <div><button id="paywallBackBtn" style="margin-top:16px;background:none;border:1px solid #3a4570;color:#9aa3c0;padding:7px 18px;border-radius:16px;cursor:pointer;font-family:Georgia,serif;font-size:0.82em;font-style:italic;">Back to menu</button></div>`;
   document.getElementById('buyProBtn').onclick = beginProCheckout;
   document.getElementById('restoreBtn').onclick = async ()=>{
     const token = document.getElementById('tokenInput').value;
-    if(await validateProToken(token)){
+    const result = await validateProToken(token);
+    if(result.valid){
       save.pro = true;
       save.proToken = token.trim();
       writeSave(save);
       state.screen = 'menu';
       showModal();
+    } else if(result.reason === 'exhausted'){
+      showBanner('This token has reached its 10-restore limit. Contact support@scvd.app for help.');
     } else {
       showBanner('That token doesn\'t look right — check and try again.');
     }
+  };
+  document.getElementById('emailRestoreBtn').onclick = async ()=>{
+    const email = document.getElementById('emailInput').value.trim();
+    if(!email){ showBanner('Enter the email you used at purchase.'); return; }
+    if(!WORKER_URL){
+      showBanner("Checkout isn't wired up yet — this app has no payment Worker deployed.");
+      return;
+    }
+    try{
+      await fetch(`${WORKER_URL}/restore-by-email`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email })
+      });
+    }catch(e){ /* ignore — same message either way, see note below */ }
+    // Always the same message, whether or not that email actually purchased —
+    // the Worker never confirms or denies a match, so neither do we.
+    showBanner('If that email purchased Pro, a restore code is on its way.');
   };
   document.getElementById('paywallBackBtn').onclick = ()=>{ state.screen='menu'; showModal(); };
 }
@@ -1883,12 +2496,26 @@ function showModal(){
           }).join('')}</div>
         </div>`;
       }).join('')}
+      <div class="quest-block">
+        <div class="quest-head">The Warden's Gauntlet</div>
+        <div class="quest-desc">No quest, no ending — a proving ground to field and upgrade everything at once.</div>
+        <div class="maps">
+          <div class="map-card endless-card ${save.pro ? '' : 'locked'}">
+            <h4>${ENDLESS_MAP.name}</h4>
+            <div class="mdesc">${ENDLESS_MAP.desc}</div>
+            ${save.best['endless'] ? `<div class="best">Best: wave ${save.best['endless']}</div>` : ''}
+            ${save.pro ? '' : `<div class="best" style="color:#8a93b8;">Pro exclusive</div>`}
+          </div>
+        </div>
+      </div>
       <div><button id="menuArmoryBtn">View Field Manual</button>${save.pro
         ? ` <button id="menuSkinBtn">Skin: ${save.skin==='aurora'?'Aurora':'Classic'}</button>`
         : ' <button id="menuProBtn">Unlock Pro</button>'}</div>`;
-    box.querySelectorAll('.map-card:not(.locked)').forEach(el=>{
+    box.querySelectorAll('.map-card:not(.locked):not(.endless-card)').forEach(el=>{
       el.onclick = ()=> startMap(parseInt(el.dataset.map));
     });
+    const endlessCard = box.querySelector('.endless-card');
+    if(endlessCard) endlessCard.onclick = ()=> save.pro ? startMap('endless') : showPaywall();
     document.getElementById('menuArmoryBtn').onclick = ()=> showArmory(()=> showModal());
     const proBtn = document.getElementById('menuProBtn');
     if(proBtn) proBtn.onclick = ()=> showPaywall();
@@ -1917,8 +2544,11 @@ function showModal(){
       });
     };
   } else if(state.screen==='defeat'){
+    const waveText = currentMap.waveCount===Infinity
+      ? `You held for ${state.waveNum} wave${state.waveNum===1?'':'s'} in ${currentMap.name}.`
+      : `Wave ${state.waveNum} of ${currentMap.waveCount} on ${currentMap.name}.`;
     box.innerHTML = `<h2>The Hall Falls Silent</h2>
-      <div class="flavor">Wave ${state.waveNum} of ${currentMap.waveCount} on ${currentMap.name}. The dissonance gets in, this time.</div>
+      <div class="flavor">${waveText} The dissonance gets in, this time.</div>
       <button class="primary" id="retryBtn">Try again</button>
       <button class="primary" id="menuBtn" style="margin-left:10px;">Map select</button>`;
     document.getElementById('retryBtn').onclick = ()=> startMap(currentMap.id);
@@ -1929,14 +2559,19 @@ function hideModal(){ document.getElementById('overlay').classList.add('hidden')
 
 /* ---------- start / reset ---------- */
 function startMap(id){
+  requestWakeLock();
+  if(id==='endless' && !save.pro){
+    showPaywall();
+    return;
+  }
   if(playsRemainingToday() <= 0){
     showPaywall();
     return;
   }
   consumeFreePlay();
-  currentMap = MAPS.find(m=>m.id===id);
+  currentMap = id==='endless' ? ENDLESS_MAP : MAPS.find(m=>m.id===id);
   state.screen='playing';
-  state.echoes = 140 + (id-1)*20;
+  state.echoes = id==='endless' ? 280 : 140 + (id-1)*20;
   state.integrity = currentMap.lives;
   state.waveNum = 0;
   state.towers = [];
@@ -1945,6 +2580,10 @@ function startMap(id){
   state.popups = [];
   state.watermark = generateWatermark(currentMap);
   state.bossTrail = [];
+  state.bossAlive = false;
+  state.bossEscaped = false;
+  stopClaudeRiff();
+  stopAllEnemyDrones();
   state.resonance = 0;
   state.resonanceTargeting = false;
   state.selectedBuild=null;
@@ -1952,6 +2591,7 @@ function startMap(id){
   state.waveActive=false;
   state.spawnQueue=[];
   state.hudRefresh=0;
+  state.endlessCountdownDeadline = id==='endless' ? (performance.now() + ENDLESS_WAVE_INTERVAL_MS) : 0;
   hideModal();
   hideSidePanel();
   updateHud();
@@ -1963,6 +2603,21 @@ document.getElementById('startWaveBtn').onclick = beginWave;
 document.getElementById('speedBtn').onclick = ()=>{
   state.speed = state.speed===1?2: state.speed===2?0.001:1;
   document.getElementById('speedBtn').textContent = state.speed===1?'▶ 1x':state.speed===2?'▶▶ 2x':'⏸';
+};
+document.getElementById('exitToMenuBtn').onclick = ()=>{
+  if(state.screen!=='playing'){ state.screen='menu'; showModal(); return; }
+  if(confirm('Leave this map? Your current run will be lost.')){
+    stopClaudeRiff();
+    stopAllEnemyDrones();
+    state.screen='menu';
+    showModal();
+  }
+};
+const muteBtnEl = document.getElementById('muteBtn');
+muteBtnEl.textContent = save.muted ? '🔇' : '🔊';
+muteBtnEl.onclick = ()=>{
+  setMuted(!save.muted);
+  muteBtnEl.textContent = save.muted ? '🔇' : '🔊';
 };
 
 /* ---------- boot ---------- */
