@@ -892,7 +892,7 @@ let currentMap = null;
 
 /* ---------- towers ---------- */
 const TOWERS = {
-  spire:{ key:'spire', name:'Solfège Spire', cost:50, range:115, rate:600, dmg:9, color:'#4fd8e8',
+  spire:{ key:'spire', name:'Solfège Spire', cost:50, range:115, rate:500, dmg:11, color:'#4fd8e8',
     desc:"Reliable single-note strike.", air:true, ground:true },
   bloom:{ key:'bloom', name:'Chorus Bloom', cost:95, range:95, rate:950, dmg:13, splash:52, color:'#e8b34c',
     desc:"Harmonic pulse, hits all nearby.", air:false, ground:true },
@@ -937,6 +937,9 @@ let state = {
   watermark:null,
   bossTrail:[],
   resonance:0,
+  overcharge:0,
+  overchargeFlashUntil:0,
+  overchargeStrikes:[],
   resonanceTargeting:false,
   endlessCountdownDeadline:0,
   waveStartedAt:0,
@@ -1055,7 +1058,7 @@ function generateEndlessWave(waveIndex){
   const n = Math.min(40, 5 + waveIndex);
   for(let i=0;i<n;i++){
     const t = pool[Math.floor(Math.random()*pool.length)];
-    list.push({type:t, delay:Math.max(220, 600-waveIndex*8), scale});
+    list.push({type:t, delay:Math.max(300, 600-waveIndex*8), scale});
   }
   return list;
 }
@@ -1136,6 +1139,7 @@ function dealDamage(e, dmg, ignoreArmor){
 
 /* ---------- combining towers ---------- */
 const MAX_BARRELS = 3;
+const OVERCHARGE_MAX = 120; // extra kill-value needed once resonance is already full, before the surge fires
 function tryCombine(source, target){
   if(source.key !== target.key) return {ok:false, reason:'type'};
   if(TOWERS[source.key].support) return {ok:false, reason:'support'};
@@ -1155,7 +1159,16 @@ function tryCombine(source, target){
 
 function killEnemy(e){
   state.echoes += e.reward;
-  state.resonance = Math.min(100, state.resonance + Math.min(18, e.reward));
+  if(state.resonance >= 100){
+    // resonance is already full and unspent — banked restraint keeps building an
+    // overcharge instead, until it reaches critical and surges into every tower
+    state.overcharge = Math.min(OVERCHARGE_MAX, state.overcharge + Math.min(18, e.reward));
+    if(state.overcharge >= OVERCHARGE_MAX){
+      triggerOverchargeSurge();
+    }
+  } else {
+    state.resonance = Math.min(100, state.resonance + Math.min(18, e.reward));
+  }
   spawnParticle(e.x, e.y, e.color, 14);
   state.popups.push({x:e.x, y:e.y, text:`+${e.reward}`, life:1});
   if(e.splits){
@@ -1171,6 +1184,84 @@ function killEnemy(e){
     save.claudeDefeats++;
     writeSave(save);
   }
+}
+function playOverchargeSurgeSound(){
+  if(!audioCtx) return;
+  const now = audioCtx.currentTime;
+
+  // lightning crack — instant sharp snap
+  const crackBuf = getBreachNoiseBuffer();
+  if(crackBuf){
+    const src = audioCtx.createBufferSource();
+    src.buffer = crackBuf;
+    const hp = audioCtx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=2500;
+    const crackGain = audioCtx.createGain();
+    crackGain.gain.setValueAtTime(0.0001, now);
+    crackGain.gain.exponentialRampToValueAtTime(TOWER_HARMONIC_BASE_GAIN*2.2, now+0.006);
+    crackGain.gain.exponentialRampToValueAtTime(0.0001, now+0.22);
+    src.connect(hp); hp.connect(crackGain); crackGain.connect(masterGain);
+    src.start(now); src.stop(now+0.25);
+  }
+  // descending electric zap layered on the crack
+  const zap = audioCtx.createOscillator();
+  zap.type = 'sawtooth';
+  zap.frequency.setValueAtTime(3200, now);
+  zap.frequency.exponentialRampToValueAtTime(180, now+0.16);
+  const zapGain = audioCtx.createGain();
+  zapGain.gain.setValueAtTime(0.0001, now);
+  zapGain.gain.exponentialRampToValueAtTime(TOWER_HARMONIC_BASE_GAIN*1.4, now+0.005);
+  zapGain.gain.exponentialRampToValueAtTime(0.0001, now+0.18);
+  zap.connect(zapGain); zapGain.connect(masterGain);
+  zap.start(now); zap.stop(now+0.2);
+
+  // thunder rumble — rolling low boom trailing just behind the crack
+  const rumbleStart = now+0.05;
+  const rumbleDur = 1.7;
+  const rumbleBuf = getBreachNoiseBuffer();
+  if(rumbleBuf){
+    const rSrc = audioCtx.createBufferSource();
+    rSrc.buffer = rumbleBuf;
+    rSrc.loop = true;
+    const lp = audioCtx.createBiquadFilter(); lp.type='lowpass';
+    lp.frequency.setValueAtTime(1200, rumbleStart);
+    lp.frequency.exponentialRampToValueAtTime(90, rumbleStart+rumbleDur*0.8);
+    const rGain = audioCtx.createGain();
+    rGain.gain.setValueAtTime(0.0001, rumbleStart);
+    rGain.gain.exponentialRampToValueAtTime(ENEMY_DRONE_GAIN*2.4, rumbleStart+0.12);
+    rGain.gain.exponentialRampToValueAtTime(ENEMY_DRONE_GAIN*0.6, rumbleStart+rumbleDur*0.6);
+    rGain.gain.linearRampToValueAtTime(0.0001, rumbleStart+rumbleDur);
+    rSrc.connect(lp); lp.connect(rGain); rGain.connect(masterGain);
+    rSrc.start(rumbleStart); rSrc.stop(rumbleStart+rumbleDur+0.05);
+  }
+  // low-frequency body for weight under the rumble
+  [55, 41].forEach(freq=>{
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    const oGain = audioCtx.createGain();
+    oGain.gain.setValueAtTime(0.0001, rumbleStart);
+    oGain.gain.exponentialRampToValueAtTime(ENEMY_DRONE_GAIN*1.6, rumbleStart+0.15);
+    oGain.gain.exponentialRampToValueAtTime(0.0001, rumbleStart+rumbleDur*0.9);
+    osc.connect(oGain); oGain.connect(masterGain);
+    osc.start(rumbleStart); osc.stop(rumbleStart+rumbleDur);
+  });
+}
+function triggerOverchargeSurge(){
+  const until = performance.now()+20000;
+  const strikes = [];
+  for(const t of state.towers){
+    if(TOWERS[t.key].support) continue;
+    t.resonanceBoost = { until };
+    spawnParticle(t.x, t.y, '#8fe8ff', 22);
+    strikes.push({x:t.x, y:t.y});
+  }
+  try{ playOverchargeSurgeSound(); }catch(e){ /* audio must never be able to stall the game loop */ }
+  state.overchargeStrikes = strikes;
+  state.overchargeFlashUntil = performance.now()+650;
+  state.resonance = 0;
+  state.overcharge = 0;
+  state.resonanceTargeting = false;
+  showBanner('Volta surge! Every defender empowered!');
 }
 
 function spawnParticle(x,y,color,n){
@@ -1203,7 +1294,7 @@ function tick(now){
     while(state.spawnQueue.length && state.spawnTimer<=0){
       const spec = state.spawnQueue.shift();
       spawnEnemy(spec, currentMap, spec.scale||1);
-      state.spawnTimer = (spec.delay!==undefined? Math.max(140,spec.delay*0.75) : 400);
+      state.spawnTimer = (spec.delay!==undefined? Math.max(160,spec.delay*0.85) : 450);
     }
   }
 
@@ -1683,6 +1774,7 @@ const swordCanvas = document.getElementById('resonanceSword');
 const swordCtx = swordCanvas.getContext('2d');
 let swordWisps = [];
 const EMBER_TONES_AURORA = ['#8a6bff','#4fd8e8','#c084f0'];
+const EMBER_TONES_OVERCHARGE = ['#8fe8ff','#c5f6ff','#5ab8ff'];
 
 function drawResonanceSword(now){
   const w = swordCanvas.width, h = swordCanvas.height;
@@ -1712,13 +1804,20 @@ function drawResonanceSword(now){
   const maxBladeLen = w - guardX - 24;
   const bladeLen = maxBladeLen * charge;
   const fullyCharged = charge >= 0.999;
-  const pulse = fullyCharged ? 0.7+0.3*Math.sin(now/220) : 1;
+  const overcharging = state.resonance >= 100 && state.overcharge > 0;
+  const overchargeRatio = Math.min(1, state.overcharge/OVERCHARGE_MAX);
+  const pulseSpeed = 220 - overchargeRatio*130; // pulses faster as it nears critical
+  const pulse = fullyCharged ? 0.7+0.3*Math.sin(now/pulseSpeed) : 1;
 
   if(bladeLen > 3){
     const tipX = guardX + bladeLen;
-    const bladeH = fullyCharged ? 11*pulse : 8;
+    const bladeH = (fullyCharged ? 11+overchargeRatio*7 : 8) * pulse;
     const grad = swordCtx.createLinearGradient(tipX, 0, guardX, 0);
-    if(auroraOn){
+    if(overcharging){
+      grad.addColorStop(0, '#eafeff');
+      grad.addColorStop(0.5, '#4fd8e8');
+      grad.addColorStop(1, '#0b3a78');
+    } else if(auroraOn){
       grad.addColorStop(0, fullyCharged ? '#f0e6ff' : '#c084f0');
       grad.addColorStop(0.55, '#4fd8e8');
       grad.addColorStop(1, '#2a1a6e');
@@ -1728,8 +1827,8 @@ function drawResonanceSword(now){
       grad.addColorStop(1, '#7a1a0a');
     }
     swordCtx.save();
-    swordCtx.shadowColor = auroraOn ? (fullyCharged ? '#dfc8ff' : '#8a6bff') : (fullyCharged ? '#ffdf9e' : '#ff7a3d');
-    swordCtx.shadowBlur = fullyCharged ? 22*pulse : 10;
+    swordCtx.shadowColor = overcharging ? '#8fe8ff' : (auroraOn ? (fullyCharged ? '#dfc8ff' : '#8a6bff') : (fullyCharged ? '#ffdf9e' : '#ff7a3d'));
+    swordCtx.shadowBlur = overcharging ? (20+30*overchargeRatio)*pulse : (fullyCharged ? 22*pulse : 10);
     swordCtx.fillStyle = grad;
     swordCtx.beginPath();
     swordCtx.moveTo(guardX, midY-bladeH/2);
@@ -1740,12 +1839,12 @@ function drawResonanceSword(now){
     swordCtx.fill();
     swordCtx.restore();
 
-    // laser core running through the blade — fire (or aurora) sword with a plasma spine
+    // laser core running through the blade — fire (or aurora, or overcharging blue) sword with a plasma spine
     swordCtx.save();
     swordCtx.shadowColor = '#fff8dc';
     swordCtx.shadowBlur = fullyCharged ? 14*pulse : 6;
     swordCtx.strokeStyle = 'rgba(255,250,230,0.9)';
-    swordCtx.lineWidth = fullyCharged ? 3*pulse : 2;
+    swordCtx.lineWidth = (fullyCharged ? 3+overchargeRatio*2 : 2) * pulse;
     swordCtx.lineCap = 'round';
     swordCtx.beginPath();
     swordCtx.moveTo(guardX+4, midY);
@@ -1753,14 +1852,15 @@ function drawResonanceSword(now){
     swordCtx.stroke();
     swordCtx.restore();
 
-    // smouldering plasma wisps rising off the blade
-    if(Math.random() < 0.6){
-      const tones = auroraOn ? EMBER_TONES_AURORA : EMBER_TONES;
+    // smouldering plasma wisps rising off the blade — thicker and more frequent while overcharging
+    if(Math.random() < (overcharging ? 0.6+0.35*overchargeRatio : 0.6)){
+      const tones = overcharging ? EMBER_TONES_OVERCHARGE : (auroraOn ? EMBER_TONES_AURORA : EMBER_TONES);
       swordWisps.push({
         x: guardX + Math.random()*bladeLen,
         y: midY + (Math.random()-0.5)*bladeH*0.8,
-        vy: -(0.25+Math.random()*0.35),
+        vy: -(0.25+Math.random()*0.35) * (1+overchargeRatio*0.6),
         life: 1,
+        size: 1 + overchargeRatio*0.9,
         color: tones[Math.floor(Math.random()*tones.length)]
       });
     }
@@ -1777,7 +1877,7 @@ function drawResonanceSword(now){
     swordCtx.shadowColor = p.color;
     swordCtx.shadowBlur = 6;
     swordCtx.beginPath();
-    swordCtx.arc(p.x, p.y, 1.4+1.4*p.life, 0, Math.PI*2);
+    swordCtx.arc(p.x, p.y, (1.4+1.4*p.life)*(p.size||1), 0, Math.PI*2);
     swordCtx.fill();
     swordCtx.restore();
   }
@@ -1974,6 +2074,18 @@ function render(){
     }
   }
 
+  // Volta surge — lightning striking down into every empowered tower at once
+  if(state.overchargeFlashUntil && performance.now() < state.overchargeFlashUntil){
+    for(const pt of state.overchargeStrikes){
+      drawLightningBolt(ctx, pt.x, 0, pt.x, pt.y, '#8fe8ff');
+    }
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = '#8fe8ff';
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+
   // boss vapor trail
   for(const p of state.bossTrail){
     ctx.save();
@@ -2100,6 +2212,7 @@ canvas.addEventListener('click', (ev)=>{
     } else if(hit){
       hit.resonanceBoost = { until: performance.now()+20000 };
       state.resonance = 0;
+      state.overcharge = 0;
       state.resonanceTargeting = false;
       spawnParticle(hit.x, hit.y, '#ffcf5c', 26);
       showBanner(`${TOWERS[hit.key].name} empowered by Volta Fire!`);
@@ -2585,6 +2698,9 @@ function startMap(id){
   stopClaudeRiff();
   stopAllEnemyDrones();
   state.resonance = 0;
+  state.overcharge = 0;
+  state.overchargeFlashUntil = 0;
+  state.overchargeStrikes = [];
   state.resonanceTargeting = false;
   state.selectedBuild=null;
   state.selectedTower=null;
