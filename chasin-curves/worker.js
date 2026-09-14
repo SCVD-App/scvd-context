@@ -1,4 +1,4 @@
-// Chasin' Curves — Worker v3.4
+// Chasin' Curves — Worker v3.5
 // Session 12: Email + 6-digit code auth replaces open username login.
 //             member/garage routes now require a valid session bound to the
 //             requester's own email — closes the "type anyone's username,
@@ -126,6 +126,20 @@
 //             Cover-photo upload, the canvas-generated Instagram-postable
 //             image, RSVP/cancel UI, the nudge/auto-cancel cron, and
 //             reliability tracking are still not built — next session.
+// Session 21: Waypoint capture (app.js TripPlanner — geocoded stops, first
+//             = meeting point, last = end point) plus a run-page redesign
+//             per Scott's call: no separate map block, no pins/route line.
+//             Instead the vehicle hero gets a thin (opacity 0.22, screen
+//             blend) faded map layered on top, with bold waypoint NAME
+//             labels positioned by real Web Mercator projection — ported
+//             from app.js's own trip-postcard bbox-aspect-correction code
+//             rather than reinvented, since that code exists specifically
+//             because of a prior alignment bug (route drifting off the
+//             roads under it when the requested image's aspect ratio
+//             didn't match the bbox). Requesting the map at the exact same
+//             16:10 aspect as the .hero CSS box is what makes the
+//             percentage-based label positions land correctly regardless
+//             of the visitor's screen width.
 // Endpoints: 38 total
 //
 // Secrets required in Cloudflare dashboard:
@@ -430,6 +444,98 @@ async function grantPro(env, email, planId, plan, stripeSessionId) {
 // wall, so it's the app's actual public attack surface for stored XSS if
 // that step is ever skipped on a new field.
 const APP_URL = 'https://scvd-app.github.io/Chasin-Curves/';
+// Reused as-is from app.js's client-side constant — this is Mapbox's
+// public pk. token (designed for client embedding), not a secret, so
+// duplicating it server-side for the run-map overlay is safe.
+const MAPBOX_TOKEN = 'pk.eyJ1Ijoic2N2ZCIsImEiOiJjbXMzOHB1eXUwMzRjMzVvYm0ya29wYTZ1In0.FlTd5i3zPj5W7E57UaH5gw';
+const MAPBOX_MAX_DIMENSION_SERVER = 1280; // mirrors app.js's MAPBOX_MAX_DIMENSION — same cap, same reason
+const HERO_W = 1200, HERO_H = 750; // exact 16:10, matches the .hero CSS box below — label % positions only
+                                     // line up correctly if the requested map image's aspect ratio matches
+                                     // the box it's displayed in, same reasoning as app.js's correctBBoxAspect.
+
+// ── Web Mercator projection — ported from app.js's trip-postcard code
+// (mercatorY/correctBBoxAspect/projectPoint) rather than reinvented. That
+// code exists because of a real bug (route lines drifting off the roads
+// underneath them) caused by Mapbox silently re-padding a bbox whose aspect
+// ratio didn't match the requested image — same failure mode would hit
+// waypoint label positions here if skipped.
+const toRad = (d) => (d * Math.PI) / 180;
+const toDeg = (r) => (r * 180) / Math.PI;
+const mercatorY = (lat) => Math.log(Math.tan(Math.PI / 4 + toRad(lat) / 2));
+const mercatorYInverse = (y) => toDeg(2 * Math.atan(Math.exp(y)) - Math.PI / 2);
+
+function computeBBox(waypoints) {
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (const w of waypoints) {
+    if (w.lat < minLat) minLat = w.lat;
+    if (w.lat > maxLat) maxLat = w.lat;
+    if (w.lng < minLng) minLng = w.lng;
+    if (w.lng > maxLng) maxLng = w.lng;
+  }
+  const latSpan = Math.max(maxLat - minLat, 0.01);
+  const lngSpan = Math.max(maxLng - minLng, 0.01);
+  const latPad = latSpan * 0.18, lngPad = lngSpan * 0.18;
+  return { minLat: minLat - latPad, maxLat: maxLat + latPad, minLng: minLng - lngPad, maxLng: maxLng + lngPad };
+}
+
+function correctBBoxAspect(bbox, targetAspect) {
+  const xSpan = toRad(bbox.maxLng - bbox.minLng);
+  const yMercMin = mercatorY(bbox.minLat), yMercMax = mercatorY(bbox.maxLat);
+  const ySpan = yMercMax - yMercMin;
+  const currentAspect = xSpan / ySpan;
+  if (currentAspect < targetAspect) {
+    const xSpanNew = targetAspect * ySpan;
+    const centerLng = (bbox.minLng + bbox.maxLng) / 2;
+    const halfSpanDeg = toDeg(xSpanNew) / 2;
+    return { minLat: bbox.minLat, maxLat: bbox.maxLat, minLng: centerLng - halfSpanDeg, maxLng: centerLng + halfSpanDeg };
+  } else if (currentAspect > targetAspect) {
+    const ySpanNew = xSpan / targetAspect;
+    const yMercCenter = (yMercMin + yMercMax) / 2;
+    const halfSpanMerc = ySpanNew / 2;
+    return {
+      minLat: mercatorYInverse(yMercCenter - halfSpanMerc),
+      maxLat: mercatorYInverse(yMercCenter + halfSpanMerc),
+      minLng: bbox.minLng, maxLng: bbox.maxLng,
+    };
+  }
+  return bbox;
+}
+
+// Percentage position (0-100), not pixels — the hero renders at whatever
+// width the visitor's screen gives it, so CSS % keeps a label aligned with
+// its real-world point regardless of device.
+function projectToPercent(lng, lat, bbox) {
+  const xPct = ((lng - bbox.minLng) / (bbox.maxLng - bbox.minLng)) * 100;
+  const yMerc = mercatorY(lat);
+  const yMercMin = mercatorY(bbox.minLat), yMercMax = mercatorY(bbox.maxLat);
+  const yPct = 100 - ((yMerc - yMercMin) / (yMercMax - yMercMin)) * 100;
+  return [xPct, yPct];
+}
+
+// Plain (no markers/path — those are now hand-placed text labels instead)
+// faded map backdrop, sized to exactly match the hero box's aspect ratio.
+function buildFadedMapUrl(bbox) {
+  const scale = Math.min(1, MAPBOX_MAX_DIMENSION_SERVER / HERO_W, MAPBOX_MAX_DIMENSION_SERVER / HERO_H);
+  const reqW = Math.round(HERO_W * scale), reqH = Math.round(HERO_H * scale);
+  const bboxStr = `[${bbox.minLng},${bbox.minLat},${bbox.maxLng},${bbox.maxLat}]`;
+  return `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/${bboxStr}/${reqW}x${reqH}@2x?access_token=${MAPBOX_TOKEN}`;
+}
+
+// Returns { mapUrl, labels: [{ text, xPct, yPct, kind }] } or null if fewer
+// than 2 waypoints (nothing meaningful to show). kind is 'start'/'end'/'via'
+// — drives the label's colour accent in the template.
+function buildWaypointOverlay(waypoints) {
+  if (!waypoints || waypoints.length < 2) return null;
+  const bbox = correctBBoxAspect(computeBBox(waypoints), HERO_W / HERO_H);
+  const mapUrl = buildFadedMapUrl(bbox);
+  const labels = waypoints.map((w, i) => {
+    const [xPct, yPct] = projectToPercent(w.lng, w.lat, bbox);
+    const kind = i === 0 ? 'start' : (i === waypoints.length - 1 ? 'end' : 'via');
+    return { text: w.label, xPct, yPct, kind };
+  });
+  return { mapUrl, labels };
+}
+
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -463,11 +569,17 @@ function renderRunNotFoundHtml() {
 <a href="${APP_URL}" style="color:#2E6DA4;">Go to Chasin' Curves</a></body></html>`;
 }
 
-function renderRunPageHtml({ trip, organiserDisplayName, vehiclePhotoUrl, vehicleLabel, roadNames, goingCount, maybeCount }) {
+function renderRunPageHtml({ trip, organiserDisplayName, vehiclePhotoUrl, vehicleLabel, roadNames, goingCount, maybeCount, waypointOverlay }) {
   const title = escapeHtml(trip.title || 'A Chasin\u2019 Curves run');
   const dateLabel = fmtDateLabel(trip.date);
   const timeLabel = trip.time ? escapeHtml(trip.time) : '';
-  const meetingPoint = trip.meetingPoint ? escapeHtml(trip.meetingPoint) : '';
+  // Session 20: a run with waypoints derives its meeting/end point display
+  // from them (first/last) rather than the old free-text meetingPoint field
+  // — the planner form never actually collected that field, so waypoints
+  // are the real source of truth whenever they exist.
+  const waypoints = trip.waypoints || [];
+  const meetingPoint = waypoints[0]?.label ? escapeHtml(waypoints[0].label) : (trip.meetingPoint ? escapeHtml(trip.meetingPoint) : '');
+  const endPoint = waypoints.length > 1 ? escapeHtml(waypoints[waypoints.length - 1].label) : '';
   const notes = trip.notes ? escapeHtml(trip.notes) : '';
   const organiser = escapeHtml(organiserDisplayName);
   const vehicle = vehicleLabel ? escapeHtml(vehicleLabel) : '';
@@ -484,6 +596,22 @@ function renderRunPageHtml({ trip, organiserDisplayName, vehiclePhotoUrl, vehicl
       </div>`
     : '';
 
+  // Session 20: waypoint names overlaid directly on the hero — a thin,
+  // low-opacity map backdrop (so it never competes with the vehicle photo)
+  // plus bold text labels positioned by real Web Mercator projection, not
+  // guessed. Start is champagne, end is Monza red, vias plain bone — kept
+  // to text only (no pins/lines) per Scott's call: names are legible at a
+  // glance, which is the whole point, without the visual clutter of a full
+  // route render.
+  const LABEL_COLORS = { start: '#C9A84C', end: '#C0392B', via: '#f5f3ee' };
+  const mapOverlayHtml = waypointOverlay ? `
+    <img class="hero-map" src="${escapeHtml(waypointOverlay.mapUrl)}" alt=""/>
+    ${waypointOverlay.labels.map(l => `
+      <div class="waypoint-label" style="left:${l.xPct.toFixed(2)}%; top:${l.yPct.toFixed(2)}%; color:${LABEL_COLORS[l.kind]};">
+        ${escapeHtml(l.text)}
+      </div>`).join('')}
+  ` : '';
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -499,8 +627,10 @@ ${heroUrl ? `<meta property="og:image" content="${escapeHtml(heroUrl)}"/>` : ''}
 <style>
   body { margin:0; background:#0d0d0d; color:#f5f3ee; font-family:'Josefin Sans',sans-serif; }
   .wrap { max-width:560px; margin:0 auto; padding:0 0 60px; }
-  .hero { width:100%; aspect-ratio:16/10; background:#0a0a0a linear-gradient(160deg,#151515,#0a0a0a); background-size:cover; background-position:center; position:relative; }
-  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at bottom, rgba(0,0,0,0.75), rgba(0,0,0,0.15) 60%); }
+  .hero { width:100%; aspect-ratio:16/10; background:#0a0a0a linear-gradient(160deg,#151515,#0a0a0a); background-size:cover; background-position:center; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at bottom, rgba(0,0,0,0.75), rgba(0,0,0,0.15) 60%); pointer-events:none; }
+  .hero-map { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0.22; mix-blend-mode:screen; }
+  .waypoint-label { position:absolute; transform:translate(-50%,-50%); font-family:'Josefin Sans',sans-serif; font-weight:600; font-size:13px; letter-spacing:0.03em; text-shadow:0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6); white-space:nowrap; }
   .brand { text-align:center; padding:28px 24px 8px; }
   .brand-name { font-family:'Cormorant Garamond',serif; font-weight:700; font-size:28px; color:#C9A84C; letter-spacing:0.02em; }
   .brand-tag { font-size:11px; letter-spacing:0.2em; color:#777; text-transform:uppercase; margin-top:4px; }
@@ -518,7 +648,9 @@ ${heroUrl ? `<meta property="og:image" content="${escapeHtml(heroUrl)}"/>` : ''}
 </head>
 <body>
   <div class="wrap">
-    <div class="hero" ${heroUrl ? `style="background-image:url('${escapeHtml(heroUrl)}');"` : ''}></div>
+    <div class="hero" ${heroUrl ? `style="background-image:url('${escapeHtml(heroUrl)}');"` : ''}>
+      ${mapOverlayHtml}
+    </div>
     <div class="brand">
       <div class="brand-name">Chasin<span style="color:#C0392B;">'</span> Curves</div>
       <div class="brand-tag">Roads, Rivers &amp; Riffs</div>
@@ -529,6 +661,7 @@ ${heroUrl ? `<meta property="og:image" content="${escapeHtml(heroUrl)}"/>` : ''}
       <h1>${title}</h1>
       ${dateLabel ? `<div class="meta">${dateLabel}${timeLabel ? ` \u00b7 ${timeLabel}` : ''}</div>` : ''}
       ${meetingPoint ? `<div class="meta dim">Meeting at ${meetingPoint}</div>` : ''}
+      ${endPoint ? `<div class="meta dim">Finishing at ${endPoint}</div>` : ''}
       ${vehicle ? `<div class="meta dim">Look for: ${vehicle}</div>` : ''}
       ${roadsLine ? `<div class="roads">${roadsLine}</div>` : ''}
       ${notes ? `<div class="notes">${notes}</div>` : ''}
@@ -1331,6 +1464,7 @@ export default {
         time: trip.time || null,
         timezone: trip.timezone || null,
         meetingPoint: trip.meetingPoint || null,
+        waypoints: trip.waypoints || [],
         routes: trip.routes || [],
         notes: trip.notes || null,
         status: trip.status || 'open',
@@ -1384,6 +1518,7 @@ export default {
         roadNames,
         goingCount: attendees.filter(a => a.status !== 'maybe').length,
         maybeCount: attendees.filter(a => a.status === 'maybe').length,
+        waypointOverlay: buildWaypointOverlay(trip.waypoints),
       });
       return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
     }
