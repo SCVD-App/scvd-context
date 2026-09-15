@@ -1,4 +1,4 @@
-// Chasin' Curves — Worker v3.5
+// Chasin' Curves — Worker v3.11
 // Session 12: Email + 6-digit code auth replaces open username login.
 //             member/garage routes now require a valid session bound to the
 //             requester's own email — closes the "type anyone's username,
@@ -140,7 +140,13 @@
 //             16:10 aspect as the .hero CSS box is what makes the
 //             percentage-based label positions land correctly regardless
 //             of the visitor's screen width.
-// Endpoints: 38 total
+// Session 22: /run/:id's CTA now carries run context (id/title/host) as
+//             query params into the app URL, so the new magazine splash
+//             page (built in app.js) can greet an arriving visitor with
+//             the specific run they were invited to rather than a
+//             generic pitch. No other worker.js change this session —
+//             the splash page itself lives entirely in app.js.
+// Endpoints: 39 total
 //
 // Secrets required in Cloudflare dashboard:
 //   RESEND_API_KEY        ← re_... from resend.com dashboard (already in use for Mic Drop)
@@ -521,6 +527,16 @@ function buildFadedMapUrl(bbox) {
   return `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/${bboxStr}/${reqW}x${reqH}@2x?access_token=${MAPBOX_TOKEN}`;
 }
 
+// Truncates a place label to just the town/suburb — takes everything
+// before the first comma. Applied at DISPLAY time (here, and again for
+// the meeting/end-point lines in renderRunPageHtml) rather than only at
+// capture time in app.js, so it fixes waypoints already saved with the
+// full "Town, Queensland, Australia" form from before this existed —
+// no need to re-add stops on any existing trip to get the short form.
+function shortenPlace(label) {
+  return String(label ?? '').split(',')[0].trim();
+}
+
 // Returns { mapUrl, labels: [{ text, xPct, yPct, kind }] } or null if fewer
 // than 2 waypoints (nothing meaningful to show). kind is 'start'/'end'/'via'
 // — drives the label's colour accent in the template.
@@ -531,7 +547,7 @@ function buildWaypointOverlay(waypoints) {
   const labels = waypoints.map((w, i) => {
     const [xPct, yPct] = projectToPercent(w.lng, w.lat, bbox);
     const kind = i === 0 ? 'start' : (i === waypoints.length - 1 ? 'end' : 'via');
-    return { text: w.label, xPct, yPct, kind };
+    return { text: shortenPlace(w.label), xPct, yPct, kind };
   });
   return { mapUrl, labels };
 }
@@ -578,8 +594,8 @@ function renderRunPageHtml({ trip, organiserDisplayName, vehiclePhotoUrl, vehicl
   // — the planner form never actually collected that field, so waypoints
   // are the real source of truth whenever they exist.
   const waypoints = trip.waypoints || [];
-  const meetingPoint = waypoints[0]?.label ? escapeHtml(waypoints[0].label) : (trip.meetingPoint ? escapeHtml(trip.meetingPoint) : '');
-  const endPoint = waypoints.length > 1 ? escapeHtml(waypoints[waypoints.length - 1].label) : '';
+  const meetingPoint = waypoints[0]?.label ? escapeHtml(shortenPlace(waypoints[0].label)) : (trip.meetingPoint ? escapeHtml(trip.meetingPoint) : '');
+  const endPoint = waypoints.length > 1 ? escapeHtml(shortenPlace(waypoints[waypoints.length - 1].label)) : '';
   const notes = trip.notes ? escapeHtml(trip.notes) : '';
   const organiser = escapeHtml(organiserDisplayName);
   const vehicle = vehicleLabel ? escapeHtml(vehicleLabel) : '';
@@ -589,6 +605,11 @@ function renderRunPageHtml({ trip, organiserDisplayName, vehiclePhotoUrl, vehicl
 
   const ogDescriptionParts = [dateLabel, timeLabel, meetingPoint].filter(Boolean);
   const ogDescription = escapeHtml(`${ogDescriptionParts.join(' \u00b7 ')} \u2014 hosted by ${organiserDisplayName} on Chasin' Curves`);
+  // Session 22: carries run context through to the splash page so it can
+  // greet an arriving visitor by the actual run they were invited to
+  // ("Kenilworth Donuts Run — hosted by Scott") rather than a generic
+  // pitch — the splash page itself lives in app.js, not here.
+  const joinUrl = `${APP_URL}?run=${encodeURIComponent(trip.id)}&title=${encodeURIComponent(trip.title || '')}&host=${encodeURIComponent(organiserDisplayName)}`;
 
   const cancelBanner = trip.status === 'cancelled'
     ? `<div style="background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.4);border-radius:10px;padding:14px 18px;margin-bottom:20px;color:#f5f3ee;font-family:'Josefin Sans',sans-serif;font-size:14px;">
@@ -600,12 +621,25 @@ function renderRunPageHtml({ trip, organiserDisplayName, vehiclePhotoUrl, vehicl
   // low-opacity map backdrop (so it never competes with the vehicle photo)
   // plus bold text labels positioned by real Web Mercator projection, not
   // guessed. Start is champagne, end is Monza red, vias plain bone — kept
-  // to text only (no pins/lines) per Scott's call: names are legible at a
-  // glance, which is the whole point, without the visual clutter of a full
-  // route render.
+  // to text only (no pins) per Scott's call: names are legible at a
+  // glance, which is the whole point, without pin clutter. Dotted line
+  // added per Scott's follow-up — an SVG polyline through the same label
+  // coordinates, since a viewBox="0 0 100 100" lets it use the identical
+  // percentage points with zero extra projection work. NOT using
+  // vector-effect="non-scaling-stroke" — that keeps stroke-width in real
+  // screen pixels rather than viewBox units, which made a 0.35 value
+  // render sub-pixel (i.e. invisible) once tested against a live run
+  // page. Plain viewBox-scaled stroke-width instead — the 16:10 hero's
+  // non-square aspect stretches x/y slightly unevenly, which is an
+  // acceptable trade for a thin dotted connector, not worth the added
+  // complexity of computing pixel-exact width to correct for it.
   const LABEL_COLORS = { start: '#C9A84C', end: '#C0392B', via: '#f5f3ee' };
   const mapOverlayHtml = waypointOverlay ? `
     <img class="hero-map" src="${escapeHtml(waypointOverlay.mapUrl)}" alt=""/>
+    <svg class="hero-route" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <polyline points="${waypointOverlay.labels.map(l => `${l.xPct.toFixed(2)},${l.yPct.toFixed(2)}`).join(' ')}"
+        fill="none" stroke="#C9A84C" stroke-width="0.6" stroke-dasharray="1.4,1.4" stroke-opacity="0.7"/>
+    </svg>
     ${waypointOverlay.labels.map(l => `
       <div class="waypoint-label" style="left:${l.xPct.toFixed(2)}%; top:${l.yPct.toFixed(2)}%; color:${LABEL_COLORS[l.kind]};">
         ${escapeHtml(l.text)}
@@ -630,6 +664,7 @@ ${heroUrl ? `<meta property="og:image" content="${escapeHtml(heroUrl)}"/>` : ''}
   .hero { width:100%; aspect-ratio:16/10; background:#0a0a0a linear-gradient(160deg,#151515,#0a0a0a); background-size:cover; background-position:center; position:relative; overflow:hidden; }
   .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at bottom, rgba(0,0,0,0.75), rgba(0,0,0,0.15) 60%); pointer-events:none; }
   .hero-map { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0.22; mix-blend-mode:screen; }
+  .hero-route { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
   .waypoint-label { position:absolute; transform:translate(-50%,-50%); font-family:'Josefin Sans',sans-serif; font-weight:600; font-size:13px; letter-spacing:0.03em; text-shadow:0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6); white-space:nowrap; }
   .brand { text-align:center; padding:28px 24px 8px; }
   .brand-name { font-family:'Cormorant Garamond',serif; font-weight:700; font-size:28px; color:#C9A84C; letter-spacing:0.02em; }
@@ -667,7 +702,7 @@ ${heroUrl ? `<meta property="og:image" content="${escapeHtml(heroUrl)}"/>` : ''}
       ${notes ? `<div class="notes">${notes}</div>` : ''}
       <div class="organiser">Hosted by ${organiser}</div>
       <div class="going">${goingCount} going${maybeCount ? ` \u00b7 ${maybeCount} maybe` : ''}</div>
-      <a class="cta" href="${APP_URL}">View &amp; Join in Chasin' Curves</a>
+      <a class="cta" href="${joinUrl}">View &amp; Join in Chasin' Curves</a>
     </div>
   </div>
 </body>
@@ -1666,6 +1701,31 @@ export default {
       const ok = await grantPro(env, email, planId, plan, `comp_${Date.now()}`);
       if (!ok) return err('Member not found — they need to sign up first', 404);
       return json({ ok: true });
+    }
+
+    // ── Admin — delete trip(s) — Session 21. Same shared-adminKey pattern
+    // as grant-pro above. Built for tidying up beta-test trips (accepts a
+    // single tripId or a tripIds array so a whole night's test data can be
+    // cleared in one call). Deliberately does NOT support a "delete
+    // everything" flag — always requires the specific IDs, so a mistyped
+    // request can't wipe every real trip. This is the endpoint rinlojM's
+    // Chasin' Curves adapter calls — a delegate cleans up trips through
+    // rinlojM's own PIN+phrase gate, never touching this admin key or
+    // Chasin' Curves' own login at all.
+    if (path === '/admin/delete-trip' && method === 'POST') {
+      const body = await request.json();
+      if (!env.CURVES_ADMIN_KEY || body.adminKey !== env.CURVES_ADMIN_KEY) {
+        return err('Unauthorised', 403);
+      }
+      const ids = Array.isArray(body.tripIds) ? body.tripIds.map(String)
+        : (body.tripId != null ? [String(body.tripId)] : []);
+      if (ids.length === 0) return err('tripId or tripIds required');
+
+      const trips = JSON.parse(await env.CURVES_KV.get('trips') || '[]');
+      const remaining = trips.filter(t => !ids.includes(String(t.id)));
+      const deletedCount = trips.length - remaining.length;
+      await env.CURVES_KV.put('trips', JSON.stringify(remaining));
+      return json({ ok: true, deletedCount, remainingCount: remaining.length });
     }
 
     return err('Not found', 404);

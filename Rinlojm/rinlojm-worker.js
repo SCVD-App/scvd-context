@@ -11,17 +11,33 @@
 //   - Secret: RINLOJM_PHRASE           (long random string — the real gate)
 //   - Secret: MICDROP_ADMIN_KEY        (same value as Mic Drop's MICDROP_TOKEN_SECRET)
 //   - Secret: CC_ADMIN_KEY             (same value as Cult Connections' ADMIN_KEY)
+//   - Secret: CURVES_ADMIN_KEY         (same value as Chasin' Curves' CURVES_ADMIN_KEY secret)
 //   - Var:    MICDROP_URL              (e.g. https://mic-drop.<sub>.workers.dev)
 //   - Var:    CC_URL                   (e.g. https://cult-connections.<sub>.workers.dev)
+//   - Var:    CURVES_URL               (e.g. https://chasin-curves.emblen-scott.workers.dev)
 //
 // Per-app config below is the ONLY place a new app's shape needs adding —
 // everything else (PIN gate, phrase gate, rate limiting, audit log,
 // frontend) is shared.
+//
+// Session 21 addition: Chasin' Curves added as the first "cleanup"-type
+// app (list + multi-delete) rather than "grant" (tier + email) — added
+// after a beta-test session left a page full of trial trips needing
+// tidy-up, and building a session-based admin tab inside Chasin' Curves
+// itself was considered and dropped in favour of routing through here,
+// consistent with how Mic Drop and Cult Connections already keep their
+// real admin keys server-side-only rather than handing them to any device.
 // ══════════════════════════════════════════════════════════
 
 // ── PER-APP ADAPTERS ──
 // Each entry knows how to turn (tier, email) into a real grant call against
 // that app's own worker. Add a new app here only — nothing else changes.
+// actionType distinguishes the two shapes this tool now supports:
+//   "grant"   (default) — pick a tier, enter an email, mint access.
+//   "cleanup" — list live items from the app, multi-select, delete them.
+// Only the frontend rendering and the two endpoints below branch on this;
+// the PIN gate, phrase gate, rate limiting, and audit log are unchanged
+// and shared by both shapes.
 const APPS = {
   micdrop: {
     label: "Mic Drop",
@@ -59,6 +75,37 @@ const APPS = {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `Cult Connections grant failed (${res.status})`);
       return { token: data.token, emailSent: data.emailSent, note: null };
+    },
+  },
+  // Chasin' Curves — cleanup, not grant. Added for tidying up beta-test
+  // trips without exposing CURVES_ADMIN_KEY to any device but this tool's
+  // own server side, and without needing an in-app admin UI in Chasin'
+  // Curves itself (that approach was considered and dropped in favour of
+  // routing through here, matching how Mic Drop/CC admin keys already work).
+  chasincurves: {
+    label: "Chasin' Curves",
+    actionType: "cleanup",
+    // GET /trips is Chasin' Curves' own public, no-auth endpoint (the app's
+    // trip list has always been openly readable) — no admin key needed just
+    // to list what exists, only to delete.
+    listItems: async (env) => {
+      const res = await fetch(`${env.CURVES_URL}/trips`);
+      if (!res.ok) throw new Error(`Couldn't list trips (${res.status})`);
+      const trips = await res.json();
+      return trips.map(t => ({
+        id: String(t.id),
+        label: `${t.title || "Untitled"} — ${t.date || "no date"}${t.status === "cancelled" ? " (cancelled)" : ""}`,
+      }));
+    },
+    deleteItems: async (env, ids) => {
+      const res = await fetch(`${env.CURVES_URL}/admin/delete-trip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminKey: env.CURVES_ADMIN_KEY, tripIds: ids }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `Chasin' Curves delete failed (${res.status})`);
+      return { deletedCount: data.deletedCount };
     },
   },
   // Wardens of Luminara: add here once its own Stripe integration and
@@ -133,7 +180,10 @@ export default {
 
     // ── POST /api/unlock-phrase ──
     // Re-checked independently of the PIN — a correct PIN alone never
-    // reveals tier options, only the phrase does.
+    // reveals tier/item options, only the phrase does. Branches on the
+    // app's actionType: grant apps get their tier list back as before;
+    // cleanup apps get a live item list instead (fetched right here, since
+    // this call is already phrase-gated — no separate list endpoint needed).
     if (url.pathname === "/api/unlock-phrase" && request.method === "POST") {
       const { phrase, app } = await request.json();
       const limit = await checkRateLimit(env, ip);
@@ -144,7 +194,16 @@ export default {
         return json({ ok: false });
       }
       await clearFailures(env, ip);
-      return json({ ok: true, tiers: APPS[app].tiers });
+
+      if (APPS[app].actionType === "cleanup") {
+        try {
+          const items = await APPS[app].listItems(env);
+          return json({ ok: true, actionType: "cleanup", items });
+        } catch (e) {
+          return json({ ok: false, error: e.message }, 502);
+        }
+      }
+      return json({ ok: true, actionType: "grant", tiers: APPS[app].tiers });
     }
 
     // ── POST /api/grant ──
@@ -161,6 +220,27 @@ export default {
       try {
         const result = await APPS[app].grant(env, tier, email);
         await logGrant(env, { app, tier, email, ip });
+        return json({ ok: true, ...result });
+      } catch (e) {
+        return json({ ok: false, error: e.message }, 502);
+      }
+    }
+
+    // ── POST /api/cleanup ──
+    // Same re-verify-the-phrase discipline as /api/grant — this deletes
+    // real data, so a cached "already unlocked" client flag is never
+    // trusted for it either.
+    if (url.pathname === "/api/cleanup" && request.method === "POST") {
+      const { phrase, app, ids } = await request.json();
+      if (phrase.trim() !== (env.RINLOJM_PHRASE || "").trim() || !APPS[app] || APPS[app].actionType !== "cleanup") {
+        return json({ ok: false, error: "Unauthorised" }, 403);
+      }
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return json({ ok: false, error: "No items selected" }, 400);
+      }
+      try {
+        const result = await APPS[app].deleteItems(env, ids);
+        await logGrant(env, { app, tier: "cleanup", email: `${ids.length} item(s)`, ip });
         return json({ ok: true, ...result });
       } catch (e) {
         return json({ ok: false, error: e.message }, 502);
@@ -207,6 +287,7 @@ let pinBuf = "";
 let unlockedApps = null;
 let currentApp = null;
 let currentTiers = null;
+let currentItems = null;
 let selectedTier = null;
 
 const app = document.getElementById("app");
@@ -267,13 +348,55 @@ async function submitPhrase() {
     if (res.locked) { document.getElementById("phraseModal").remove(); app.innerHTML = \`<div style="text-align:center;color:#888;">\${res.retryAfterSec}s</div>\`; setTimeout(renderAppList, res.retryAfterSec * 1000); return; }
     if (!res.ok) { document.getElementById("phraseInput").value = ""; return; }
     window.__rinlojmPhrase = phrase; // held only in memory for this session, never persisted
-    currentTiers = res.tiers;
     document.getElementById("phraseModal").remove();
-    renderTiers();
+    if (res.actionType === "cleanup") {
+      currentItems = res.items;
+      renderCleanup();
+    } else {
+      currentTiers = res.tiers;
+      renderTiers();
+    }
   } catch (e) {
     document.getElementById("phraseModal").remove();
     app.innerHTML = \`<div style="text-align:center;color:#a55;padding-bottom:20px;">error — check Worker logs</div>\`;
     setTimeout(renderAppList, 2000);
+  }
+}
+
+function renderCleanup() {
+  if (currentItems.length === 0) {
+    app.innerHTML = \`<div style="text-align:center;color:#888;padding:20px 0;">nothing to clean up</div>\`;
+    return;
+  }
+  app.innerHTML = \`
+    \${currentItems.map(it => \`
+      <div class="list-item" style="display:flex;align-items:center;gap:12px;" onclick="toggleItem(event, '\${it.id}')">
+        <input type="checkbox" id="item-\${it.id}" style="width:18px;height:18px;flex-shrink:0;" onclick="event.stopPropagation()" onchange="toggleItem(event, '\${it.id}')">
+        <span>\${it.label}</span>
+      </div>\`).join("")}
+    <button class="go-btn" style="margin-top:16px;background:#a53a3a;" onclick="submitCleanup()">delete selected</button>
+    <div class="result" id="result"></div>\`;
+}
+
+function toggleItem(e, id) {
+  const box = document.getElementById("item-" + id);
+  if (e.target !== box) box.checked = !box.checked;
+}
+
+async function submitCleanup() {
+  const ids = currentItems.map(it => it.id).filter(id => document.getElementById("item-" + id).checked);
+  if (ids.length === 0) return;
+  if (!confirm(\`Delete \${ids.length} item(s)? This can't be undone.\`)) return;
+  const resultEl = document.getElementById("result");
+  resultEl.textContent = "…";
+  try {
+    const res = await fetch("/api/cleanup", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ phrase: window.__rinlojmPhrase, app: currentApp, ids }) }).then(r => r.json());
+    if (!res.ok) { resultEl.textContent = res.error || "failed"; return; }
+    resultEl.textContent = \`deleted \${res.deletedCount}\`;
+    currentItems = currentItems.filter(it => !ids.includes(it.id));
+    setTimeout(renderCleanup, 800);
+  } catch (e) {
+    resultEl.textContent = "error — check Worker logs";
   }
 }
 
